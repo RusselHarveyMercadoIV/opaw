@@ -205,7 +205,7 @@ private struct AddDogSheet: View {
                 }
             }
             .navigationDestination(isPresented: $showPhoto) {
-                AvatarCaptureStep(draft: draft) { dismiss() }
+                AvatarCaptureStep(draft: draft, onSaved: { dismiss() })
             }
         }
     }

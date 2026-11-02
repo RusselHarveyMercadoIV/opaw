@@ -55,7 +55,7 @@ struct QuickLogWidgetView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Image(systemName: "pawprint.fill")
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Color.opawWidgetAccent)
                 Text(entry.dogName ?? "Opaw")
                     .font(.headline)
                     .lineLimit(1)
@@ -71,7 +71,8 @@ struct QuickLogWidgetView: View {
                     ForEach(CareKind.quickLog) { kind in
                         Button(intent: LogCareIntent(kind: kind)) {
                             VStack(spacing: 2) {
-                                Text(kind.emoji).font(.title3)
+                                Image(systemName: kind.symbol)
+                                    .font(.title3)
                                 Text("\(entry.counts[kind] ?? 0)")
                                     .font(.caption2.monospacedDigit())
                                     .foregroundStyle(.secondary)
@@ -79,7 +80,7 @@ struct QuickLogWidgetView: View {
                             .frame(maxWidth: .infinity, minHeight: 40)
                         }
                         .buttonStyle(.bordered)
-                        .tint(.orange)
+                        .tint(Color.opawWidgetAccent)
                         .accessibilityLabel("Log \(kind.title)")
                     }
                 }
@@ -109,13 +110,13 @@ struct WalkLiveActivity: Widget {
         ActivityConfiguration(for: WalkActivityAttributes.self) { context in
             WalkActivityLockScreenView(context: context)
                 .activityBackgroundTint(Color.black.opacity(0.75))
-                .activitySystemActionForegroundColor(.orange)
+                .activitySystemActionForegroundColor(Color.opawWidgetAccent)
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
                     Label(context.attributes.dogName, systemImage: "pawprint.fill")
                         .font(.headline)
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(Color.opawWidgetAccent)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     WalkTimerText(state: context.state)
@@ -127,13 +128,13 @@ struct WalkLiveActivity: Widget {
                 }
             } compactLeading: {
                 Image(systemName: "figure.walk")
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Color.opawWidgetAccent)
             } compactTrailing: {
                 Text(OpawFormat.distance(meters: context.state.distanceMeters))
                     .font(.caption.monospacedDigit())
             } minimal: {
                 Image(systemName: "pawprint.fill")
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Color.opawWidgetAccent)
             }
         }
     }
@@ -158,7 +159,7 @@ struct WalkActivityLockScreenView: View {
         HStack(spacing: 16) {
             Image(systemName: "pawprint.circle.fill")
                 .font(.system(size: 40))
-                .foregroundStyle(.orange)
+                .foregroundStyle(Color.opawWidgetAccent)
             VStack(alignment: .leading, spacing: 4) {
                 Text(context.isStale ? "Updating…" : context.state.isPaused ? "Walk paused" : "Walking with \(context.attributes.dogName)")
                     .font(.headline)
@@ -174,4 +175,9 @@ struct WalkActivityLockScreenView: View {
         }
         .padding()
     }
+}
+
+extension Color {
+    /// Opaw's persimmon accent, matching the app's AccentColor.
+    static let opawWidgetAccent = Color(red: 0.894, green: 0.341, blue: 0.180)
 }

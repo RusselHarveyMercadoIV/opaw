@@ -1,4 +1,5 @@
 import CoreImage
+import OpawKit
 import UIKit
 import Vision
 
@@ -33,6 +34,24 @@ enum CutoutService {
             return observations.contains { observation in
                 observation.labels.contains { $0.identifier == VNAnimalIdentifier.dog.rawValue && $0.confidence > 0.3 }
             }
+        }.value
+    }
+
+    /// Guesses the breed with Vision's built-in image classifier, entirely on device.
+    ///
+    /// Returns nil when no known breed is confident enough; the person can always type one.
+    static func guessBreed(_ image: UIImage) async -> BreedGuess? {
+        guard let cgImage = image.cgImage else { return nil }
+        return await Task.detached(priority: .userInitiated) {
+            let request = VNClassifyImageRequest()
+            let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+            do {
+                try handler.perform([request])
+            } catch {
+                return nil
+            }
+            let labels = (request.results ?? []).map { (identifier: $0.identifier, confidence: Double($0.confidence)) }
+            return BreedCatalog.bestGuess(from: labels)
         }.value
     }
 

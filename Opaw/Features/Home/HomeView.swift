@@ -24,7 +24,10 @@ struct HomeView: View {
                 if let dog {
                     TimelineView(.periodic(from: .now, by: 60)) { context in
                         let mood = MoodEngine.mood(for: BadgeService.careSnapshot(for: dog, now: context.date), now: context.date)
-                        content(dog: dog, mood: mood)
+                        VStack(alignment: .leading, spacing: Space.l) {
+                            greeting(dog: dog, now: context.date)
+                            content(dog: dog, mood: mood)
+                        }
                     }
                     .padding()
                     .frame(maxWidth: 1100)
@@ -32,7 +35,8 @@ struct HomeView: View {
                 }
             }
             .opawBackground()
-            .navigationTitle(dog?.name ?? "Today")
+            .navigationTitle("Today")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 if dogs.count > 1 {
                     ToolbarItem(placement: .topBarLeading) {
@@ -94,44 +98,68 @@ struct HomeView: View {
         }
     }
 
+    private func greeting(dog: Dog, now: Date) -> some View {
+        let hour = Calendar.current.component(.hour, from: now)
+        let part = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening"
+        return VStack(alignment: .leading, spacing: 6) {
+            Eyebrow(text: now.formatted(.dateTime.weekday(.wide).month(.wide).day()))
+            (Text("\(part),\n") + Text(dog.name).foregroundColor(.opawOrange) + Text("."))
+                .font(.opawDisplay(34))
+                .foregroundStyle(Color.opawInk)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.top, Space.s)
+    }
+
     private func avatarCard(dog: Dog, mood: AvatarMood) -> some View {
         let streak = StreakCalculator.currentStreak(dates: (dog.careEvents ?? []).map(\.date))
         return VStack(spacing: 12) {
             NavigationLink {
                 AvatarStudioView(dog: dog)
             } label: {
-                AvatarView(dog: dog, mood: mood)
-                    .frame(height: 300)
-                    .frame(maxWidth: .infinity)
+                ZStack(alignment: .bottom) {
+                    Ellipse()
+                        .fill(Color.black.opacity(0.06))
+                        .frame(width: 180, height: 16)
+                        .blur(radius: 6)
+                    AvatarView(dog: dog, mood: mood)
+                        .frame(height: 300)
+                        .padding(.bottom, 6)
+                }
+                .frame(maxWidth: .infinity)
             }
             .buttonStyle(.plain)
             Text(mood.caption)
-                .font(.title3.weight(.semibold))
+                .font(.opawDisplay(22, weight: .regular))
+                .italic()
+                .foregroundStyle(Color.opawInk)
             if streak > 0 {
                 Label("\(streak)-day care streak", systemImage: "flame.fill")
-                    .font(.subheadline)
-                    .foregroundStyle(.orange)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(Color.opawOrange)
             }
         }
         .card()
     }
 
     private func quickLogCard(dog: Dog) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Quick log")
-                .font(.headline)
-            HStack(spacing: 10) {
+        VStack(alignment: .leading, spacing: Space.m) {
+            Eyebrow(text: "Quick log")
+            HStack(spacing: 0) {
                 ForEach(CareKind.quickLog) { kind in
                     Button {
                         quickLog(kind, dog: dog)
                     } label: {
-                        VStack(spacing: 4) {
-                            Text(kind.emoji).font(.title)
-                            Text(kind.title).font(.caption)
+                        VStack(spacing: 6) {
+                            CareGlyph(symbol: kind.symbol, size: 52)
+                            Text(kind.title)
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(Color.opawInk)
                         }
-                        .frame(maxWidth: .infinity, minHeight: 64)
+                        .frame(maxWidth: .infinity, minHeight: 76)
+                        .contentShape(Rectangle())
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.pressable)
                     .accessibilityLabel("Log \(kind.title)")
                 }
             }
@@ -153,14 +181,13 @@ struct HomeView: View {
         func count(_ kind: CareKind) -> String { "\(today.filter { $0.kind == kind }.count)" }
 
         return VStack(alignment: .leading, spacing: 14) {
-            Text("Today")
-                .font(.headline)
+            Eyebrow(text: "Today")
             HStack(spacing: 18) {
                 ZStack {
                     ProgressRing(progress: snapshot.activityMinutesToday / goal)
                     VStack(spacing: 0) {
                         Text("\(Int(snapshot.activityMinutesToday))")
-                            .font(.title2.bold().monospacedDigit())
+                            .font(.opawNumber(26))
                         Text("of \(Int(goal)) min")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
@@ -182,9 +209,8 @@ struct HomeView: View {
                 selectedTab = .walk
             } label: {
                 Label("Start a walk", systemImage: "figure.walk")
-                    .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.opawPrimary)
         }
         .card()
     }
@@ -193,8 +219,7 @@ struct HomeView: View {
         let recent = (dog.careEvents ?? []).sorted { $0.date > $1.date }.prefix(6)
         return VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Recent")
-                    .font(.headline)
+                Eyebrow(text: "Recent")
                 Spacer()
                 NavigationLink("History") {
                     CareHistoryView(dog: dog)
@@ -235,10 +260,7 @@ struct CareEventRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Text(event.kind.emoji)
-                .font(.title3)
-                .frame(width: 36, height: 36)
-                .background(Color.opawOrange.opacity(0.12), in: Circle())
+            CareGlyph(symbol: event.kind.symbol)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.subheadline.weight(.medium))

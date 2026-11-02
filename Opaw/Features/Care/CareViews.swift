@@ -26,7 +26,11 @@ struct CareLogSheet: View {
                                 kind = option
                             } label: {
                                 VStack(spacing: 4) {
-                                    Text(option.emoji).font(.title2)
+                                    Image(systemName: option.symbol)
+                                        .font(.title3)
+                                        .foregroundStyle(option == kind ? Color.white : Color.opawOrange)
+                                        .frame(width: 40, height: 40)
+                                        .background(option == kind ? Color.opawOrange : Color.opawOrange.opacity(0.1), in: Circle())
                                     Text(option.title)
                                         .font(.caption)
                                         .lineLimit(1)
@@ -35,7 +39,7 @@ struct CareLogSheet: View {
                                 .frame(maxWidth: .infinity, minHeight: 60)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .fill(option == kind ? Color.opawOrange.opacity(0.25) : Color.secondary.opacity(0.08))
+                                        .fill(option == kind ? Color.opawOrange.opacity(0.08) : Color.opawSurface)
                                 )
                             }
                             .buttonStyle(.plain)
@@ -142,7 +146,11 @@ struct CareHistoryView: View {
             Menu {
                 Button("All") { filter = nil }
                 ForEach(CareKind.allCases) { kind in
-                    Button("\(kind.emoji) \(kind.title)") { filter = kind }
+                    Button {
+                        filter = kind
+                    } label: {
+                        Label(kind.title, systemImage: kind.symbol)
+                    }
                 }
             } label: {
                 Label("Filter", systemImage: filter == nil ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
@@ -206,7 +214,7 @@ private struct ReminderRow: View {
     var body: some View {
         Toggle(isOn: $reminder.isEnabled) {
             HStack(spacing: 12) {
-                Text(reminder.kind.emoji).font(.title3)
+                CareGlyph(symbol: reminder.kind.symbol)
                 VStack(alignment: .leading) {
                     Text(reminder.title)
                     Text(String(format: "%02d:%02d", reminder.hour, reminder.minute))
@@ -233,7 +241,7 @@ private struct AddReminderSheet: View {
         NavigationStack {
             Form {
                 Picker("Type", selection: $kind) {
-                    ForEach(CareKind.allCases) { Text("\($0.emoji) \($0.title)").tag($0) }
+                    ForEach(CareKind.allCases) { Label($0.title, systemImage: $0.symbol).tag($0) }
                 }
                 TextField("Title", text: $title, prompt: Text("\(dog.name)'s \(kind.title.lowercased())"))
                 DatePicker("Time", selection: $time, displayedComponents: .hourAndMinute)

@@ -6,6 +6,10 @@ struct OpawApp: App {
     @State private var walkRecorder = WalkRecorder()
     @State private var pack = PackService()
 
+    init() {
+        OpawAppearance.apply()
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView()
@@ -21,11 +25,16 @@ struct RootView: View {
     @Query(sort: \Dog.createdAt) private var dogs: [Dog]
 
     var body: some View {
-        if dogs.isEmpty {
-            OnboardingView()
-        } else {
-            MainTabView()
+        ZStack {
+            if dogs.isEmpty {
+                OnboardingView()
+                    .transition(.opacity)
+            } else {
+                MainTabView()
+                    .transition(.opacity.combined(with: .scale(scale: 1.04)))
+            }
         }
+        .animation(.easeInOut(duration: 0.6), value: dogs.isEmpty)
     }
 }
 
