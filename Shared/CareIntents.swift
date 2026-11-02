@@ -2,11 +2,26 @@ import AppIntents
 import WidgetKit
 import OpawKit
 
-// App Intents needs these as literals so Siri and Shortcuts can read them at build time.
-extension CareKind: AppEnum {
-    public static var typeDisplayRepresentation: TypeDisplayRepresentation = "Care type"
+/// Mirror of `CareKind` for Siri and Shortcuts.
+///
+/// App Intents reads enum cases at build time and only supports enums declared in the same module,
+/// so this can't be a conformance on `CareKind` itself (which lives in OpawKit).
+enum CareKindOption: String, AppEnum {
+    case meal
+    case water
+    case pee
+    case poop
+    case bath
+    case brush
+    case nails
+    case meds
+    case vet
+    case weight
+    case play
 
-    public static var caseDisplayRepresentations: [CareKind: DisplayRepresentation] = [
+    static var typeDisplayRepresentation: TypeDisplayRepresentation = "Care type"
+
+    static var caseDisplayRepresentations: [CareKindOption: DisplayRepresentation] = [
         .meal: DisplayRepresentation(title: "Meal", image: .init(systemName: "fork.knife")),
         .water: DisplayRepresentation(title: "Water", image: .init(systemName: "drop.fill")),
         .pee: DisplayRepresentation(title: "Pee", image: .init(systemName: "drop.triangle")),
@@ -19,6 +34,14 @@ extension CareKind: AppEnum {
         .weight: DisplayRepresentation(title: "Weight", image: .init(systemName: "scalemass.fill")),
         .play: DisplayRepresentation(title: "Play", image: .init(systemName: "tennisball.fill")),
     ]
+
+    init(_ kind: CareKind) {
+        self = CareKindOption(rawValue: kind.rawValue) ?? .meal
+    }
+
+    var kind: CareKind {
+        CareKind(rawValue: rawValue) ?? .meal
+    }
 }
 
 /// Logs a care event. Used by the Home Screen widget buttons and by Siri.
@@ -27,7 +50,7 @@ struct LogCareIntent: AppIntent {
     static var description = IntentDescription("Log a meal, potty break, bath and more for your dog.")
 
     @Parameter(title: "Type")
-    var kind: CareKind
+    var kind: CareKindOption
 
     static var parameterSummary: some ParameterSummary {
         Summary("Log \(\.$kind) for my dog")
@@ -36,13 +59,13 @@ struct LogCareIntent: AppIntent {
     init() {}
 
     init(kind: CareKind) {
-        self.kind = kind
+        self.kind = CareKindOption(kind)
     }
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        let name = try CareLogger.log(kind)
+        let name = try CareLogger.log(kind.kind)
         WidgetCenter.shared.reloadTimelines(ofKind: OpawWidgetKind.quickLog)
-        return .result(dialog: "Logged \(kind.title.lowercased()) for \(name).")
+        return .result(dialog: "Logged \(kind.kind.title.lowercased()) for \(name).")
     }
 }
