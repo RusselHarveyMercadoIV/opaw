@@ -76,6 +76,16 @@ private struct WalkHomeView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .listRowBackground(Color.clear)
+                } else if recorder.isDenied {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Location is turned off for Opaw, so walks can't be recorded. You can turn it on in Settings.")
+                        Button("Open Settings") {
+                            if let url = URL(string: UIApplication.openSettingsURLString) {
+                                UIApplication.shared.open(url)
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
                 } else {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Opaw needs your location to record walks.")

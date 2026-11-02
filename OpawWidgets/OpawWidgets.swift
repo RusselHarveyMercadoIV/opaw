@@ -93,7 +93,7 @@ struct QuickLogWidgetView: View {
 
 struct QuickLogWidget: Widget {
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: "QuickLogWidget", provider: QuickLogProvider()) { entry in
+        StaticConfiguration(kind: OpawWidgetKind.quickLog, provider: QuickLogProvider()) { entry in
             QuickLogWidgetView(entry: entry)
         }
         .configurationDisplayName("Quick log")
@@ -160,7 +160,7 @@ struct WalkActivityLockScreenView: View {
                 .font(.system(size: 40))
                 .foregroundStyle(.orange)
             VStack(alignment: .leading, spacing: 4) {
-                Text(context.state.isPaused ? "Walk paused" : "Walking with \(context.attributes.dogName)")
+                Text(context.isStale ? "Updating…" : context.state.isPaused ? "Walk paused" : "Walking with \(context.attributes.dogName)")
                     .font(.headline)
                     .foregroundStyle(.white)
                 HStack(spacing: 16) {

@@ -29,6 +29,10 @@ struct LogCareIntent: AppIntent {
     @Parameter(title: "Type")
     var kind: CareKind
 
+    static var parameterSummary: some ParameterSummary {
+        Summary("Log \(\.$kind) for my dog")
+    }
+
     init() {}
 
     init(kind: CareKind) {
@@ -38,7 +42,7 @@ struct LogCareIntent: AppIntent {
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
         let name = try CareLogger.log(kind)
-        WidgetCenter.shared.reloadAllTimelines()
+        WidgetCenter.shared.reloadTimelines(ofKind: OpawWidgetKind.quickLog)
         return .result(dialog: "Logged \(kind.title.lowercased()) for \(name).")
     }
 }

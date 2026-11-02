@@ -32,6 +32,8 @@ final class WalkRecorder: NSObject {
     private var pauseStartedAt: Date?
     private var activity: Activity<WalkActivityAttributes>?
     private var lastActivityUpdate: Date = .distantPast
+    /// Keeps location updates flowing in the background while a walk records.
+    @ObservationIgnored private var backgroundSession: CLBackgroundActivitySession?
 
     @ObservationIgnored private let manager = CLLocationManager()
 
@@ -46,6 +48,10 @@ final class WalkRecorder: NSObject {
 
     var isAuthorized: Bool {
         authorization == .authorizedWhenInUse || authorization == .authorizedAlways
+    }
+
+    var isDenied: Bool {
+        authorization == .denied || authorization == .restricted
     }
 
     func requestPermission() {
@@ -83,6 +89,7 @@ final class WalkRecorder: NSObject {
         manager.allowsBackgroundLocationUpdates = true
         manager.showsBackgroundLocationIndicator = true
         manager.pausesLocationUpdatesAutomatically = false
+        backgroundSession = CLBackgroundActivitySession()
         manager.startUpdatingLocation()
         startLiveActivity()
     }
@@ -111,6 +118,8 @@ final class WalkRecorder: NSObject {
         let result = FinishedWalk(startedAt: startedAt, endedAt: Date(), points: points, pins: pins)
         manager.stopUpdatingLocation()
         manager.allowsBackgroundLocationUpdates = false
+        backgroundSession?.invalidate()
+        backgroundSession = nil
         state = .idle
         self.startedAt = nil
         endLiveActivity()
@@ -170,7 +179,7 @@ final class WalkRecorder: NSObject {
         do {
             activity = try Activity.request(
                 attributes: WalkActivityAttributes(dogName: dogName),
-                content: ActivityContent(state: activityState(), staleDate: nil),
+                content: ActivityContent(state: activityState(), staleDate: Date().addingTimeInterval(5 * 60)),
                 pushType: nil
             )
         } catch {
@@ -183,7 +192,7 @@ final class WalkRecorder: NSObject {
         // Live Activity updates are budgeted by the system, so throttle them.
         guard force || Date().timeIntervalSince(lastActivityUpdate) > 15 else { return }
         lastActivityUpdate = Date()
-        let content = ActivityContent(state: activityState(), staleDate: nil)
+        let content = ActivityContent(state: activityState(), staleDate: Date().addingTimeInterval(5 * 60))
         Task {
             await activity.update(content)
         }
@@ -191,7 +200,7 @@ final class WalkRecorder: NSObject {
 
     private func endLiveActivity() {
         guard let activity else { return }
-        let content = ActivityContent(state: activityState(), staleDate: nil)
+        let content = ActivityContent(state: activityState(), staleDate: Date().addingTimeInterval(5 * 60))
         self.activity = nil
         Task {
             await activity.end(content, dismissalPolicy: .immediate)

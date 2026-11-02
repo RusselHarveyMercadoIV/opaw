@@ -94,7 +94,7 @@ struct CareLogSheet: View {
         modelContext.insert(event)
         try? modelContext.save()
         Haptics.success()
-        WidgetCenter.shared.reloadAllTimelines()
+        WidgetCenter.shared.reloadTimelines(ofKind: OpawWidgetKind.quickLog)
         onSaved()
         dismiss()
     }
@@ -132,7 +132,7 @@ struct CareHistoryView: View {
                             modelContext.delete(group.events[index])
                         }
                         try? modelContext.save()
-                        WidgetCenter.shared.reloadAllTimelines()
+                        WidgetCenter.shared.reloadTimelines(ofKind: OpawWidgetKind.quickLog)
                     }
                 }
             }

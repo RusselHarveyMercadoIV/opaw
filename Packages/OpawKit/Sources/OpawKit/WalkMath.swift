@@ -38,6 +38,12 @@ public struct WalkStats: Equatable, Sendable {
     public var movingSeconds: TimeInterval
     public var elapsedSeconds: TimeInterval
 
+    public init(distanceMeters: Double, movingSeconds: TimeInterval, elapsedSeconds: TimeInterval) {
+        self.distanceMeters = distanceMeters
+        self.movingSeconds = movingSeconds
+        self.elapsedSeconds = elapsedSeconds
+    }
+
     public var distanceKm: Double { distanceMeters / 1000 }
 
     /// Minutes per kilometre while moving, or nil when too short to be meaningful.

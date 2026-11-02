@@ -2,6 +2,25 @@ import Foundation
 import SwiftData
 import OpawKit
 
+enum OpawWidgetKind {
+    static let quickLog = "QuickLogWidget"
+}
+
+/// Version 1 of the on-device database. Add a new version and a migration stage
+/// to `OpawMigrationPlan` whenever a model changes after release.
+enum OpawSchemaV1: VersionedSchema {
+    static var versionIdentifier = Schema.Version(1, 0, 0)
+
+    static var models: [any PersistentModel.Type] {
+        [Dog.self, CareEvent.self, Walk.self, Memory.self, Reminder.self]
+    }
+}
+
+enum OpawMigrationPlan: SchemaMigrationPlan {
+    static var schemas: [any VersionedSchema.Type] { [OpawSchemaV1.self] }
+    static var stages: [MigrationStage] { [] }
+}
+
 /// Settings shared between the app and its extensions.
 enum OpawDefaults {
     static let appGroupID = "group.app.opaw.shared"
@@ -19,7 +38,7 @@ enum OpawDefaults {
 enum OpawStore {
     static let appGroupID = OpawDefaults.appGroupID
 
-    static let schema = Schema([Dog.self, CareEvent.self, Walk.self, Memory.self, Reminder.self])
+    static let schema = Schema(versionedSchema: OpawSchemaV1.self)
 
     static let container: ModelContainer = makeContainer()
 
@@ -35,13 +54,13 @@ enum OpawStore {
             schema: schema,
             groupContainer: .identifier(appGroupID)
         )
-        if let container = try? ModelContainer(for: schema, configurations: [groupConfig]) {
+        if let container = try? ModelContainer(for: schema, migrationPlan: OpawMigrationPlan.self, configurations: [groupConfig]) {
             return container
         }
         // Fall back to the app's own container, for example when App Groups aren't provisioned yet.
         let localConfig = ModelConfiguration("Opaw", schema: schema)
         do {
-            return try ModelContainer(for: schema, configurations: [localConfig])
+            return try ModelContainer(for: schema, migrationPlan: OpawMigrationPlan.self, configurations: [localConfig])
         } catch {
             fatalError("Could not open the Opaw database: \(error)")
         }

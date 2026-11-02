@@ -42,7 +42,7 @@ struct ProfileView: View {
                     ForEach(dogs) { item in
                         Button {
                             activeDogID = item.id.uuidString
-                            WidgetCenter.shared.reloadAllTimelines()
+                            WidgetCenter.shared.reloadTimelines(ofKind: OpawWidgetKind.quickLog)
                         } label: {
                             HStack {
                                 DogThumbnail(data: item.cutoutData ?? item.photoData, size: 36)
@@ -67,6 +67,7 @@ struct ProfileView: View {
                     Text("Your care logs, walks and memories stay on your iPhone. Only what you choose to share with the Pack is uploaded.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
+                    Link("Privacy policy", destination: URL(string: "https://github.com/RusselHarveyMercadoIV/opaw/blob/main/docs/PRIVACY.md")!)
                 }
             }
             .navigationTitle("Profile")

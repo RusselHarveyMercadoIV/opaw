@@ -95,7 +95,10 @@ private struct PackHomeView: View {
         case feed = "Feed"
     }
 
+    @Environment(PackService.self) private var pack
     @State private var section: PackSection = .nearby
+    @State private var confirmDelete = false
+    @State private var deleteError: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -108,6 +111,42 @@ private struct PackHomeView: View {
             case .nearby: NearbyDogsView()
             case .feed: PackFeedView()
             }
+        }
+        .toolbar {
+            Menu {
+                Link(destination: URL(string: "https://github.com/RusselHarveyMercadoIV/opaw/blob/main/docs/PRIVACY.md")!) {
+                    Label("Privacy policy", systemImage: "hand.raised")
+                }
+                Button(role: .destructive) {
+                    confirmDelete = true
+                } label: {
+                    Label("Leave the pack and delete my account", systemImage: "person.crop.circle.badge.xmark")
+                }
+            } label: {
+                Label("Pack settings", systemImage: "gearshape")
+            }
+        }
+        .confirmationDialog(
+            "Delete your Pack account?",
+            isPresented: $confirmDelete,
+            titleVisibility: .visible
+        ) {
+            Button("Delete account", role: .destructive) {
+                Task {
+                    do {
+                        try await pack.deleteAccount()
+                    } catch {
+                        deleteError = error.localizedDescription
+                    }
+                }
+            }
+        } message: {
+            Text("This removes your shared dogs, posts, likes and photos from the Pack. Your logs, walks and memories stay on this iPhone.")
+        }
+        .alert("Couldn't delete your account", isPresented: Binding(get: { deleteError != nil }, set: { if !$0 { deleteError = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(deleteError ?? "")
         }
     }
 }

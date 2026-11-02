@@ -404,6 +404,27 @@ final class PackService {
         try await client.from("blocks").upsert(BlockInsert(blocker_id: user, blocked_id: blocked)).execute()
     }
 
+    // MARK: Account
+
+    /// Deletes the user's shared files, Pack data and account. Local data on the phone is kept.
+    func deleteAccount() async throws {
+        let client = try requireClient()
+        let user = try requireUser()
+        let folder = user.uuidString.lowercased()
+        for bucket in ["post-images", "avatar-inputs"] {
+            let files = (try? await client.storage.from(bucket).list(path: folder)) ?? []
+            let paths = files.map { "\(folder)/\($0.name)" }
+            if !paths.isEmpty {
+                _ = try? await client.storage.from(bucket).remove(paths: paths)
+            }
+        }
+        try await client.rpc("delete_my_account").execute()
+        try? await client.auth.signOut()
+        userID = nil
+        hasAcceptedRules = false
+        UserDefaults.standard.set(false, forKey: Self.rulesKey)
+    }
+
     // MARK: Avatar clips
 
     /// Uploads the dog's cutout and queues a job for the avatar worker. Returns the job id.

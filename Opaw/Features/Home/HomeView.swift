@@ -40,7 +40,7 @@ struct HomeView: View {
                             ForEach(dogs) { dog in
                                 Button(dog.name) {
                                     activeDogID = dog.id.uuidString
-                                    WidgetCenter.shared.reloadAllTimelines()
+                                    WidgetCenter.shared.reloadTimelines(ofKind: OpawWidgetKind.quickLog)
                                 }
                             }
                         } label: {
@@ -219,7 +219,7 @@ struct HomeView: View {
         try? modelContext.save()
         Haptics.success()
         awardBadges(for: dog)
-        WidgetCenter.shared.reloadAllTimelines()
+        WidgetCenter.shared.reloadTimelines(ofKind: OpawWidgetKind.quickLog)
     }
 
     private func awardBadges(for dog: Dog) {
