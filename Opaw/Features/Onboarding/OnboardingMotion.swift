@@ -43,10 +43,11 @@ struct WalkingPaws: View {
                     let point = position(u, in: size)
                     let ahead = position(min(1, u + 0.02), in: size)
                     let behind = position(max(0, u - 0.02), in: size)
-                    let angle = atan2(ahead.y - behind.y, ahead.x - behind.x)
+                    let angle = Double(atan2(ahead.y - behind.y, ahead.x - behind.x))
                     let side: Double = index.isMultiple(of: 2) ? 1 : -1
-                    let x = point.x + cos(angle + .pi / 2) * 11 * side
-                    let y = point.y + sin(angle + .pi / 2) * 11 * side
+                    let normal = angle + Double.pi / 2
+                    let x = Double(point.x) + cos(normal) * 11 * side
+                    let y = Double(point.y) + sin(normal) * 11 * side
 
                     let opacity: Double
                     if reduceMotion {
@@ -77,10 +78,11 @@ struct WalkingPaws: View {
 
     /// A soft S-curve from bottom left to top right.
     private func position(_ u: Double, in size: CGSize) -> CGPoint {
-        CGPoint(
-            x: size.width * (0.06 + 0.88 * u),
-            y: size.height * (0.88 - 0.72 * u) + sin(u * .pi * 2) * size.height * 0.1
-        )
+        let width = Double(size.width)
+        let height = Double(size.height)
+        let x: Double = width * (0.06 + 0.88 * u)
+        let y: Double = height * (0.88 - 0.72 * u) + sin(u * Double.pi * 2) * height * 0.1
+        return CGPoint(x: x, y: y)
     }
 }
 
@@ -122,10 +124,10 @@ struct PawConfetti: View {
                     guard t > 0 else { continue }
                     let progress = t * particle.speed
                     guard progress < 1 else { continue }
-                    let x = size.width * (0.08 + 0.84 * particle.x) + sin(t * 1.6 + particle.spin) * 10
-                    let y = size.height * (0.78 - 0.7 * progress)
+                    let x: Double = Double(size.width) * (0.08 + 0.84 * particle.x) + sin(t * 1.6 + particle.spin) * 10
+                    let y: Double = Double(size.height) * (0.78 - 0.7 * progress)
                     var layer = context
-                    layer.opacity = sin(progress * .pi) * 0.55
+                    layer.opacity = sin(progress * Double.pi) * 0.55
                     layer.translateBy(x: x, y: y)
                     layer.rotate(by: .degrees(particle.spin * 12 + t * particle.spin * 8))
                     layer.scaleBy(x: particle.size, y: particle.size)
