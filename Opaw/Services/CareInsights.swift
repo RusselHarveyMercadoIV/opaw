@@ -38,6 +38,7 @@ extension Dog {
         return (overdue, pending.min())
     }
 
+    @MainActor
     func careReport(now: Date = Date()) -> CareReport {
         CareScore.report(
             for: BadgeService.careSnapshot(for: self, now: now),
