@@ -86,6 +86,7 @@ final class CareEvent {
     var date: Date = Date()
     var note: String = ""
     var poopConsistencyRaw: String?
+    var poopColorRaw: String?
     var weightKg: Double?
     var dog: Dog?
 
@@ -102,6 +103,11 @@ final class CareEvent {
     var poopConsistency: PoopConsistency? {
         get { poopConsistencyRaw.flatMap(PoopConsistency.init(rawValue:)) }
         set { poopConsistencyRaw = newValue?.rawValue }
+    }
+
+    var poopColor: PoopColor? {
+        get { poopColorRaw.flatMap(PoopColor.init(rawValue:)) }
+        set { poopColorRaw = newValue?.rawValue }
     }
 }
 

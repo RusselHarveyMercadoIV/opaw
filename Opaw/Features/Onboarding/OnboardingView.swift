@@ -538,7 +538,7 @@ private struct EnergyRow: View {
             HStack(spacing: Space.m) {
                 Image(systemName: level.symbol)
                     .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(isSelected ? Color.white : Color.opawInk)
+                    .foregroundStyle(isSelected ? Color.opawOnInk : Color.opawInk)
                     .frame(width: 48, height: 48)
                     .background(isSelected ? Color.opawOrange : Color.opawCream, in: Circle())
                     .phaseAnimator([false, true]) { content, up in

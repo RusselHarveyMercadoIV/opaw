@@ -40,28 +40,114 @@ struct RootView: View {
 
 struct MainTabView: View {
     @State private var selection: AppTab = .home
+    @Environment(WalkRecorder.self) private var recorder
 
     var body: some View {
         TabView(selection: $selection) {
             HomeView(selectedTab: $selection)
-                .tabItem { Label("Today", systemImage: "pawprint.fill") }
                 .tag(AppTab.home)
-            WalkTabView()
-                .tabItem { Label("Walk", systemImage: "figure.walk") }
-                .tag(AppTab.walk)
+                .toolbar(.hidden, for: .tabBar)
+            CareView(selectedTab: $selection)
+                .tag(AppTab.care)
+                .toolbar(.hidden, for: .tabBar)
+            WalkTabView(selectedTab: $selection)
+                .tag(AppTab.activity)
+                .toolbar(.hidden, for: .tabBar)
             MemoriesView()
-                .tabItem { Label("Memories", systemImage: "photo.stack") }
                 .tag(AppTab.memories)
-            PackView()
-                .tabItem { Label("Pack", systemImage: "person.3.fill") }
-                .tag(AppTab.pack)
-            ProfileView()
-                .tabItem { Label("Profile", systemImage: "person.crop.circle") }
-                .tag(AppTab.profile)
+                .toolbar(.hidden, for: .tabBar)
+        }
+        .overlay(alignment: .bottom) {
+            if recorder.state == .idle {
+                FloatingTabBar(selection: $selection)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: recorder.state == .idle)
+    }
+}
+
+enum AppTab: Hashable, CaseIterable {
+    case home, care, activity, memories
+
+    var title: String {
+        switch self {
+        case .home: return "Home"
+        case .care: return "Care"
+        case .activity: return "Walk"
+        case .memories: return "Memories"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .home: return "house.fill"
+        case .care: return "pawprint.fill"
+        case .activity: return "waveform.path.ecg"
+        case .memories: return "photo.fill"
         }
     }
 }
 
-enum AppTab: Hashable {
-    case home, walk, memories, pack, profile
+/// The floating bottom bar: the current tab is a black pill with its name, the others are white circles.
+struct FloatingTabBar: View {
+    @Binding var selection: AppTab
+    @Namespace private var pill
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(AppTab.allCases, id: \.self) { tab in
+                if tab != AppTab.allCases.first { Spacer(minLength: 8) }
+                Button {
+                    guard selection != tab else { return }
+                    Haptics.select()
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { selection = tab }
+                } label: {
+                    item(tab)
+                }
+                .buttonStyle(.pressable)
+                .accessibilityLabel(tab.title)
+                .accessibilityAddTraits(selection == tab ? .isSelected : [])
+            }
+        }
+        .padding(.horizontal, Space.l)
+        .padding(.bottom, 4)
+    }
+
+    @ViewBuilder
+    private func item(_ tab: AppTab) -> some View {
+        if selection == tab {
+            HStack(spacing: 10) {
+                Image(systemName: tab.symbol)
+                    .font(.system(size: 20, weight: .bold))
+                Text(tab.title)
+                    .font(.opaw(16, .heavy))
+                    .lineLimit(1)
+            }
+            .foregroundStyle(Color.opawOnInk)
+            .padding(.leading, 20)
+            .padding(.trailing, 24)
+            .frame(height: 64)
+            .background {
+                Capsule()
+                    .fill(Color.opawInk)
+                    .matchedGeometryEffect(id: "pill", in: pill)
+            }
+            .shadow(color: .black.opacity(0.22), radius: 14, y: 14)
+        } else {
+            Image(systemName: tab.symbol)
+                .font(.system(size: 20, weight: .bold))
+                .foregroundStyle(Color.opawInk)
+                .frame(width: 64, height: 64)
+                .background(Color.opawSurface, in: Circle())
+                .shadow(color: .black.opacity(0.08), radius: 13, y: 10)
+        }
+    }
+}
+
+extension View {
+    /// Leaves room under scrolling content for the floating tab bar.
+    func tabBarInset() -> some View {
+        safeAreaInset(edge: .bottom) { Color.clear.frame(height: 76) }
+    }
 }

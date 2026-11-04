@@ -99,13 +99,13 @@ struct BadgeGrid: View {
                 VStack(spacing: 6) {
                     ZStack {
                         Circle()
-                            .fill(isEarned ? Color.opawOrange : Color.secondary.opacity(0.12))
+                            .fill(isEarned ? Color.opawInk : Color.opawChip)
                         if !isEarned {
                             ProgressRing(progress: badge.progress(stats), lineWidth: 4)
                         }
                         Image(systemName: badge.symbol)
                             .font(.title2)
-                            .foregroundStyle(isEarned ? .white : .secondary)
+                            .foregroundStyle(isEarned ? Color.opawOnInk : Color.opawMuted)
                     }
                     .frame(width: 60, height: 60)
                     Text(badge.title)
@@ -187,7 +187,7 @@ struct EditDogView: View {
     }
 }
 
-private struct AddDogSheet: View {
+struct AddDogSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var draft = DogDraft()
     @State private var showPhoto = false

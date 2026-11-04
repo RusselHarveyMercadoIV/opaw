@@ -52,18 +52,52 @@ struct QuickLogWidgetView: View {
     @Environment(\.widgetFamily) private var family
 
     var body: some View {
+        Group {
+            if family == .accessoryRectangular {
+                lockScreen
+            } else {
+                homeScreen
+            }
+        }
+        .containerBackground(for: .widget) {
+            family == .accessoryRectangular ? Color.clear : Color(red: 0.957, green: 0.957, blue: 0.961)
+        }
+    }
+
+    /// Lock Screen: three one-tap logs.
+    private var lockScreen: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(entry.dogName ?? "Opaw")
+                .font(.system(size: 13, weight: .heavy, design: .rounded))
+                .lineLimit(1)
+            HStack(spacing: 6) {
+                ForEach([CareKind.meal, .pee, .poop]) { kind in
+                    Button(intent: LogCareIntent(kind: kind)) {
+                        Image(systemName: kind.symbol)
+                            .font(.system(size: 15, weight: .bold))
+                            .frame(maxWidth: .infinity, minHeight: 30)
+                    }
+                    .buttonStyle(.plain)
+                    .background(.white.opacity(0.18), in: Capsule())
+                    .accessibilityLabel("Log \(kind.title)")
+                }
+            }
+        }
+    }
+
+    private var homeScreen: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Image(systemName: "pawprint.fill")
-                    .foregroundStyle(Color.opawWidgetAccent)
                 Text(entry.dogName ?? "Opaw")
-                    .font(.headline)
+                    .font(.system(size: 16, weight: .black, design: .rounded))
                     .lineLimit(1)
                 Spacer(minLength: 0)
             }
+            .foregroundStyle(Color.opawWidgetInk)
             if entry.dogName == nil {
                 Text("Open Opaw to add your dog.")
-                    .font(.caption)
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
                     .foregroundStyle(.secondary)
             } else {
                 let columns = family == .systemSmall ? 2 : 4
@@ -72,22 +106,20 @@ struct QuickLogWidgetView: View {
                         Button(intent: LogCareIntent(kind: kind)) {
                             VStack(spacing: 2) {
                                 Image(systemName: kind.symbol)
-                                    .font(.title3)
+                                    .font(.system(size: 17, weight: .semibold))
                                 Text("\(entry.counts[kind] ?? 0)")
-                                    .font(.caption2.monospacedDigit())
+                                    .font(.system(size: 11, weight: .heavy, design: .rounded).monospacedDigit())
                                     .foregroundStyle(.secondary)
                             }
-                            .frame(maxWidth: .infinity, minHeight: 40)
+                            .foregroundStyle(Color.opawWidgetInk)
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .background(.white, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                         }
-                        .buttonStyle(.bordered)
-                        .tint(Color.opawWidgetAccent)
+                        .buttonStyle(.plain)
                         .accessibilityLabel("Log \(kind.title)")
                     }
                 }
             }
-        }
-        .containerBackground(for: .widget) {
-            Color(.systemBackground)
         }
     }
 }
@@ -99,7 +131,7 @@ struct QuickLogWidget: Widget {
         }
         .configurationDisplayName("Quick log")
         .description("Log meals, water and potty breaks with one tap.")
-        .supportedFamilies([.systemSmall, .systemMedium])
+        .supportedFamilies([.systemSmall, .systemMedium, .accessoryRectangular])
     }
 }
 
@@ -109,32 +141,35 @@ struct WalkLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: WalkActivityAttributes.self) { context in
             WalkActivityLockScreenView(context: context)
-                .activityBackgroundTint(Color.black.opacity(0.75))
-                .activitySystemActionForegroundColor(Color.opawWidgetAccent)
+                .activityBackgroundTint(Color.white)
+                .activitySystemActionForegroundColor(Color.opawWidgetInk)
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
                     Label(context.attributes.dogName, systemImage: "pawprint.fill")
-                        .font(.headline)
-                        .foregroundStyle(Color.opawWidgetAccent)
+                        .font(.system(size: 16, weight: .heavy, design: .rounded))
+                        .foregroundStyle(.white)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     WalkTimerText(state: context.state)
-                        .font(.title3.monospacedDigit())
+                        .font(.system(size: 20, weight: .heavy, design: .rounded).monospacedDigit())
+                        .foregroundStyle(.white)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     Text(OpawFormat.distance(meters: context.state.distanceMeters))
-                        .font(.title2.bold().monospacedDigit())
+                        .font(.system(size: 28, weight: .black, design: .rounded).monospacedDigit())
+                        .foregroundStyle(.white)
                 }
             } compactLeading: {
                 Image(systemName: "figure.walk")
-                    .foregroundStyle(Color.opawWidgetAccent)
+                    .foregroundStyle(.white)
             } compactTrailing: {
                 Text(OpawFormat.distance(meters: context.state.distanceMeters))
-                    .font(.caption.monospacedDigit())
+                    .font(.system(size: 12, weight: .heavy, design: .rounded).monospacedDigit())
+                    .foregroundStyle(.white)
             } minimal: {
                 Image(systemName: "pawprint.fill")
-                    .foregroundStyle(Color.opawWidgetAccent)
+                    .foregroundStyle(.white)
             }
         }
     }
@@ -156,28 +191,32 @@ struct WalkActivityLockScreenView: View {
     let context: ActivityViewContext<WalkActivityAttributes>
 
     var body: some View {
-        HStack(spacing: 16) {
-            Image(systemName: "pawprint.circle.fill")
-                .font(.system(size: 40))
-                .foregroundStyle(Color.opawWidgetAccent)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(context.isStale ? "Updating…" : context.state.isPaused ? "Walk paused" : "Walking with \(context.attributes.dogName)")
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                HStack(spacing: 16) {
-                    Text(OpawFormat.distance(meters: context.state.distanceMeters))
-                    WalkTimerText(state: context.state)
-                }
-                .font(.title3.monospacedDigit())
+        HStack(spacing: 14) {
+            Image(systemName: "pawprint.fill")
+                .font(.system(size: 20, weight: .bold))
                 .foregroundStyle(.white)
+                .frame(width: 48, height: 48)
+                .background(Color.opawWidgetInk, in: Circle())
+            VStack(alignment: .leading, spacing: 2) {
+                Text(context.isStale ? "Updating…" : context.state.isPaused ? "Walk paused" : "Walking with \(context.attributes.dogName)")
+                    .font(.system(size: 16, weight: .heavy, design: .rounded))
+                HStack(alignment: .firstTextBaseline, spacing: 14) {
+                    Text(OpawFormat.distance(meters: context.state.distanceMeters))
+                        .font(.system(size: 26, weight: .black, design: .rounded).monospacedDigit())
+                    WalkTimerText(state: context.state)
+                        .font(.system(size: 18, weight: .bold, design: .rounded).monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
             }
+            .foregroundStyle(Color.opawWidgetInk)
             Spacer(minLength: 0)
         }
-        .padding()
+        .padding(16)
     }
 }
 
 extension Color {
-    /// Opaw's persimmon accent, matching the app's AccentColor.
-    static let opawWidgetAccent = Color(red: 0.894, green: 0.341, blue: 0.180)
+    /// Opaw's ink, matching the app's AccentColor.
+    static let opawWidgetAccent = Color(red: 0.067, green: 0.067, blue: 0.067)
+    static let opawWidgetInk = Color(red: 0.067, green: 0.067, blue: 0.067)
 }

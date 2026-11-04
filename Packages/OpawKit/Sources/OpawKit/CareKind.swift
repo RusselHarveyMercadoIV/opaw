@@ -79,20 +79,25 @@ public enum CareKind: String, CaseIterable, Codable, Sendable, Identifiable {
 
 /// Optional detail for poop logs, useful for spotting health issues.
 public enum PoopConsistency: String, CaseIterable, Codable, Sendable, Identifiable {
+    case hard
+    case firm
     case normal
     case soft
     case runny
-    case hard
     case bloody
 
     public var id: String { rawValue }
 
+    /// The choices shown when logging; blood is logged as a color instead.
+    public static let pickerCases: [PoopConsistency] = [.hard, .firm, .normal, .soft, .runny]
+
     public var title: String {
         switch self {
+        case .hard: return "Hard"
+        case .firm: return "Firm"
         case .normal: return "Normal"
         case .soft: return "Soft"
         case .runny: return "Runny"
-        case .hard: return "Hard"
         case .bloody: return "Blood visible"
         }
     }
@@ -100,8 +105,33 @@ public enum PoopConsistency: String, CaseIterable, Codable, Sendable, Identifiab
     /// Whether this consistency deserves a gentle "keep an eye on it" hint.
     public var isConcerning: Bool {
         switch self {
-        case .normal, .soft: return false
+        case .firm, .normal, .soft: return false
         case .runny, .hard, .bloody: return true
         }
+    }
+}
+
+public enum PoopColor: String, CaseIterable, Codable, Sendable, Identifiable {
+    case brown
+    case yellow
+    case green
+    case black
+    case redTinge
+
+    public var id: String { rawValue }
+
+    public var title: String {
+        switch self {
+        case .brown: return "Brown"
+        case .yellow: return "Yellow"
+        case .green: return "Green"
+        case .black: return "Black"
+        case .redTinge: return "Red tinge"
+        }
+    }
+
+    /// Black or red stool can mean bleeding; worth a call to the vet.
+    public var isConcerning: Bool {
+        self == .black || self == .redTinge
     }
 }

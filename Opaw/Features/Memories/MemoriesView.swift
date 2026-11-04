@@ -7,6 +7,13 @@ struct MemoriesView: View {
     @Query(sort: \Dog.createdAt) private var dogs: [Dog]
     @AppStorage(OpawDefaults.activeDogKey, store: OpawDefaults.shared) private var activeDogID = ""
     @State private var showAdd = false
+    @State private var filter: Filter = .all
+
+    enum Filter: String, CaseIterable {
+        case all = "All"
+        case walks = "Walks"
+        case photos = "Photos"
+    }
 
     private var dog: Dog? {
         dogs.first { $0.id.uuidString == activeDogID } ?? dogs.first
@@ -14,6 +21,14 @@ struct MemoriesView: View {
 
     private var memories: [Memory] {
         (dog?.memories ?? []).sorted { $0.date > $1.date }
+    }
+
+    private var filtered: [Memory] {
+        switch filter {
+        case .all: return memories
+        case .walks: return memories.filter { $0.walkID != nil }
+        case .photos: return memories.filter { $0.walkID == nil }
+        }
     }
 
     /// Memories from this calendar day in earlier years.
@@ -30,13 +45,40 @@ struct MemoriesView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
+                    HStack {
+                        Text("Memories")
+                            .font(.opawDisplay(32))
+                        Spacer()
+                        Button { showAdd = true } label: { RoundIcon(symbol: "plus") }
+                            .buttonStyle(.pressable)
+                            .disabled(dog == nil)
+                            .accessibilityLabel("Add memory")
+                    }
+                    .padding(.top, 10)
+                    HStack(spacing: 6) {
+                        ForEach(Filter.allCases, id: \.self) { option in
+                            Button {
+                                withAnimation(.snappy) { filter = option }
+                                Haptics.select()
+                            } label: {
+                                Text(option.rawValue)
+                                    .font(.opaw(14, .bold))
+                                    .foregroundStyle(option == filter ? Color.opawOnInk : Color.opawInk)
+                                    .padding(.horizontal, 18)
+                                    .padding(.vertical, 10)
+                                    .background(option == filter ? Color.opawInk : Color.opawSurface, in: Capsule())
+                                    .shadow(color: .black.opacity(option == filter ? 0 : 0.05), radius: 8, y: 6)
+                            }
+                            .buttonStyle(.pressable)
+                        }
+                    }
                     if let dog {
                         milestoneBanner(dog: dog)
                     }
                     if !onThisDay.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
                             Label("On this day", systemImage: "clock.arrow.circlepath")
-                                .font(.headline)
+                                .font(.opaw(17, .black))
                             ScrollView(.horizontal, showsIndicators: false) {
                                 HStack {
                                     ForEach(onThisDay) { memory in
@@ -51,15 +93,15 @@ struct MemoriesView: View {
                             }
                         }
                     }
-                    if memories.isEmpty {
+                    if filtered.isEmpty {
                         ContentUnavailableView(
                             "No memories yet",
                             systemImage: "photo.on.rectangle.angled",
                             description: Text("Save favorite moments with \(dog?.name ?? "your dog").")
                         )
                     } else {
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 8)], spacing: 8) {
-                            ForEach(memories) { memory in
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 12)], spacing: 12) {
+                            ForEach(filtered) { memory in
                                 NavigationLink {
                                     MemoryDetailView(memory: memory)
                                 } label: {
@@ -70,18 +112,12 @@ struct MemoriesView: View {
                         }
                     }
                 }
-                .padding()
+                .padding(.horizontal, Space.l)
+                .padding(.bottom, 100)
             }
+            .scrollIndicators(.hidden)
             .opawBackground()
-            .navigationTitle("Memories")
-            .toolbar {
-                Button {
-                    showAdd = true
-                } label: {
-                    Label("Add memory", systemImage: "plus")
-                }
-                .disabled(dog == nil)
-            }
+            .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $showAdd) {
                 if let dog {
                     AddMemorySheet(dog: dog)
@@ -97,14 +133,14 @@ struct MemoriesView: View {
         if let birth = dog.birthDate,
            calendar.component(.month, from: birth) == calendar.component(.month, from: Date()),
            calendar.component(.day, from: birth) == calendar.component(.day, from: Date()) {
-            Label("Happy birthday, \(dog.name)! 🎂", systemImage: "gift.fill")
-                .font(.headline)
+            Label("Happy birthday, \(dog.name)!", systemImage: "gift.fill")
+                .font(.opaw(17, .heavy))
                 .card()
         } else {
             let days = calendar.dateComponents([.day], from: dog.createdAt, to: Date()).day ?? 0
             if days > 0, days % 100 == 0 {
                 Label("\(days) days with \(dog.name) on Opaw!", systemImage: "sparkles")
-                    .font(.headline)
+                    .font(.opaw(17, .heavy))
                     .card()
             }
         }
@@ -116,7 +152,7 @@ struct MemoryTile: View {
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
-            Color.opawOrange.opacity(0.15)
+            Color.opawChip
             if let data = memory.photoData, let image = UIImage(data: data) {
                 Image(uiImage: image)
                     .resizable()
@@ -124,16 +160,25 @@ struct MemoryTile: View {
             } else {
                 Image(systemName: "pawprint.fill")
                     .font(.largeTitle)
-                    .foregroundStyle(Color.opawOrange)
+                    .foregroundStyle(Color.opawMuted)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            Text(memory.date.formatted(.dateTime.month(.abbreviated).day().year()))
-                .font(.caption2.weight(.semibold))
-                .padding(6)
-                .background(.ultraThinMaterial, in: Capsule())
-                .padding(6)
+            LinearGradient(colors: [.clear, .black.opacity(0.45)], startPoint: .center, endPoint: .bottom)
+            VStack(alignment: .leading, spacing: 1) {
+                if !memory.caption.isEmpty {
+                    Text(memory.caption)
+                        .font(.opaw(14, .heavy))
+                        .lineLimit(1)
+                }
+                Text(memory.date.formatted(.dateTime.month(.abbreviated).day().year()))
+                    .font(.opaw(12, .semibold))
+                    .opacity(0.85)
+            }
+            .foregroundStyle(.white)
+            .padding(12)
         }
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .shadow(color: .black.opacity(0.06), radius: 12, y: 10)
     }
 }
 

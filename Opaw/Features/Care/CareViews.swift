@@ -6,11 +6,13 @@ import WidgetKit
 /// Log any kind of care with optional details.
 struct CareLogSheet: View {
     let dog: Dog
+    var initialKind: CareKind = .meal
     var onSaved: () -> Void = {}
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @State private var kind: CareKind = .meal
+    @State private var didSetKind = false
     @State private var date = Date()
     @State private var note = ""
     @State private var consistency: PoopConsistency = .normal
@@ -28,9 +30,9 @@ struct CareLogSheet: View {
                                 VStack(spacing: 4) {
                                     Image(systemName: option.symbol)
                                         .font(.title3)
-                                        .foregroundStyle(option == kind ? Color.white : Color.opawOrange)
+                                        .foregroundStyle(option == kind ? Color.opawOnInk : Color.opawInk)
                                         .frame(width: 40, height: 40)
-                                        .background(option == kind ? Color.opawOrange : Color.opawOrange.opacity(0.1), in: Circle())
+                                        .background(option == kind ? Color.opawInk : Color.opawChip, in: Circle())
                                     Text(option.title)
                                         .font(.caption)
                                         .lineLimit(1)
@@ -39,7 +41,7 @@ struct CareLogSheet: View {
                                 .frame(maxWidth: .infinity, minHeight: 60)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .fill(option == kind ? Color.opawOrange.opacity(0.08) : Color.opawSurface)
+                                        .fill(option == kind ? Color.opawChip : Color.opawSurface)
                                 )
                             }
                             .buttonStyle(.plain)
@@ -53,12 +55,12 @@ struct CareLogSheet: View {
                     DatePicker("When", selection: $date, in: ...Date())
                     if kind == .poop {
                         Picker("Consistency", selection: $consistency) {
-                            ForEach(PoopConsistency.allCases) { Text($0.title).tag($0) }
+                            ForEach(PoopConsistency.pickerCases) { Text($0.title).tag($0) }
                         }
                         if consistency.isConcerning {
                             Label("Keep an eye on this. If it continues for more than a day, call your vet.", systemImage: "exclamationmark.triangle")
                                 .font(.footnote)
-                                .foregroundStyle(.orange)
+                                .foregroundStyle(Color.opawAlert)
                         }
                     }
                     if kind == .weight {
@@ -86,6 +88,11 @@ struct CareLogSheet: View {
             }
         }
         .presentationDetents([.medium, .large])
+        .onAppear {
+            guard !didSetKind else { return }
+            didSetKind = true
+            kind = initialKind
+        }
     }
 
     private func save() {
@@ -227,7 +234,7 @@ private struct ReminderRow: View {
     }
 }
 
-private struct AddReminderSheet: View {
+struct AddReminderSheet: View {
     let dog: Dog
     let onSaved: () -> Void
 

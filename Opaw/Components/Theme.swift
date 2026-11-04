@@ -3,100 +3,147 @@ import UIKit
 
 // MARK: - Design tokens
 //
-// Direction: smooth, minimalist white. Pure white canvas, near-black ink,
-// one warm accent (persimmon), soft gray surfaces instead of shadows,
-// a serif display face for headlines and generous whitespace.
+// "Soft white": light gray ground, white cards with soft shadows, round floating
+// buttons, black pill buttons, a full-color sticker pet, rounded heavy type.
+// Red appears only when something needs attention.
+
+extension UIColor {
+    convenience init(hex: UInt32, alpha: CGFloat = 1) {
+        self.init(
+            red: CGFloat((hex >> 16) & 0xFF) / 255,
+            green: CGFloat((hex >> 8) & 0xFF) / 255,
+            blue: CGFloat(hex & 0xFF) / 255,
+            alpha: alpha
+        )
+    }
+
+    static func opaw(light: UInt32, dark: UInt32) -> UIColor {
+        UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: dark) : UIColor(hex: light) }
+    }
+}
 
 extension Color {
-    /// The single accent color. Defined in the asset catalog so it adapts to dark mode.
+    init(hex: UInt32) {
+        self.init(uiColor: UIColor(hex: hex))
+    }
+
+    /// The accent: black ink on light, white on dark. Defined in the asset catalog.
     static let opawOrange = Color("AccentColor")
 
-    /// The app canvas: pure white in light mode, true black in dark mode.
-    static let opawCream = Color(uiColor: .systemBackground)
+    /// The ground behind cards.
+    static let opawCream = Color(uiColor: .opaw(light: 0xF4F4F5, dark: 0x0B0B0C))
 
     /// Primary text and the primary button fill.
-    static let opawInk = Color(uiColor: UIColor { traits in
-        traits.userInterfaceStyle == .dark
-            ? UIColor(white: 0.96, alpha: 1)
-            : UIColor(red: 0.07, green: 0.07, blue: 0.08, alpha: 1)
-    })
+    static let opawInk = Color(uiColor: .opaw(light: 0x111111, dark: 0xF5F5F5))
 
     /// Text drawn on top of `opawInk`.
-    static let opawOnInk = Color(uiColor: UIColor { traits in
-        traits.userInterfaceStyle == .dark ? .black : .white
-    })
+    static let opawOnInk = Color(uiColor: .opaw(light: 0xFFFFFF, dark: 0x111111))
 
-    /// Soft surface for cards and controls, a whisper off white.
-    static let opawSurface = Color(uiColor: UIColor { traits in
-        traits.userInterfaceStyle == .dark
-            ? UIColor(white: 0.11, alpha: 1)
-            : UIColor(red: 0.965, green: 0.965, blue: 0.97, alpha: 1)
-    })
+    /// Cards, round buttons and sheets.
+    static let opawSurface = Color(uiColor: .opaw(light: 0xFFFFFF, dark: 0x1C1C1E))
 
-    /// Hairlines and inactive marks.
-    static let opawHairline = Color(uiColor: UIColor { traits in
-        traits.userInterfaceStyle == .dark
-            ? UIColor(white: 1, alpha: 0.12)
-            : UIColor(white: 0, alpha: 0.08)
-    })
+    /// Chips and inputs inside a card.
+    static let opawChip = Color(uiColor: .opaw(light: 0xF1F1F2, dark: 0x2C2C2E))
+
+    /// Secondary text.
+    static let opawMuted = Color(uiColor: .opaw(light: 0x999999, dark: 0x8E8E93))
+
+    /// Row dividers inside cards.
+    static let opawHairline = Color(uiColor: .opaw(light: 0xEEEEEE, dark: 0x2C2C2E))
+
+    /// Only for things that need attention: overdue meds, warnings.
+    static let opawAlert = Color(hex: 0xEC3013)
+
+    /// Mood dots.
+    static let opawGood = Color(hex: 0x34C759)
+    static let opawWarn = Color(hex: 0xF5B300)
 }
 
 enum Space {
     static let xs: CGFloat = 4
     static let s: CGFloat = 8
     static let m: CGFloat = 16
-    static let l: CGFloat = 24
+    static let l: CGFloat = 20
     static let xl: CGFloat = 32
     static let xxl: CGFloat = 48
 }
 
 enum Radius {
-    static let control: CGFloat = 16
-    static let card: CGFloat = 24
+    static let control: CGFloat = 20
+    static let card: CGFloat = 30
+    static let sheet: CGFloat = 40
 }
 
 extension Font {
-    /// Serif display face (New York) for headlines.
-    static func opawDisplay(_ size: CGFloat, weight: Font.Weight = .semibold) -> Font {
-        .system(size: size, weight: weight, design: .serif)
+    /// Rounded heavy display type, close to Nunito Black.
+    static func opawDisplay(_ size: CGFloat, weight: Font.Weight = .black) -> Font {
+        .system(size: size, weight: weight == .regular ? .bold : weight == .semibold ? .black : weight, design: .rounded)
+    }
+
+    /// Rounded text at a given weight.
+    static func opaw(_ size: CGFloat, _ weight: Font.Weight = .bold) -> Font {
+        .system(size: size, weight: weight, design: .rounded)
     }
 
     /// Rounded numerals for stats.
     static func opawNumber(_ size: CGFloat) -> Font {
-        .system(size: size, weight: .semibold, design: .rounded).monospacedDigit()
+        .system(size: size, weight: .black, design: .rounded).monospacedDigit()
     }
 }
 
-/// Small uppercase label above a headline, such as "01  NAME".
+/// Small label above a section.
 struct Eyebrow: View {
     let text: String
 
     var body: some View {
-        Text(text.uppercased())
-            .font(.system(size: 12, weight: .semibold))
-            .tracking(1.6)
-            .foregroundStyle(.secondary)
+        Text(text)
+            .font(.opaw(14, .bold))
+            .foregroundStyle(Color.opawMuted)
     }
 }
 
 // MARK: - Surfaces
 
-/// A flat, soft card: no shadow, just a quiet surface.
+/// A white card with a soft shadow.
 struct CardModifier: ViewModifier {
+    var padding: CGFloat = 20
+
     func body(content: Content) -> some View {
         content
-            .padding(20)
+            .padding(padding)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.opawSurface, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+            .shadow(color: .black.opacity(0.05), radius: 15, y: 12)
+    }
+}
+
+/// A pet cutout printed like a sticker: a thick white edge and a soft drop shadow.
+struct StickerModifier: ViewModifier {
+    var edge: CGFloat = 5
+
+    func body(content: Content) -> some View {
+        content
+            .shadow(color: .white, radius: 0, x: edge, y: 0)
+            .shadow(color: .white, radius: 0, x: -edge, y: 0)
+            .shadow(color: .white, radius: 0, x: 0, y: edge)
+            .shadow(color: .white, radius: 0, x: 0, y: -edge)
+            .shadow(color: .black.opacity(0.16), radius: 7, y: 10)
     }
 }
 
 extension View {
-    func card() -> some View { modifier(CardModifier()) }
+    func card(padding: CGFloat = 20) -> some View { modifier(CardModifier(padding: padding)) }
+
+    func sticker(edge: CGFloat = 5) -> some View { modifier(StickerModifier(edge: edge)) }
 
     /// Screen background.
     func opawBackground() -> some View {
         background(Color.opawCream.ignoresSafeArea())
+    }
+
+    /// The soft shadow under floating round buttons.
+    func floatingShadow() -> some View {
+        shadow(color: .black.opacity(0.07), radius: 13, y: 10)
     }
 }
 
@@ -108,9 +155,9 @@ struct OpawPrimaryButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: 17, weight: .semibold))
+            .font(.opaw(17, .heavy))
             .foregroundStyle(Color.opawOnInk)
-            .frame(maxWidth: .infinity, minHeight: 56)
+            .frame(maxWidth: .infinity, minHeight: 62)
             .background(Color.opawInk.opacity(isEnabled ? 1 : 0.18), in: Capsule())
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: configuration.isPressed)
@@ -121,10 +168,11 @@ struct OpawPrimaryButtonStyle: ButtonStyle {
 struct OpawSecondaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: 17, weight: .semibold))
+            .font(.opaw(17, .heavy))
             .foregroundStyle(Color.opawInk)
-            .frame(maxWidth: .infinity, minHeight: 56)
+            .frame(maxWidth: .infinity, minHeight: 62)
             .background(Color.opawSurface, in: Capsule())
+            .floatingShadow()
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: configuration.isPressed)
     }
@@ -149,6 +197,64 @@ extension ButtonStyle where Self == OpawSecondaryButtonStyle {
 
 extension ButtonStyle where Self == PressableStyle {
     static var pressable: PressableStyle { PressableStyle() }
+}
+
+/// A white floating circle with an icon, used for top-bar and bottom-bar actions.
+struct RoundIcon: View {
+    let symbol: String
+    var size: CGFloat = 54
+    var tint: Color = .opawInk
+
+    var body: some View {
+        Image(systemName: symbol)
+            .font(.system(size: size * 0.38, weight: .bold))
+            .foregroundStyle(tint)
+            .frame(width: size, height: size)
+            .background(Color.opawSurface, in: Circle())
+            .floatingShadow()
+    }
+}
+
+/// A pill-shaped choice: black when selected, light gray otherwise.
+struct ChoiceChip: View {
+    let title: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.opaw(14, .bold))
+                .foregroundStyle(isSelected ? Color.opawOnInk : Color.opawInk.opacity(0.7))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(isSelected ? Color.opawInk : Color.opawChip, in: Capsule())
+        }
+        .buttonStyle(.pressable)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
+/// A screen header: round button, title, round button.
+struct ScreenHeader<Leading: View, Trailing: View>: View {
+    let title: String
+    @ViewBuilder var leading: Leading
+    @ViewBuilder var trailing: Trailing
+
+    var body: some View {
+        ZStack {
+            Text(title)
+                .font(.opaw(22, .black))
+                .foregroundStyle(Color.opawInk)
+            HStack {
+                leading
+                Spacer()
+                trailing
+            }
+        }
+        .padding(.horizontal, Space.l)
+        .padding(.top, 10)
+    }
 }
 
 // MARK: - Shared pieces
@@ -185,7 +291,7 @@ struct ProgressRing: View {
     var body: some View {
         ZStack {
             Circle()
-                .stroke(Color.opawHairline, lineWidth: lineWidth)
+                .stroke(Color.opawChip, lineWidth: lineWidth)
             Circle()
                 .trim(from: 0, to: min(1, max(0, progress)))
                 .stroke(Color.opawOrange, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
@@ -204,9 +310,9 @@ struct CareGlyph: View {
     var body: some View {
         Image(systemName: symbol)
             .font(.system(size: size * 0.42, weight: .semibold))
-            .foregroundStyle(filled ? Color.white : Color.opawOrange)
+            .foregroundStyle(filled ? Color.opawOnInk : Color.opawInk)
             .frame(width: size, height: size)
-            .background(filled ? Color.opawOrange : Color.opawOrange.opacity(0.1), in: Circle())
+            .background(filled ? Color.opawInk : Color.opawChip, in: Circle())
     }
 }
 
@@ -252,20 +358,18 @@ enum Haptics {
     }
 }
 
-/// Serif navigation titles across the app.
+/// Rounded heavy navigation titles across the app.
 enum OpawAppearance {
     static func apply() {
-        let large = UIFont.systemFont(ofSize: 34, weight: .bold)
-        let inline = UIFont.systemFont(ofSize: 17, weight: .semibold)
         let appearance = UINavigationBarAppearance()
         appearance.configureWithTransparentBackground()
-        appearance.backgroundColor = .systemBackground
+        appearance.backgroundColor = .opaw(light: 0xF4F4F5, dark: 0x0B0B0C)
         appearance.shadowColor = .clear
-        if let serif = large.fontDescriptor.withDesign(.serif) {
-            appearance.largeTitleTextAttributes = [.font: UIFont(descriptor: serif, size: 34)]
+        if let rounded = UIFont.systemFont(ofSize: 34, weight: .black).fontDescriptor.withDesign(.rounded) {
+            appearance.largeTitleTextAttributes = [.font: UIFont(descriptor: rounded, size: 34)]
         }
-        if let serif = inline.fontDescriptor.withDesign(.serif) {
-            appearance.titleTextAttributes = [.font: UIFont(descriptor: serif, size: 17)]
+        if let rounded = UIFont.systemFont(ofSize: 18, weight: .black).fontDescriptor.withDesign(.rounded) {
+            appearance.titleTextAttributes = [.font: UIFont(descriptor: rounded, size: 18)]
         }
         UINavigationBar.appearance().standardAppearance = appearance
         UINavigationBar.appearance().scrollEdgeAppearance = appearance
