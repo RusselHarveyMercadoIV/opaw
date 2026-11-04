@@ -122,7 +122,8 @@ private struct PackHomeView: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             Map(initialPosition: .userLocation(fallback: .automatic)) {
-                UserAnnotation { _ in
+                if let here = location.lastLocation?.coordinate {
+                    Annotation("", coordinate: here) {
                     ZStack {
                         Circle().fill(Color.opawAlert.opacity(0.14)).frame(width: 90, height: 90)
                         Circle()
@@ -130,6 +131,7 @@ private struct PackHomeView: View {
                             .frame(width: 20, height: 20)
                             .overlay(Circle().stroke(Color.white, lineWidth: 4))
                             .shadow(color: .black.opacity(0.2), radius: 5, y: 4)
+                    }
                     }
                 }
                 ForEach(shown) { dog in

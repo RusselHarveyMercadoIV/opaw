@@ -381,8 +381,6 @@ private struct LiveWalkView: View {
                 }
                 if let here = recorder.lastLocation?.coordinate ?? recorder.points.last?.coordinate {
                     Annotation("", coordinate: here, anchor: .bottom) { petMarker }
-                } else {
-                    UserAnnotation()
                 }
             }
             .mapStyle(.standard(pointsOfInterest: .excludingAll))

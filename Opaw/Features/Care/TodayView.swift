@@ -198,16 +198,16 @@ struct TodayView: View {
     }
 
     private var logCard: some View {
-        let entries = entries
+        let rows = entries
         return VStack(spacing: 0) {
-            if entries.isEmpty {
+            if rows.isEmpty {
                 Text(isToday ? "Nothing logged yet. Tap a tile to log it." : "Nothing was logged this day.")
                     .font(.opaw(15, .semibold))
                     .foregroundStyle(Color.opawMuted)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.vertical, 13)
             }
-            ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
+            ForEach(Array(rows.enumerated()), id: \.element.id) { index, entry in
                 HStack(spacing: 0) {
                     Text(entry.date.formatted(date: .omitted, time: .shortened))
                         .foregroundStyle(Color.opawFaint)
@@ -222,7 +222,7 @@ struct TodayView: View {
                 .font(.opaw(15, .semibold))
                 .padding(.vertical, 13)
                 .overlay(alignment: .bottom) {
-                    if index < entries.count - 1 { Rectangle().fill(Color.opawHairline).frame(height: 1) }
+                    if index < rows.count - 1 { Rectangle().fill(Color.opawHairline).frame(height: 1) }
                 }
             }
         }
