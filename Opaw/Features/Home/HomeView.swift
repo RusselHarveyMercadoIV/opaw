@@ -82,7 +82,7 @@ struct HomeView: View {
             .accessibilityLabel("Family")
             Spacer()
             if page != Self.addPage, let dog = currentDog {
-                Button { sheet = .nearby } label: { TopCircle { Image(systemName: "heart.fill").font(.system(size: 20, weight: .bold)) } }
+                Button { sheet = .nearby } label: { TopCircle { Icon(.heart, size: 22) } }
                     .buttonStyle(.pressable)
                     .accessibilityLabel("Friends nearby")
                 ShareAvatarButton(dog: dog)
@@ -108,8 +108,7 @@ struct HomeView: View {
             Text("Family")
                 .font(.opaw(15, .heavy))
                 .foregroundStyle(Color.opawInk)
-            Image(systemName: "chevron.right")
-                .font(.system(size: 13, weight: .heavy))
+            Icon(.chevronRight, size: 16)
                 .foregroundStyle(Color.opawInk)
         }
         .padding(.leading, 8)
@@ -193,8 +192,7 @@ private struct ShareAvatarButton: View {
 
     private var label: some View {
         TopCircle {
-            Image(systemName: "point.3.filled.connected.trianglepath.dotted")
-                .font(.system(size: 19, weight: .bold))
+            Icon(.share, size: 22)
         }
     }
 }
@@ -371,8 +369,7 @@ private struct AddPetPage: View {
                         .frame(width: 190, height: 210)
                         .padding(.top, 70)
                     Button(action: onAdd) {
-                        Image(systemName: "plus")
-                            .font(.system(size: 32, weight: .bold))
+                        Icon(.plus, size: 34, weight: 2.8)
                             .foregroundStyle(.white)
                             .frame(width: 88, height: 88)
                             .background(Color(hex: 0x111111), in: Circle())

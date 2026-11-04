@@ -178,8 +178,7 @@ struct CareView: View {
 
     private func circle(symbol: String, label: String, badge: String?, alert: Bool) -> some View {
         VStack(spacing: 6) {
-            Image(systemName: symbol)
-                .font(.system(size: 24, weight: .semibold))
+            SymbolIcon(symbol: symbol, size: 26)
                 .foregroundStyle(alert ? Color.opawAlert : Color.opawInk)
                 .frame(width: 68, height: 68)
                 .background(Color.opawSurface, in: Circle())

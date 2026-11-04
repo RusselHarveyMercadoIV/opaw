@@ -113,8 +113,7 @@ struct FamilyTreeView: View {
                         MiniFace(data: relative.photoData, size: size, rim: 4, fill: Color.opawChip, initial: String(relative.name.prefix(1)))
                             .shadow(color: .black.opacity(0.1), radius: 12, y: 10)
                     } else {
-                        Image(systemName: "plus")
-                            .font(.system(size: 20, weight: .bold))
+                        Icon(.plus, size: 22)
                             .foregroundStyle(Color.opawMuted)
                             .frame(width: size, height: size)
                             .overlay(Circle().strokeBorder(Color(hex: 0xC4C4C6), style: StrokeStyle(lineWidth: 2, dash: [5, 4])))
@@ -199,8 +198,7 @@ struct FamilyTreeView: View {
                         .accessibilityLabel(item.name)
                     }
                     Button { showAddDog = true } label: {
-                        Image(systemName: "plus")
-                            .font(.system(size: 18, weight: .bold))
+                        Icon(.plus, size: 20)
                             .foregroundStyle(Color.opawMuted)
                             .frame(width: 58, height: 58)
                             .overlay(Circle().strokeBorder(Color(hex: 0xC4C4C6), style: StrokeStyle(lineWidth: 2, dash: [5, 4])))
@@ -274,8 +272,7 @@ private struct RelativeSheet: View {
                     ZStack {
                         MiniFace(data: relative.photoData, size: 80, rim: 4, fill: Color.opawChip)
                         if relative.photoData == nil {
-                            Image(systemName: "camera.fill")
-                                .font(.system(size: 22, weight: .bold))
+                            Icon(.camera, size: 24)
                                 .foregroundStyle(Color.opawMuted)
                         }
                     }

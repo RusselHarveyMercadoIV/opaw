@@ -119,8 +119,7 @@ struct FloatingTabBar: View {
     private func item(_ tab: AppTab) -> some View {
         if selection == tab {
             HStack(spacing: 10) {
-                Image(systemName: tab.symbol)
-                    .font(.system(size: 22, weight: .bold))
+                SymbolIcon(symbol: tab.symbol, size: 24, cutoutColor: Color.opawInk)
                 Text(tab.title)
                     .font(.opaw(16, .heavy))
                     .lineLimit(1)
@@ -136,8 +135,7 @@ struct FloatingTabBar: View {
             }
             .shadow(color: .black.opacity(0.22), radius: 14, y: 14)
         } else {
-            Image(systemName: tab.symbol)
-                .font(.system(size: 22, weight: .bold))
+            SymbolIcon(symbol: tab.symbol, size: 24, cutoutColor: Color.opawSurface)
                 .foregroundStyle(Color.opawInk)
                 .frame(width: 64, height: 64)
                 .background(Color.opawSurface, in: Circle())

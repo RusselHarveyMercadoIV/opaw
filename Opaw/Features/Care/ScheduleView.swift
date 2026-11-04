@@ -106,8 +106,7 @@ struct ScheduleView: View {
             ZStack {
                 if isDone {
                     Circle().fill(Color(hex: 0x111111))
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 9, weight: .black))
+                    Icon(.check, size: 11)
                         .foregroundStyle(.white)
                 } else if needsAttention {
                     Circle().strokeBorder(Color.opawAlert, lineWidth: 2.5)

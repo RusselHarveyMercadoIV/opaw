@@ -247,8 +247,7 @@ struct RoundIcon: View {
     var tint: Color = .opawInk
 
     var body: some View {
-        Image(systemName: symbol)
-            .font(.system(size: size * 0.38, weight: .bold))
+        SymbolIcon(symbol: symbol, size: size * 0.41)
             .foregroundStyle(tint)
             .frame(width: size, height: size)
             .background(Color.opawSurface, in: Circle())

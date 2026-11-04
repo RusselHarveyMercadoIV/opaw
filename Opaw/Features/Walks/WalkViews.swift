@@ -472,8 +472,7 @@ private struct LiveWalkView: View {
                         if recorder.state == .paused { recorder.resume() } else { recorder.pause() }
                         Haptics.tap()
                     } label: {
-                        Image(systemName: recorder.state == .paused ? "play.fill" : "pause.fill")
-                            .font(.system(size: 20, weight: .bold))
+                        SymbolIcon(symbol: recorder.state == .paused ? "play.fill" : "pause.fill", size: 22)
                             .foregroundStyle(Color(hex: 0x111111))
                             .frame(width: 64, height: 64)
                             .background(Color(hex: 0xF1F1F2), in: Circle())
@@ -523,8 +522,7 @@ struct PinBadge: View {
 
     var body: some View {
         let isPoop = kind == CareKind.poop.rawValue
-        Image(systemName: isPoop ? CareKind.poop.symbol : CareKind.pee.symbol)
-            .font(.system(size: 15, weight: .bold))
+        Icon(isPoop ? .poop : .pee, size: 17)
             .foregroundStyle(isPoop ? Color.white : Color(hex: 0x111111))
             .frame(width: 34, height: 34)
             .background(isPoop ? Color(hex: 0x111111) : Color.white, in: Circle())
@@ -659,8 +657,7 @@ private struct WalkStoryView: View {
         VStack(alignment: .leading, spacing: 0) {
             if isRecord {
                 HStack(spacing: 6) {
-                    Image(systemName: "sparkle")
-                        .font(.system(size: 12, weight: .black))
+                    Icon(.sparkle, size: 13)
                     Text("Longest walk this month")
                         .font(.opaw(13, .heavy))
                 }

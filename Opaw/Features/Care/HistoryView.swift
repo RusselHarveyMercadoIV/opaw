@@ -73,8 +73,7 @@ struct HistoryView: View {
         .overlay(alignment: .bottom) {
             ShareLink(item: vetSummary) {
                 HStack(spacing: 10) {
-                    Image(systemName: "doc.text")
-                        .font(.system(size: 18, weight: .bold))
+                    Icon(.document, size: 20)
                     Text("Share vet summary")
                         .font(.opaw(17, .heavy))
                 }
@@ -95,8 +94,7 @@ struct HistoryView: View {
 
     private var summaryCard: some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "sparkles")
-                .font(.system(size: 18, weight: .bold))
+            Icon(.sparkle, size: 18)
                 .foregroundStyle(.white)
                 .padding(.top, 2)
             VStack(alignment: .leading, spacing: 4) {

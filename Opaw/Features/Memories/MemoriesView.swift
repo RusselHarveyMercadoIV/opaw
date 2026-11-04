@@ -30,8 +30,7 @@ struct MemoriesView: View {
                             .foregroundStyle(Color.opawInk)
                         Spacer()
                         Button { showAdd = true } label: {
-                            Image(systemName: "camera")
-                                .font(.system(size: 20, weight: .bold))
+                            Icon(.camera, size: 22)
                                 .foregroundStyle(.white)
                                 .frame(width: 54, height: 54)
                                 .background(Color(hex: 0x111111), in: Circle())
@@ -295,8 +294,7 @@ private struct BigMemoryCard<Photo: View>: View {
                     toggleFavorite()
                     Haptics.tap()
                 } label: {
-                    Image(systemName: isFavorite ? "heart.fill" : "heart")
-                        .font(.system(size: 21, weight: .bold))
+                    Icon(.heart, size: 22)
                         .foregroundStyle(isFavorite ? Color.opawAlert : Color.opawGhost)
                         .frame(width: 44, height: 44)
                 }

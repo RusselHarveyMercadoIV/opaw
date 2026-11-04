@@ -72,8 +72,7 @@ struct QuickLogWidgetView: View {
         Button(intent: LogCareIntent(kind: .poop)) {
             ZStack {
                 AccessoryWidgetBackground()
-                Image(systemName: CareKind.poop.symbol)
-                    .font(.system(size: 22, weight: .bold))
+                Icon(.poop, size: 24)
             }
         }
         .buttonStyle(.plain)
@@ -89,8 +88,7 @@ struct QuickLogWidgetView: View {
             HStack(spacing: 6) {
                 ForEach([CareKind.meal, .pee, .poop]) { kind in
                     Button(intent: LogCareIntent(kind: kind)) {
-                        Image(systemName: kind.symbol)
-                            .font(.system(size: 15, weight: .bold))
+                        SymbolIcon(symbol: kind.symbol, size: 17)
                             .frame(maxWidth: .infinity, minHeight: 30)
                     }
                     .buttonStyle(.plain)
@@ -121,8 +119,7 @@ struct QuickLogWidgetView: View {
                     ForEach(CareKind.quickLog) { kind in
                         Button(intent: LogCareIntent(kind: kind)) {
                             VStack(spacing: 2) {
-                                Image(systemName: kind.symbol)
-                                    .font(.system(size: 17, weight: .semibold))
+                                SymbolIcon(symbol: kind.symbol, size: 19)
                                 Text("\(entry.counts[kind] ?? 0)")
                                     .font(.custom("Nunito-ExtraBold", size: 11).monospacedDigit())
                                     .foregroundStyle(.secondary)
@@ -327,8 +324,7 @@ struct WalkActivityLockScreenView: View {
                         .foregroundStyle(Color(white: 0.67))
                 }
                 Spacer(minLength: 0)
-                Image(systemName: context.state.isPaused ? "play.fill" : "pause.fill")
-                    .font(.system(size: 16, weight: .bold))
+                SymbolIcon(symbol: context.state.isPaused ? "play.fill" : "pause.fill", size: 18)
                     .foregroundStyle(.white)
                     .frame(width: 44, height: 44)
                     .background(Color(red: 0.165, green: 0.165, blue: 0.173), in: Circle())
