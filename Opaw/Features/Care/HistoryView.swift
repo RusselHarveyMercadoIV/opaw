@@ -31,60 +31,64 @@ struct HistoryView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 12) {
-                ScreenHeader(title: "History") {
-                    Button { dismiss() } label: { RoundIcon(symbol: "chevron.left") }
-                        .buttonStyle(.pressable)
-                        .accessibilityLabel("Back")
-                } trailing: {
-                    ShareLink(item: vetSummary) { RoundIcon(symbol: "square.and.arrow.up") }
-                        .buttonStyle(.pressable)
-                        .accessibilityLabel("Share summary")
-                }
-
+            VStack(spacing: 0) {
                 HStack(spacing: 6) {
                     ForEach(Range.allCases) { option in
-                        Button {
+                        FilterPill(title: option.rawValue, isSelected: option == range) {
                             withAnimation(.snappy) { range = option }
                             Haptics.select()
-                        } label: {
-                            Text(option.rawValue)
-                                .font(.opaw(14, .bold))
-                                .foregroundStyle(option == range ? Color.opawOnInk : Color.opawInk)
-                                .padding(.horizontal, 18)
-                                .padding(.vertical, 10)
-                                .background(option == range ? Color.opawInk : Color.opawSurface, in: Capsule())
-                                .shadow(color: .black.opacity(option == range ? 0 : 0.05), radius: 8, y: 6)
                         }
-                        .buttonStyle(.pressable)
                     }
                     Spacer()
                 }
-                .padding(.horizontal, Space.l)
-                .padding(.top, 4)
+                .padding(.horizontal, 20)
+                .padding(.top, 14)
 
                 summaryCard
-                    .padding(.horizontal, Space.l)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 14)
                 weightCard
-                    .padding(.horizontal, Space.l)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 12)
                 poopCard
-                    .padding(.horizontal, Space.l)
-                logCard
-                    .padding(.horizontal, Space.l)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 12)
             }
-            .padding(.bottom, 180)
+            .padding(.bottom, 120)
         }
         .scrollIndicators(.hidden)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            ScreenHeader(title: "History") {
+                Button { dismiss() } label: { RoundIcon(symbol: "chevron.left") }
+                    .buttonStyle(.pressable)
+                    .accessibilityLabel("Back")
+            } trailing: {
+                ShareLink(item: vetSummary) { RoundIcon(symbol: "square.and.arrow.up") }
+                    .buttonStyle(.pressable)
+                    .accessibilityLabel("Share summary")
+            }
+            .background(Color.opawCream)
+        }
         .opawBackground()
         .overlay(alignment: .bottom) {
             ShareLink(item: vetSummary) {
-                Label("Share vet summary", systemImage: "doc.text")
+                HStack(spacing: 10) {
+                    Image(systemName: "doc.text")
+                        .font(.system(size: 18, weight: .bold))
+                    Text("Share vet summary")
+                        .font(.opaw(17, .heavy))
+                }
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 62)
+                .background(Color(hex: 0x111111), in: Capsule())
             }
-            .buttonStyle(.opawPrimary)
-            .padding(.horizontal, Space.l)
-            .padding(.bottom, 92)
+            .buttonStyle(.pressable)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 4)
         }
         .toolbar(.hidden, for: .navigationBar)
+        .hidesFloatingTabBar()
     }
 
     // MARK: Summary
@@ -92,7 +96,7 @@ struct HistoryView: View {
     private var summaryCard: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: "sparkles")
-                .font(.system(size: 20, weight: .bold))
+                .font(.system(size: 18, weight: .bold))
                 .foregroundStyle(.white)
                 .padding(.top, 2)
             VStack(alignment: .leading, spacing: 4) {
@@ -101,13 +105,15 @@ struct HistoryView: View {
                     .foregroundStyle(Color(hex: 0xAAAAAA))
                 Text(weeklySummary)
                     .font(.opaw(16, .bold))
+                    .lineSpacing(5)
                     .foregroundStyle(.white)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
         }
-        .padding(20)
-        .background(Color(hex: 0x111111), in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+        .padding(.horizontal, 20)
+        .padding(.vertical, 18)
+        .background(Color(hex: 0x111111), in: RoundedRectangle(cornerRadius: 30, style: .continuous))
     }
 
     /// Plain sentences from this week's numbers. Computed on device; nothing leaves the phone.
@@ -175,8 +181,8 @@ struct HistoryView: View {
                     .font(.opaw(17, .black))
                 Spacer()
                 if let latest = weightPoints.last {
-                    (Text(latest.kg.formatted(.number.precision(.fractionLength(1)))) + Text(" kg").font(.opaw(14, .bold)).foregroundColor(Color.opawMuted))
-                        .font(.opawNumber(22))
+                    (Text(latest.kg.formatted(.number.precision(.fractionLength(1)))) + Text(" kg").font(.opaw(14, .black)).foregroundColor(Color.opawMuted))
+                        .font(.opaw(22, .black))
                 }
             }
             if points.count < 2 {
@@ -190,10 +196,16 @@ struct HistoryView: View {
                         LineMark(x: .value("Date", point.date), y: .value("kg", point.kg))
                             .foregroundStyle(Color.opawInk)
                             .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
-                            .interpolationMethod(.catmullRom)
+                            .interpolationMethod(.linear)
                         PointMark(x: .value("Date", point.date), y: .value("kg", point.kg))
-                            .foregroundStyle(index == points.count - 1 ? Color.opawInk : Color.opawSurface)
-                            .symbolSize(index == points.count - 1 ? 120 : 40)
+                            .symbol {
+                                if index == points.count - 1 {
+                                    Circle().fill(Color.opawInk).frame(width: 12, height: 12)
+                                } else {
+                                    Circle().fill(Color.opawSurface).frame(width: 7, height: 7)
+                                        .overlay(Circle().stroke(Color.opawInk, lineWidth: 2.5))
+                                }
+                            }
                     }
                 }
                 .chartYScale(domain: .automatic(includesZero: false))
@@ -202,18 +214,22 @@ struct HistoryView: View {
                     AxisMarks(values: .automatic(desiredCount: 6)) { _ in
                         AxisValueLabel(format: range == .week ? .dateTime.weekday(.abbreviated) : .dateTime.month(.abbreviated))
                             .font(.opaw(12, .semibold))
-                            .foregroundStyle(Color.opawMuted)
+                            .foregroundStyle(Color.opawFaint)
                     }
                 }
                 .frame(height: 110)
             }
         }
-        .card(padding: 20)
+        .padding(.horizontal, 20)
+        .padding(.top, 18)
+        .padding(.bottom, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .whiteCard()
     }
 
     // MARK: Poop
 
-    private enum PoopDay { case empty, normal, watch }
+    private enum PoopDay: Equatable { case empty, normal, other(PoopConsistency?) }
 
     /// One entry per day, oldest first.
     private func poopDays(count: Int) -> [PoopDay] {
@@ -223,66 +239,43 @@ struct HistoryView: View {
             let day = calendar.date(byAdding: .day, value: -offset, to: today) ?? today
             let poops = dog.events(on: day).filter { $0.kind == .poop }
             if poops.isEmpty { return .empty }
-            let concerning = poops.contains { ($0.poopConsistency?.isConcerning ?? false) || ($0.poopColor?.isConcerning ?? false) }
-            return concerning ? .watch : .normal
+            if let off = poops.first(where: { ($0.poopConsistency ?? .normal) != .normal || ($0.poopColor?.isConcerning ?? false) }) {
+                return .other(off.poopConsistency)
+            }
+            return .normal
         }
     }
 
     private var poopCard: some View {
         let days = poopDays(count: 14)
         let normal = days.filter { $0 == .normal }.count
-        let watch = days.filter { $0 == .watch }.count
+        var others: [String: Int] = [:]
+        for day in days {
+            if case .other(let consistency) = day { others[(consistency?.title ?? "Off").lowercased(), default: 0] += 1 }
+        }
+        let caption = ([("\(normal) normal")] + others.sorted { $0.value > $1.value }.map { "\($0.value) \($0.key)" }).joined(separator: " · ")
         return VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {
                 Text("Poop, last 14 days")
                     .font(.opaw(17, .black))
                 Spacer()
-                Text(watch > 0 ? "\(normal) normal · \(watch) to watch" : "\(normal) normal")
+                Text(caption)
                     .font(.opaw(13, .bold))
-                    .foregroundStyle(watch > 0 ? Color.opawAlert : Color.opawMuted)
+                    .foregroundStyle(Color.opawMuted)
             }
             HStack(spacing: 4) {
                 ForEach(Array(days.enumerated()), id: \.offset) { _, day in
                     RoundedRectangle(cornerRadius: 7, style: .continuous)
-                        .fill(day == .normal ? Color.opawInk : day == .watch ? Color.opawAlert : Color.opawChip)
+                        .fill(day == .normal ? Color.opawInk : day == .empty ? Color(hex: 0xEEEEEF) : Color(hex: 0xD9D9DC))
                         .frame(height: 26)
                 }
             }
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("\(normal) normal days and \(watch) days to watch in the last 14 days")
-        }
-        .card(padding: 20)
-    }
-
-    // MARK: Log
-
-    private var logCard: some View {
-        let events = (dog.careEvents ?? []).filter { $0.date >= start }.sorted { $0.date > $1.date }
-        return VStack(alignment: .leading, spacing: 0) {
-            Text("All logs")
-                .font(.opaw(17, .black))
-                .padding(.vertical, 12)
-            if events.isEmpty {
-                Text("Nothing logged in this range.")
-                    .font(.opaw(15, .semibold))
-                    .foregroundStyle(Color.opawMuted)
-                    .padding(.bottom, 12)
-            }
-            ForEach(events.prefix(60)) { event in
-                HStack(alignment: .firstTextBaseline) {
-                    Text(event.date.formatted(.dateTime.month(.abbreviated).day()))
-                        .font(.opaw(13, .bold))
-                        .foregroundStyle(Color.opawMuted)
-                        .frame(width: 52, alignment: .leading)
-                    CareEventRow(event: event)
-                }
-                .overlay(alignment: .top) { Rectangle().fill(Color.opawHairline).frame(height: 1) }
-            }
+            .accessibilityLabel(caption)
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 4)
-        .background(Color.opawSurface, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
-        .shadow(color: .black.opacity(0.05), radius: 15, y: 12)
+        .padding(.vertical, 16)
+        .whiteCard()
     }
 
     // MARK: Vet summary

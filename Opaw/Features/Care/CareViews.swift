@@ -242,6 +242,9 @@ struct AddReminderSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var kind: CareKind = .meds
     @State private var title = ""
+    @State private var note = ""
+    @State private var repeats: ReminderRepeat = .daily
+    @State private var startDate = Date()
     @State private var time = Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: Date()) ?? Date()
 
     var body: some View {
@@ -251,6 +254,13 @@ struct AddReminderSheet: View {
                     ForEach(CareKind.allCases) { Label($0.title, systemImage: $0.symbol).tag($0) }
                 }
                 TextField("Title", text: $title, prompt: Text("\(dog.name)'s \(kind.title.lowercased())"))
+                TextField("Detail", text: $note, prompt: Text("e.g. with food"))
+                Picker("Repeats", selection: $repeats) {
+                    ForEach(ReminderRepeat.allCases) { Text($0.title).tag($0) }
+                }
+                if repeats != .daily {
+                    DatePicker("Next on", selection: $startDate, in: Date()..., displayedComponents: .date)
+                }
                 DatePicker("Time", selection: $time, displayedComponents: .hourAndMinute)
             }
             .navigationTitle("New reminder")
@@ -263,7 +273,16 @@ struct AddReminderSheet: View {
                     Button("Add") {
                         let parts = Calendar.current.dateComponents([.hour, .minute], from: time)
                         let finalTitle = title.isEmpty ? "\(dog.name)'s \(kind.title.lowercased())" : title
-                        modelContext.insert(Reminder(title: finalTitle, kind: kind, hour: parts.hour ?? 9, minute: parts.minute ?? 0, dog: dog))
+                        modelContext.insert(Reminder(
+                            title: finalTitle,
+                            kind: kind,
+                            hour: parts.hour ?? 9,
+                            minute: parts.minute ?? 0,
+                            repeats: repeats,
+                            startDate: startDate,
+                            note: note.trimmingCharacters(in: .whitespacesAndNewlines),
+                            dog: dog
+                        ))
                         try? modelContext.save()
                         onSaved()
                         dismiss()
@@ -271,6 +290,6 @@ struct AddReminderSheet: View {
                 }
             }
         }
-        .presentationDetents([.medium])
+        .presentationDetents([.large])
     }
 }

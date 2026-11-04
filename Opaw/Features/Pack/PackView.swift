@@ -22,7 +22,6 @@ struct PackView: View {
                     PackHomeView()
                 }
             }
-            .navigationTitle("Pack")
         }
     }
 }
@@ -87,57 +86,129 @@ private struct JoinPackView: View {
     }
 }
 
-// MARK: - Home
+// MARK: - Nearby (2e)
 
 private struct PackHomeView: View {
-    enum PackSection: String, CaseIterable {
-        case nearby = "Nearby"
-        case feed = "Feed"
-    }
-
     @Environment(PackService.self) private var pack
-    @State private var section: PackSection = .nearby
+    @Environment(WalkRecorder.self) private var location
+    @Environment(\.modelContext) private var modelContext
+    @Query(sort: \Dog.createdAt) private var myDogs: [Dog]
+
+    enum Filter { case nearby, walking }
+
+    @State private var filter: Filter = .nearby
+    @State private var dogs: [PackDog] = []
+    @State private var posts: [PackPost] = []
+    @State private var following: Set<UUID> = []
+    @State private var selected: PackDog?
+    @State private var status: String?
+    @State private var profile: PackDog?
+    @State private var reporting: PackDog?
     @State private var confirmDelete = false
     @State private var deleteError: String?
 
+    private var walkingNow: Set<UUID> {
+        Set(posts.filter { $0.kind == "walk" && Date().timeIntervalSince($0.createdAt) < 2 * 3600 }.map(\.dogID))
+    }
+
+    private var shown: [PackDog] {
+        let placed = dogs.filter { $0.lat != nil && $0.lon != nil }
+        switch filter {
+        case .nearby: return placed.filter { ($0.distanceM ?? 0) <= 1000 }
+        case .walking: return placed.filter { walkingNow.contains($0.id) }
+        }
+    }
+
     var body: some View {
-        VStack(spacing: 0) {
-            Picker("Section", selection: $section) {
-                ForEach(PackSection.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+        ZStack(alignment: .bottom) {
+            Map(initialPosition: .userLocation(fallback: .automatic)) {
+                UserAnnotation { _ in
+                    ZStack {
+                        Circle().fill(Color.opawAlert.opacity(0.14)).frame(width: 90, height: 90)
+                        Circle()
+                            .fill(Color.opawAlert)
+                            .frame(width: 20, height: 20)
+                            .overlay(Circle().stroke(Color.white, lineWidth: 4))
+                            .shadow(color: .black.opacity(0.2), radius: 5, y: 4)
+                    }
+                }
+                ForEach(shown) { dog in
+                    Annotation("", coordinate: CLLocationCoordinate2D(latitude: dog.lat ?? 0, longitude: dog.lon ?? 0), anchor: .bottom) {
+                        Button {
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) { selected = dog }
+                            Haptics.select()
+                        } label: {
+                            VStack(spacing: 6) {
+                                PackAvatar(url: pack.publicURL(for: dog.avatarPath), size: 74, plain: true)
+                                    .sticker(edge: 4, blur: 5, y: 8, opacity: 0.18)
+                                    .loopMotion(walkingNow.contains(dog.id) ? .trot : .breathe, duration: walkingNow.contains(dog.id) ? 0.6 : 3)
+                                Text(dog.name)
+                                    .font(.opaw(13, .heavy))
+                                    .foregroundStyle(Color(hex: 0x111111))
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 4)
+                                    .background(Color.white, in: Capsule())
+                                    .shadow(color: .black.opacity(0.08), radius: 7, y: 6)
+                            }
+                        }
+                        .buttonStyle(.pressable)
+                    }
+                }
             }
-            .pickerStyle(.segmented)
-            .padding()
-            switch section {
-            case .nearby: NearbyDogsView()
-            case .feed: PackFeedView()
+            .mapStyle(.standard(pointsOfInterest: .excludingAll))
+            .ignoresSafeArea()
+
+            if let dog = selected ?? shown.first {
+                card(dog)
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 8)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else if let status {
+                Text(status)
+                    .font(.opaw(15, .semibold))
+                    .foregroundStyle(Color.opawMuted)
+                    .padding(20)
+                    .frame(maxWidth: .infinity)
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: 36, style: .continuous))
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 8)
             }
         }
-        .toolbar {
-            Menu {
-                Link(destination: URL(string: "https://github.com/RusselHarveyMercadoIV/opaw/blob/main/docs/PRIVACY.md")!) {
-                    Label("Privacy policy", systemImage: "hand.raised")
+        .overlay(alignment: .top) {
+            HStack(spacing: 8) {
+                FilterPill(title: "Within 1 km", isSelected: filter == .nearby, verticalPadding: 11) { filter = .nearby }
+                FilterPill(title: "Out walking", isSelected: filter == .walking, verticalPadding: 11) { filter = .walking }
+                Spacer()
+                settingsMenu
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 10)
+        }
+        .toolbar(.hidden, for: .navigationBar)
+        .task {
+            location.warmUp()
+            await load()
+        }
+        .sheet(item: $profile) { dog in
+            PackDogProfile(dog: dog, url: pack.publicURL(for: dog.avatarPath)) {
+                reporting = dog
+            } onBlock: {
+                Task {
+                    try? await pack.block(userID: dog.ownerID)
+                    selected = nil
+                    await load()
                 }
-                Button(role: .destructive) {
-                    confirmDelete = true
-                } label: {
-                    Label("Leave the pack and delete my account", systemImage: "person.crop.circle.badge.xmark")
-                }
-            } label: {
-                Label("Pack settings", systemImage: "gearshape")
             }
         }
-        .confirmationDialog(
-            "Delete your Pack account?",
-            isPresented: $confirmDelete,
-            titleVisibility: .visible
-        ) {
+        .sheet(item: $reporting) { dog in
+            ReportSheet(subject: dog.name) { reason in
+                try await pack.report(dogID: dog.id, reason: reason)
+            }
+        }
+        .confirmationDialog("Delete your Pack account?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Delete account", role: .destructive) {
                 Task {
-                    do {
-                        try await pack.deleteAccount()
-                    } catch {
-                        deleteError = error.localizedDescription
-                    }
+                    do { try await pack.deleteAccount() } catch { deleteError = error.localizedDescription }
                 }
             }
         } message: {
@@ -149,91 +220,88 @@ private struct PackHomeView: View {
             Text(deleteError ?? "")
         }
     }
-}
 
-private struct NearbyDogsView: View {
-    @Environment(PackService.self) private var pack
-    @Environment(WalkRecorder.self) private var location
-    @Environment(\.modelContext) private var modelContext
-    @Query(sort: \Dog.createdAt) private var myDogs: [Dog]
-    @State private var dogs: [PackDog] = []
-    @State private var following: Set<UUID> = []
-    @State private var status: String?
-    @State private var isLoading = false
-    @State private var reporting: PackDog?
+    private var settingsMenu: some View {
+        Menu {
+            Button {
+                Task { await shareMyDogs() }
+            } label: {
+                Label("Show my dog on the map", systemImage: "mappin.and.ellipse")
+            }
+            Link(destination: URL(string: "https://github.com/RusselHarveyMercadoIV/opaw/blob/main/docs/PRIVACY.md")!) {
+                Label("Privacy policy", systemImage: "hand.raised")
+            }
+            Button(role: .destructive) {
+                confirmDelete = true
+            } label: {
+                Label("Leave the pack and delete my account", systemImage: "person.crop.circle.badge.xmark")
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 16, weight: .black))
+                .foregroundStyle(Color(hex: 0x111111))
+                .frame(width: 44, height: 44)
+                .background(Color.white, in: Circle())
+                .shadow(color: .black.opacity(0.06), radius: 8, y: 6)
+        }
+        .accessibilityLabel("Pack settings")
+    }
 
-    var body: some View {
-        List {
-            Section {
-                Map(initialPosition: .userLocation(fallback: .automatic)) {
-                    UserAnnotation()
-                    ForEach(dogs.filter { $0.lat != nil && $0.lon != nil }) { dog in
-                        Annotation(dog.name, coordinate: CLLocationCoordinate2D(latitude: dog.lat ?? 0, longitude: dog.lon ?? 0)) {
-                            PackAvatar(url: pack.publicURL(for: dog.avatarPath), size: 36)
-                        }
-                    }
+    private func card(_ dog: PackDog) -> some View {
+        let today = Calendar.current.startOfDay(for: Date())
+        let theirWalks = posts.filter { $0.kind == "walk" && $0.dogID == dog.id }
+        let todayKm = theirWalks.filter { $0.createdAt >= today }.compactMap(\.distanceM).reduce(0, +)
+        let weekAgo = Date().addingTimeInterval(-7 * 86_400)
+        let weekWalks = theirWalks.filter { $0.createdAt >= weekAgo }.count
+        let isFriend = following.contains(dog.id)
+        var details = [dog.breed, dog.distanceM.map { OpawFormat.distance(meters: $0) + " away" }].compactMap { $0 }.filter { !$0.isEmpty }
+        if walkingNow.contains(dog.id) { details.append("walking now") }
+        return VStack(spacing: 0) {
+            HStack(spacing: 14) {
+                PackAvatar(url: pack.publicURL(for: dog.avatarPath), size: 66)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(dog.name)
+                        .font(.opaw(23, .black))
+                        .foregroundStyle(Color(hex: 0x111111))
+                    Text(details.joined(separator: " · "))
+                        .font(.opaw(14, .medium))
+                        .foregroundStyle(Color(hex: 0x999999))
+                        .lineLimit(1)
                 }
-                .frame(height: 240)
-                .listRowInsets(EdgeInsets())
+                Spacer(minLength: 0)
+            }
+            HStack(spacing: 0) {
+                StatColumn(value: OpawFormat.distance(meters: todayKm), label: "Today", valueSize: 18, labelSize: 13, valueColor: Color(hex: 0x111111))
+                StatColumn(value: "\(weekWalks)×", label: "Walks this week", valueSize: 18, labelSize: 13, valueColor: Color(hex: 0x111111))
+                StatColumn(value: isFriend ? "Friends" : "New", label: "With you", valueSize: 18, labelSize: 13, valueColor: Color(hex: 0x111111))
+            }
+            .padding(.vertical, 18)
+            HStack(spacing: 10) {
+                Button { profile = dog } label: {
+                    Text("View profile")
+                        .font(.opaw(16, .bold))
+                        .foregroundStyle(Color(hex: 0x777777))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 58)
+                        .background(Color(hex: 0xF1F1F2), in: Capsule())
+                }
+                .buttonStyle(.pressable)
                 Button {
-                    Task { await shareMyDogs() }
+                    Task { await wave(dog) }
                 } label: {
-                    Label("Show my dog here", systemImage: "mappin.and.ellipse")
+                    Text(isFriend ? "Friends ✓" : "Wave hello")
+                        .font(.opaw(16, .bold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 58)
+                        .background(Color(hex: 0x111111), in: Capsule())
                 }
-                if let status {
-                    Text(status).font(.footnote).foregroundStyle(.secondary)
-                }
-            } footer: {
-                Text("Positions are rounded to about 1 km.")
-            }
-
-            Section("Dogs nearby") {
-                if isLoading {
-                    ProgressView()
-                } else if dogs.isEmpty {
-                    Text("No dogs nearby yet. Invite your dog park friends!")
-                        .foregroundStyle(.secondary)
-                }
-                ForEach(dogs) { dog in
-                    HStack(spacing: 12) {
-                        PackAvatar(url: pack.publicURL(for: dog.avatarPath), size: 48)
-                        VStack(alignment: .leading) {
-                            Text(dog.name).font(.headline)
-                            Text([dog.breed, dog.distanceM.map { OpawFormat.distance(meters: $0) + " away" }]
-                                .compactMap { $0 }
-                                .filter { !$0.isEmpty }
-                                .joined(separator: " · "))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Button(following.contains(dog.id) ? "Friends" : "Add") {
-                            Task { await toggleFollow(dog) }
-                        }
-                        .buttonStyle(.bordered)
-                    }
-                    .contextMenu {
-                        Button("Report", systemImage: "flag") { reporting = dog }
-                        Button("Block owner", systemImage: "hand.raised", role: .destructive) {
-                            Task {
-                                try? await pack.block(userID: dog.ownerID)
-                                await load()
-                            }
-                        }
-                    }
-                }
+                .buttonStyle(.pressable)
             }
         }
-        .refreshable { await load() }
-        .task {
-            location.warmUp()
-            await load()
-        }
-        .sheet(item: $reporting) { dog in
-            ReportSheet(subject: dog.name) { reason in
-                try await pack.report(dogID: dog.id, reason: reason)
-            }
-        }
+        .padding(20)
+        .background(Color.white, in: RoundedRectangle(cornerRadius: 36, style: .continuous))
+        .shadow(color: .black.opacity(0.12), radius: 22, y: 18)
     }
 
     private func load() async {
@@ -244,12 +312,11 @@ private struct NearbyDogsView: View {
             if location.lastLocation != nil { await load() }
             return
         }
-        isLoading = true
-        defer { isLoading = false }
         do {
             dogs = try await pack.nearbyDogs(latitude: here.coordinate.latitude, longitude: here.coordinate.longitude)
             following = try await pack.followedDogIDs()
-            status = nil
+            posts = (try? await pack.feed(limit: 100)) ?? []
+            status = dogs.isEmpty ? "No pets nearby yet. Invite your dog park friends!" : nil
         } catch {
             status = error.localizedDescription
         }
@@ -264,17 +331,18 @@ private struct NearbyDogsView: View {
             for dog in myDogs {
                 try await pack.shareDog(dog, latitude: here.coordinate.latitude, longitude: here.coordinate.longitude)
             }
-            status = "Your dogs are on the map."
+            Haptics.success()
         } catch {
             status = error.localizedDescription
         }
     }
 
-    private func toggleFollow(_ dog: PackDog) async {
+    private func wave(_ dog: PackDog) async {
         let follow = !following.contains(dog.id)
         do {
             try await pack.setFollowing(follow, dogID: dog.id)
             if follow { following.insert(dog.id) } else { following.remove(dog.id) }
+            Haptics.success()
             for mine in myDogs {
                 BadgeService.refresh(mine, friendsCount: following.count)
             }
@@ -282,6 +350,58 @@ private struct NearbyDogsView: View {
         } catch {
             status = error.localizedDescription
         }
+    }
+}
+
+/// Another pet's profile: photo, breed, and report or block.
+private struct PackDogProfile: View {
+    let dog: PackDog
+    let url: URL?
+    let onReport: () -> Void
+    let onBlock: () -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Capsule().fill(Color(hex: 0xDDDDDD)).frame(width: 40, height: 5)
+            PackAvatar(url: url, size: 140, plain: true)
+                .sticker(edge: 5, blur: 7, y: 10)
+                .padding(.top, 10)
+            Text(dog.name)
+                .font(.opaw(30, .black))
+            Text([dog.breed, dog.size.capitalized].filter { !$0.isEmpty }.joined(separator: " · "))
+                .font(.opaw(15, .medium))
+                .foregroundStyle(Color.opawMuted)
+            Spacer()
+            HStack(spacing: 10) {
+                Button {
+                    dismiss()
+                    onReport()
+                } label: {
+                    Text("Report")
+                        .font(.opaw(16, .bold))
+                        .foregroundStyle(Color(hex: 0x777777))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 58)
+                        .background(Color(hex: 0xF1F1F2), in: Capsule())
+                }
+                Button(role: .destructive) {
+                    dismiss()
+                    onBlock()
+                } label: {
+                    Text("Block owner")
+                        .font(.opaw(16, .bold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 58)
+                        .background(Color.opawAlert, in: Capsule())
+                }
+            }
+            .buttonStyle(.pressable)
+        }
+        .padding(24)
+        .presentationDetents([.medium])
+        .presentationCornerRadius(40)
     }
 }
 
@@ -436,17 +556,25 @@ private struct PackPostRow: View {
 struct PackAvatar: View {
     let url: URL?
     var size: CGFloat = 40
+    /// A cutout without the round background, for stickers on the map.
+    var plain = false
 
     var body: some View {
-        AsyncImage(url: url) { image in
+        let image = AsyncImage(url: url) { image in
             image.resizable().scaledToFit()
         } placeholder: {
             Image(systemName: "pawprint.fill")
-                .foregroundStyle(Color.opawOrange)
+                .font(.system(size: size * 0.35))
+                .foregroundStyle(Color.opawMuted)
         }
         .frame(width: size, height: size)
-        .background(Color.opawOrange.opacity(0.12), in: Circle())
-        .clipShape(Circle())
+        if plain {
+            image
+        } else {
+            image
+                .background(Color.opawChip, in: Circle())
+                .clipShape(Circle())
+        }
     }
 }
 

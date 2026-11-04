@@ -3,13 +3,14 @@ import OpawKit
 import SwiftData
 import SwiftUI
 
-/// The Walk tab: the weekly goal and records, a live walk, and the summary after.
+/// The Walk tab: Activity (3f), a live walk (2c), and the summary after (3e).
 struct WalkTabView: View {
     @Binding var selectedTab: AppTab
 
     @Environment(WalkRecorder.self) private var recorder
     @Query(sort: \Dog.createdAt) private var dogs: [Dog]
     @AppStorage(OpawDefaults.activeDogKey, store: OpawDefaults.shared) private var activeDogID = ""
+    @AppStorage("walkActivity") private var activity = WalkActivity.walk.rawValue
     @State private var finished: IdentifiedWalk?
 
     private var dog: Dog? {
@@ -20,9 +21,9 @@ struct WalkTabView: View {
         NavigationStack {
             Group {
                 if recorder.state == .idle {
-                    ActivityView(dog: dog)
+                    ActivityView(dog: dog, dogs: dogs, activity: $activity)
                 } else {
-                    LiveWalkView(dog: dog) { result in
+                    LiveWalkView(dog: dog, activity: WalkActivity(rawValue: activity) ?? .walk) { result in
                         finished = IdentifiedWalk(walk: result)
                     }
                     .transition(.opacity)
@@ -31,9 +32,9 @@ struct WalkTabView: View {
             .animation(.easeInOut(duration: 0.3), value: recorder.state == .idle)
             .toolbar(.hidden, for: .navigationBar)
         }
-        .sheet(item: $finished) { item in
+        .fullScreenCover(item: $finished) { item in
             if let dog {
-                WalkSummarySheet(result: item.walk, dog: dog)
+                WalkSummaryView(result: item.walk, dog: dog, activity: WalkActivity(rawValue: activity) ?? .walk)
             }
         }
     }
@@ -44,118 +45,161 @@ private struct IdentifiedWalk: Identifiable {
     let walk: WalkRecorder.FinishedWalk
 }
 
-// MARK: - Activity
+enum WalkActivity: String, CaseIterable, Identifiable {
+    case walk, run, hike
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .walk: "Walk"
+        case .run: "Run"
+        case .hike: "Hike"
+        }
+    }
+}
+
+// MARK: - Activity (3f)
 
 private struct ActivityView: View {
     let dog: Dog?
+    let dogs: [Dog]
+    @Binding var activity: String
+
     @Environment(WalkRecorder.self) private var recorder
+    @AppStorage(OpawDefaults.activeDogKey, store: OpawDefaults.shared) private var activeDogID = ""
+    @State private var showChallenges = false
 
     private var walks: [Walk] {
         (dog?.walks ?? []).sorted { $0.startedAt > $1.startedAt }
     }
 
+    private var calendar: Calendar {
+        var calendar = Calendar.current
+        calendar.firstWeekday = 2
+        return calendar
+    }
+
     private var week: DateInterval {
-        Calendar.current.dateInterval(of: .weekOfYear, for: Date()) ?? DateInterval(start: Date(), duration: 7 * 86_400)
+        calendar.dateInterval(of: .weekOfYear, for: Date()) ?? DateInterval(start: Date(), duration: 7 * 86_400)
     }
 
     var body: some View {
         ZStack(alignment: .bottom) {
             ScrollView {
-                VStack(spacing: 14) {
-                    ScreenHeader(title: "Activity") {
-                        if let dog {
-                            HStack(spacing: 8) {
-                                DogThumbnail(data: dog.cutoutData ?? dog.photoData, size: 36)
-                                    .overlay(Circle().stroke(Color.opawSurface, lineWidth: 3))
-                                Text(dog.name)
-                                    .font(.opaw(15, .heavy))
-                                    .lineLimit(1)
-                            }
-                            .padding(5)
-                            .padding(.trailing, 9)
-                            .background(Color.opawSurface, in: Capsule())
-                            .floatingShadow()
-                        }
-                    } trailing: {
-                        EmptyView()
-                    }
+                VStack(spacing: 0) {
+                    header
                     if let dog {
                         goalCard(dog: dog)
-                            .padding(.horizontal, Space.l)
-                            .padding(.top, 6)
+                            .padding(.horizontal, 20)
+                            .padding(.top, 16)
+                        barsCard(dog: dog)
+                            .padding(.horizontal, 20)
+                            .padding(.top, 12)
                         recordsCard
-                            .padding(.horizontal, Space.l)
-                        walksCard
-                            .padding(.horizontal, Space.l)
+                            .padding(.horizontal, 20)
+                            .padding(.top, 12)
                     }
                 }
-                .padding(.bottom, 180)
+                .padding(.bottom, 200)
             }
             .scrollIndicators(.hidden)
 
             startControls
-                .padding(.horizontal, Space.l)
-                .padding(.bottom, 92)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 78)
         }
         .opawBackground()
+        .sheet(isPresented: $showChallenges) { ChallengesView() }
         .onAppear { recorder.warmUp() }
         .onDisappear { recorder.coolDown() }
+    }
+
+    private var header: some View {
+        HStack {
+            Menu {
+                ForEach(dogs) { item in
+                    Button(item.name) { activeDogID = item.id.uuidString }
+                }
+            } label: {
+                PetChip(dog: dog)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Text("Activity")
+                .font(.opaw(22, .black))
+                .foregroundStyle(Color.opawInk)
+            Button { showChallenges = true } label: {
+                RoundIcon(symbol: "trophy")
+            }
+            .buttonStyle(.pressable)
+            .frame(maxWidth: .infinity, alignment: .trailing)
+            .accessibilityLabel("Challenges and badges")
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 10)
     }
 
     private func goalCard(dog: Dog) -> some View {
         let goal = max(0.5, dog.traits.recommendedWeeklyKm)
         let done = dog.walkedKm(from: week.start, to: week.end)
-        let calendar = Calendar.current
-        let days: [(label: String, km: Double, isToday: Bool)] = (0..<7).map { offset in
+        return HStack(spacing: 18) {
+            GoalRing(progress: done / goal, value: done.formatted(.number.precision(.fractionLength(1))), caption: "of \(goal.formatted(.number.precision(.fractionLength(0...1)))) km")
+                .frame(width: 118, height: 118)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Weekly goal")
+                    .font(.opaw(20, .black))
+                    .foregroundStyle(Color.opawInk)
+                Text(goalText(dog: dog, goal: goal, done: done))
+                    .font(.opaw(14, .medium))
+                    .foregroundStyle(Color(hex: 0x888888))
+                    .lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(20)
+        .whiteCard()
+    }
+
+    private func barsCard(dog: Dog) -> some View {
+        let today = calendar.startOfDay(for: Date())
+        let days: [(label: String, km: Double, isToday: Bool, isFuture: Bool)] = (0..<7).map { offset in
             let day = calendar.date(byAdding: .day, value: offset, to: week.start) ?? week.start
-            let label = day.formatted(.dateTime.weekday(.narrow))
-            return (label, dog.walkedKm(on: day), calendar.isDateInToday(day))
+            return (day.formatted(.dateTime.weekday(.narrow)), dog.walkedKm(on: day), calendar.isDate(day, inSameDayAs: today), day > today)
         }
         let dayMax = max(0.5, days.map(\.km).max() ?? 0.5)
-        return VStack(alignment: .leading, spacing: 18) {
-            HStack(spacing: 18) {
-                ZStack {
-                    ProgressRing(progress: done / goal, lineWidth: 12)
-                    VStack(spacing: 0) {
-                        Text(done.formatted(.number.precision(.fractionLength(1))))
-                            .font(.opawNumber(26))
-                        Text("of \(goal.formatted(.number.precision(.fractionLength(0...1)))) km")
-                            .font(.opaw(12, .bold))
-                            .foregroundStyle(Color.opawMuted)
-                    }
-                }
-                .frame(width: 108, height: 108)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Weekly goal")
-                        .font(.opaw(20, .black))
-                    Text(goalText(dog: dog, goal: goal, done: done))
-                        .font(.opaw(14, .semibold))
-                        .foregroundStyle(Color.opawMuted)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            HStack(alignment: .bottom, spacing: 8) {
+        return VStack(spacing: 8) {
+            HStack(alignment: .bottom, spacing: 10) {
                 ForEach(Array(days.enumerated()), id: \.offset) { _, day in
-                    VStack(spacing: 6) {
-                        RoundedRectangle(cornerRadius: 7, style: .continuous)
-                            .fill(day.km > 0 ? Color.opawInk : Color.opawChip)
-                            .frame(height: max(8, 64 * day.km / dayMax))
-                        Text(day.label)
-                            .font(.opaw(12, .bold))
-                            .foregroundStyle(day.isToday ? Color.opawInk : Color.opawMuted)
-                    }
-                    .frame(maxWidth: .infinity)
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(day.isToday ? Color.opawInk : (day.isFuture || day.km == 0 ? Color.opawTrack : Color(hex: 0xCFCFD2)))
+                        .frame(height: day.isFuture || day.km == 0 ? 6 : max(6, 100 * day.km / dayMax))
+                        .frame(maxWidth: .infinity)
                 }
             }
-            .frame(height: 86, alignment: .bottom)
-            .accessibilityHidden(true)
+            .frame(height: 110, alignment: .bottom)
+            HStack(spacing: 10) {
+                ForEach(Array(days.enumerated()), id: \.offset) { _, day in
+                    Text(day.label)
+                        .font(.opaw(12, .bold))
+                        .foregroundStyle(day.isToday ? Color.opawInk : Color.opawFaint)
+                        .frame(maxWidth: .infinity)
+                }
+            }
         }
-        .card(padding: 20)
+        .padding(.horizontal, 20)
+        .padding(.top, 18)
+        .padding(.bottom, 14)
+        .whiteCard()
+        .accessibilityHidden(true)
     }
 
     private func goalText(dog: Dog, goal: Double, done: Double) -> String {
         var who: [String] = []
-        if let age = dog.ageDescription { who.append(age.replacingOccurrences(of: " old", with: "-old").replacingOccurrences(of: " ", with: "-")) }
+        if let birth = dog.birthDate {
+            let years = Calendar.current.dateComponents([.year], from: birth, to: Date()).year ?? 0
+            if years > 0 { who.append("\(years)-year-old") }
+        }
         who.append(dog.breed.isEmpty ? "\(dog.size.title.lowercased()) dog" : dog.breed)
         var text = "Set for a \(who.joined(separator: " "))"
         if let weight = dog.weightKg { text += " at \(weight.formatted(.number.precision(.fractionLength(0...1)))) kg" }
@@ -168,279 +212,310 @@ private struct ActivityView: View {
     private var recordsCard: some View {
         let longest = walks.map(\.distanceMeters).max() ?? 0
         let fastest = walks.filter { $0.distanceMeters >= 1000 }.compactMap { $0.stats.paceMinutesPerKm }.min()
-        let monthStart = Calendar.current.dateInterval(of: .month, for: Date())?.start ?? Date()
-        let month = walks.filter { $0.startedAt >= monthStart }.reduce(0) { $0 + $1.distanceMeters }
-        return VStack(alignment: .leading, spacing: 12) {
+        return VStack(alignment: .leading, spacing: 0) {
             Text("Personal records")
                 .font(.opaw(17, .black))
-            HStack(spacing: 10) {
-                RecordTile(value: longest > 0 ? OpawFormat.distance(meters: longest) : "—", label: "Longest walk")
-                RecordTile(value: fastest.map { OpawFormat.pace(minutesPerKm: $0) } ?? "—", label: "Fastest km")
-                RecordTile(value: OpawFormat.distance(meters: month), label: "This month")
-            }
-        }
-        .card(padding: 20)
-    }
-
-    private var walksCard: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text("Recent walks")
-                .font(.opaw(17, .black))
-                .padding(.vertical, 12)
-            if walks.isEmpty {
-                Text("Your walks will show up here.")
-                    .font(.opaw(15, .semibold))
-                    .foregroundStyle(Color.opawMuted)
-                    .padding(.bottom, 14)
-            }
-            ForEach(walks.prefix(10)) { walk in
-                NavigationLink {
-                    WalkDetailView(walk: walk)
-                } label: {
-                    WalkRow(walk: walk)
-                }
-                .buttonStyle(.plain)
-                .overlay(alignment: .top) { Rectangle().fill(Color.opawHairline).frame(height: 1) }
-            }
+                .padding(.top, 12)
+                .padding(.bottom, 6)
+            recordRow("Longest walk", longest > 0 ? OpawFormat.distance(meters: longest) : "–")
+            recordRow("Fastest km", fastest.map { OpawFormat.pace(minutesPerKm: $0) } ?? "–")
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 4)
-        .background(Color.opawSurface, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
-        .shadow(color: .black.opacity(0.05), radius: 15, y: 12)
+        .padding(.vertical, 6)
+        .whiteCard()
     }
 
-    @ViewBuilder
+    private func recordRow(_ label: String, _ value: String) -> some View {
+        HStack {
+            Text(label).font(.opaw(15, .semibold))
+            Spacer()
+            Text(value).font(.opaw(15, .black))
+        }
+        .foregroundStyle(Color.opawInk)
+        .padding(.vertical, 11)
+        .overlay(alignment: .top) { Rectangle().fill(Color.opawHairline).frame(height: 1) }
+    }
+
     private var startControls: some View {
-        if recorder.isAuthorized {
+        HStack(spacing: 10) {
             Button {
-                recorder.start(dogName: dog?.name ?? "your dog")
-                Haptics.success()
-            } label: {
-                Label("Start walk", systemImage: "play.fill")
-            }
-            .buttonStyle(.opawPrimary)
-        } else if recorder.isDenied {
-            Button {
-                if let url = URL(string: UIApplication.openSettingsURLString) {
+                if recorder.isAuthorized {
+                    let sticker = (dog?.cutoutData ?? dog?.photoData).flatMap(UIImage.init(data:))
+                    PetSticker.save(sticker?.thumbnailPNG(maxSide: 160))
+                    recorder.start(dogName: dog?.name ?? "your dog")
+                    Haptics.success()
+                } else if recorder.isDenied, let url = URL(string: UIApplication.openSettingsURLString) {
                     UIApplication.shared.open(url)
+                } else {
+                    recorder.requestPermission()
                 }
             } label: {
-                Label("Turn on location in Settings", systemImage: "location.slash")
+                Text(recorder.isAuthorized ? "Start \((WalkActivity(rawValue: activity) ?? .walk).title.lowercased())" : (recorder.isDenied ? "Turn on location in Settings" : "Allow location to start"))
+                    .font(.opaw(17, .heavy))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 62)
+                    .background(Color(hex: 0x111111), in: Capsule())
             }
-            .buttonStyle(.opawPrimary)
-        } else {
-            Button {
-                recorder.requestPermission()
+            .buttonStyle(.pressable)
+            Menu {
+                Picker("Activity", selection: $activity) {
+                    ForEach(WalkActivity.allCases) { Text($0.title).tag($0.rawValue) }
+                }
             } label: {
-                Label("Allow location to record walks", systemImage: "location.fill")
-            }
-            .buttonStyle(.opawPrimary)
-        }
-    }
-}
-
-private struct RecordTile: View {
-    let value: String
-    let label: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(value)
-                .font(.opawNumber(18))
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
-            Text(label)
-                .font(.opaw(12, .bold))
-                .foregroundStyle(Color.opawMuted)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(Color.opawChip, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-    }
-}
-
-struct WalkRow: View {
-    let walk: Walk
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "figure.walk")
-                .font(.system(size: 16, weight: .bold))
-                .foregroundStyle(Color.opawInk)
-                .frame(width: 40, height: 40)
-                .background(Color.opawChip, in: Circle())
-            VStack(alignment: .leading, spacing: 1) {
-                Text(walk.title)
+                Text("\((WalkActivity(rawValue: activity) ?? .walk).title) ▾")
                     .font(.opaw(15, .heavy))
                     .foregroundStyle(Color.opawInk)
-                Text("\(walk.startedAt.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated))) · \(OpawFormat.distance(meters: walk.distanceMeters)) · \(OpawFormat.duration(walk.movingSeconds))")
-                    .font(.opaw(13, .medium))
-                    .foregroundStyle(Color.opawMuted)
+                    .padding(.horizontal, 20)
+                    .frame(height: 62)
+                    .background(Color.opawSurface, in: Capsule())
+                    .shadow(color: .black.opacity(0.07), radius: 12, y: 10)
             }
-            Spacer(minLength: 0)
-            if walk.sharedToPack {
-                Image(systemName: "person.2.fill")
-                    .font(.caption)
-                    .foregroundStyle(Color.opawMuted)
-            }
-            Image(systemName: "chevron.right")
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(Color.opawMuted)
+            .accessibilityLabel("Activity type")
         }
-        .padding(.vertical, 10)
-        .contentShape(Rectangle())
+    }
+}
+
+/// A thick goal ring with the number in the middle (118pt, 13pt stroke on #eee).
+struct GoalRing: View {
+    let progress: Double
+    let value: String
+    let caption: String
+
+    var body: some View {
+        GeometryReader { proxy in
+            let line = proxy.size.width * 13 / 120
+            ZStack {
+                Circle()
+                    .stroke(Color.opawHairline, lineWidth: line)
+                    .padding(line / 2 + proxy.size.width * 4 / 120)
+                Circle()
+                    .trim(from: 0, to: min(1, max(0, progress)))
+                    .stroke(Color.opawInk, style: StrokeStyle(lineWidth: line, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                    .padding(line / 2 + proxy.size.width * 4 / 120)
+                    .animation(.spring(response: 0.8, dampingFraction: 0.8), value: progress)
+                VStack(spacing: 0) {
+                    Text(value)
+                        .font(.opaw(26, .black))
+                        .foregroundStyle(Color.opawInk)
+                    Text(caption)
+                        .font(.opaw(12, .semibold))
+                        .foregroundStyle(Color.opawMuted)
+                }
+            }
+        }
     }
 }
 
 extension Walk {
     /// "Morning walk", "Evening loop"… from when it started.
-    var title: String { Walk.title(for: startedAt) }
+    var title: String { Walk.title(for: startedAt, activity: WalkActivity(rawValue: activityRaw) ?? .walk) }
 
-    static func title(for date: Date) -> String {
-        switch Calendar.current.component(.hour, from: date) {
-        case 5..<11: return "Morning walk"
-        case 11..<14: return "Midday stroll"
-        case 14..<17: return "Afternoon walk"
-        case 17..<21: return "Evening loop"
-        default: return "Night stroll"
+    static func title(for date: Date, activity: WalkActivity = .walk) -> String {
+        let hour = Calendar.current.component(.hour, from: date)
+        switch activity {
+        case .walk:
+            switch hour {
+            case 5..<11: return "Morning walk"
+            case 11..<14: return "Midday stroll"
+            case 14..<17: return "Afternoon walk"
+            case 17..<21: return "Evening loop"
+            default: return "Night stroll"
+            }
+        case .run, .hike:
+            let part: String
+            switch hour {
+            case 5..<12: part = "Morning"
+            case 12..<17: part = "Afternoon"
+            case 17..<21: part = "Evening"
+            default: part = "Night"
+            }
+            return "\(part) \(activity.title.lowercased())"
         }
+    }
+
+    /// Times the dog stopped for at least 15 seconds within a few metres: sniff stops.
+    static func sniffStops(in points: [GeoPoint]) -> Int {
+        guard var anchor = points.first else { return 0 }
+        var stops = 0
+        var counted = false
+        for point in points.dropFirst() {
+            let distance = Geo.distance(anchor, point)
+            if distance > 8 {
+                anchor = point
+                counted = false
+            } else if !counted && point.timestamp.timeIntervalSince(anchor.timestamp) >= 15 {
+                stops += 1
+                counted = true
+            }
+        }
+        return stops
     }
 }
 
-// MARK: - Live walk
+// MARK: - Live walk (2c)
 
 private struct LiveWalkView: View {
     let dog: Dog?
+    let activity: WalkActivity
     let onFinish: (WalkRecorder.FinishedWalk) -> Void
     @Environment(WalkRecorder.self) private var recorder
     @State private var camera: MapCameraPosition = .userLocation(followsHeading: false, fallback: .automatic)
     @State private var confirmStop = false
 
-    private var peeCount: Int { recorder.pins.filter { $0.kind == CareKind.pee.rawValue }.count }
-    private var poopCount: Int { recorder.pins.filter { $0.kind == CareKind.poop.rawValue }.count }
-
     var body: some View {
         ZStack(alignment: .bottom) {
             Map(position: $camera) {
-                UserAnnotation()
                 MapPolyline(coordinates: recorder.points.map(\.coordinate))
                     .stroke(Color(hex: 0x111111), style: StrokeStyle(lineWidth: 7, lineCap: .round, lineJoin: .round))
+                if let first = recorder.points.first {
+                    Annotation("", coordinate: first.coordinate) { StartDot() }
+                }
                 ForEach(recorder.pins) { pin in
                     Annotation("", coordinate: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude)) {
                         PinBadge(kind: pin.kind)
                     }
                 }
+                if let here = recorder.lastLocation?.coordinate ?? recorder.points.last?.coordinate {
+                    Annotation("", coordinate: here, anchor: .bottom) { petMarker }
+                } else {
+                    UserAnnotation()
+                }
             }
             .mapStyle(.standard(pointsOfInterest: .excludingAll))
             .ignoresSafeArea()
+            .safeAreaPadding(.bottom, 300)
 
-            VStack(spacing: 0) {
+            sheet
+        }
+        .overlay(alignment: .topLeading) {
+            HStack(spacing: 8) {
+                if recorder.state == .paused {
+                    Circle().fill(Color.opawMuted).frame(width: 9, height: 9)
+                } else {
+                    PulseDot()
+                }
+                Text(recorder.state == .paused ? "Paused" : Walk.title(for: recorder.startedAt ?? Date(), activity: activity))
+                    .font(.opaw(15, .heavy))
+                    .foregroundStyle(Color(hex: 0x111111))
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 12)
+            .background(Color.white, in: Capsule())
+            .shadow(color: .black.opacity(0.08), radius: 13, y: 10)
+            .padding(.leading, 20)
+            .padding(.top, 10)
+        }
+        .confirmationDialog("Finish this walk?", isPresented: $confirmStop, titleVisibility: .visible) {
+            Button("Finish and save") {
+                if let result = recorder.finish() { onFinish(result) }
+            }
+            Button("Discard walk", role: .destructive) { recorder.cancel() }
+        }
+    }
+
+    /// The pet trotting along the route. Tap it to mark a pee or poop here.
+    private var petMarker: some View {
+        Menu {
+            Button {
+                recorder.dropPin(.pee)
+                Haptics.tap()
+            } label: { Label("Pee here", systemImage: CareKind.pee.symbol) }
+            Button {
+                recorder.dropPin(.poop)
+                Haptics.tap()
+            } label: { Label("Poop here", systemImage: CareKind.poop.symbol) }
+        } label: {
+            Group {
                 if let data = dog?.cutoutData ?? dog?.photoData, let image = UIImage(data: data) {
                     Image(uiImage: image)
                         .resizable()
                         .scaledToFit()
-                        .frame(height: 110)
-                        .sticker(edge: 4)
-                        .phaseAnimator([0, 1, 2, 3]) { view, step in
-                            view
-                                .offset(y: step == 1 || step == 3 ? -5 : 0)
-                                .rotationEffect(.degrees(step == 1 ? 3 : step == 3 ? -3 : 0), anchor: .bottom)
-                        } animation: { _ in .easeInOut(duration: 0.18) }
-                        .offset(y: 24)
-                        .zIndex(1)
-                }
-                statsCard
-            }
-            .padding(.horizontal, 14)
-            .padding(.bottom, 8)
-        }
-        .confirmationDialog("Finish this walk?", isPresented: $confirmStop, titleVisibility: .visible) {
-            Button("Finish and save") {
-                if let result = recorder.finish() {
-                    onFinish(result)
+                } else {
+                    Image(systemName: "dog.fill")
+                        .resizable()
+                        .scaledToFit()
+                        .foregroundStyle(Color(hex: 0x111111))
                 }
             }
-            Button("Discard walk", role: .destructive) {
-                recorder.cancel()
-            }
+            .frame(width: 96, height: 96)
+            .sticker(edge: 4, blur: 6, y: 10, opacity: 0.2)
+            .loopMotion(.trot)
         }
+        .accessibilityLabel("Mark a pee or poop here")
     }
 
-    private var statsCard: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(recorder.state == .paused ? "Paused" : Walk.title(for: recorder.startedAt ?? Date()))
-                    .font(.opaw(16, .heavy))
-                    .foregroundStyle(recorder.state == .paused ? Color.opawAlert : Color.opawMuted)
-                Spacer()
-            }
-            TimelineView(.periodic(from: .now, by: 1)) { context in
-                VStack(alignment: .leading, spacing: 14) {
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text((recorder.stats.distanceMeters / 1000).formatted(.number.precision(.fractionLength(2))))
-                            .font(.system(size: 64, weight: .black, design: .rounded).monospacedDigit())
-                            .contentTransition(.numericText())
-                        Text("kilometres")
-                            .font(.opaw(17, .bold))
-                            .foregroundStyle(Color.opawMuted)
+    private var sheet: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            VStack(spacing: 0) {
+                Text((recorder.stats.distanceMeters / 1000).formatted(.number.precision(.fractionLength(2))))
+                    .font(.opaw(80, .black))
+                    .tracking(-2.4)
+                    .monospacedDigit()
+                    .foregroundStyle(Color(hex: 0x111111))
+                    .contentTransition(.numericText())
+                    .frame(height: 72)
+                Text("kilometres")
+                    .font(.opaw(16, .semibold))
+                    .foregroundStyle(Color(hex: 0x999999))
+                    .padding(.top, 6)
+                HStack(spacing: 0) {
+                    StatColumn(value: OpawFormat.duration(recorder.elapsed(at: context.date)), label: "Time")
+                    StatColumn(value: OpawFormat.pace(minutesPerKm: recorder.stats.paceMinutesPerKm), label: "Pace /km")
+                    StatColumn(value: "\(Walk.sniffStops(in: recorder.points))", label: "Sniff stops")
+                }
+                .environment(\.colorScheme, .light)
+                .padding(.top, 22)
+                HStack(spacing: 12) {
+                    Button {
+                        if recorder.state == .paused { recorder.resume() } else { recorder.pause() }
+                        Haptics.tap()
+                    } label: {
+                        Image(systemName: recorder.state == .paused ? "play.fill" : "pause.fill")
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundStyle(Color(hex: 0x111111))
+                            .frame(width: 64, height: 64)
+                            .background(Color(hex: 0xF1F1F2), in: Circle())
                     }
-                    HStack {
-                        LiveStat(value: OpawFormat.duration(recorder.elapsed(at: context.date)), label: "Time")
-                        LiveStat(value: OpawFormat.pace(minutesPerKm: recorder.stats.paceMinutesPerKm), label: "Pace /km")
-                        LiveStat(value: "\(peeCount) · \(poopCount)", label: "Pee · poop")
+                    .buttonStyle(.pressable)
+                    .accessibilityLabel(recorder.state == .paused ? "Resume" : "Pause")
+                    Button { confirmStop = true } label: {
+                        Text("Finish walk")
+                            .font(.opaw(18, .bold))
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 64)
+                            .background(Color(hex: 0x111111), in: Capsule())
                     }
+                    .buttonStyle(.pressable)
                 }
+                .padding(.top, 26)
+                Spacer(minLength: 0)
             }
-            HStack(spacing: 10) {
-                Button {
-                    recorder.dropPin(.pee)
-                    Haptics.tap()
-                } label: {
-                    RoundIcon(symbol: CareKind.pee.symbol, size: 56)
-                }
-                .buttonStyle(.pressable)
-                .accessibilityLabel("Mark a pee here")
-                Button {
-                    recorder.dropPin(.poop)
-                    Haptics.tap()
-                } label: {
-                    RoundIcon(symbol: CareKind.poop.symbol, size: 56)
-                }
-                .buttonStyle(.pressable)
-                .accessibilityLabel("Mark a poop here")
-                Button {
-                    if recorder.state == .paused { recorder.resume() } else { recorder.pause() }
-                    Haptics.tap()
-                } label: {
-                    RoundIcon(symbol: recorder.state == .paused ? "play.fill" : "pause.fill", size: 56)
-                }
-                .buttonStyle(.pressable)
-                .accessibilityLabel(recorder.state == .paused ? "Resume" : "Pause")
-                Button("Finish walk") { confirmStop = true }
-                    .buttonStyle(.opawPrimary)
-            }
+            .padding(.horizontal, 24)
+            .padding(.top, 28)
+            .frame(height: 330)
+            .frame(maxWidth: .infinity)
+            .background(
+                Color.white
+                    .clipShape(UnevenRoundedRectangle(topLeadingRadius: 40, bottomLeadingRadius: 0, bottomTrailingRadius: 0, topTrailingRadius: 40))
+                    .shadow(color: .black.opacity(0.06), radius: 15, y: -12)
+                    .ignoresSafeArea(edges: .bottom)
+            )
         }
-        .padding(20)
-        .background(Color.opawSurface, in: RoundedRectangle(cornerRadius: 36, style: .continuous))
-        .shadow(color: .black.opacity(0.12), radius: 20, y: 10)
     }
 }
 
-private struct LiveStat: View {
-    let value: String
-    let label: String
-
+/// The white start circle with a thick black ring.
+private struct StartDot: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Text(value)
-                .font(.opawNumber(20))
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-            Text(label)
-                .font(.opaw(12, .bold))
-                .foregroundStyle(Color.opawMuted)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        Circle()
+            .fill(Color.white)
+            .frame(width: 18, height: 18)
+            .overlay(Circle().stroke(Color(hex: 0x111111), lineWidth: 4))
     }
 }
 
@@ -460,124 +535,43 @@ struct PinBadge: View {
     }
 }
 
-// MARK: - Summary
+// MARK: - Summary (3e)
 
-/// Shown after a walk ends: the route with pins, stats, then save (and optionally share).
-private struct WalkSummarySheet: View {
+/// Shown after a walk ends. The walk is saved straight away; back closes, share shares.
+private struct WalkSummaryView: View {
     let result: WalkRecorder.FinishedWalk
     let dog: Dog
+    let activity: WalkActivity
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
-    @Environment(PackService.self) private var pack
-    @State private var note = ""
-    @State private var shareToPack = false
-    @State private var isSaving = false
-    @State private var error: String?
-
-    private var stats: WalkStats { WalkCalculator.stats(for: result.points) }
-    private var peeCount: Int { result.pins.filter { $0.kind == CareKind.pee.rawValue }.count }
-    private var poopCount: Int { result.pins.filter { $0.kind == CareKind.poop.rawValue }.count }
-
-    private var isMonthRecord: Bool {
-        let monthStart = Calendar.current.dateInterval(of: .month, for: Date())?.start ?? Date()
-        let best = (dog.walks ?? []).filter { $0.startedAt >= monthStart }.map(\.distanceMeters).max() ?? 0
-        return stats.distanceMeters > 200 && stats.distanceMeters > best
-    }
+    @State private var saved: Walk?
+    @State private var isRecord = false
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                RouteMap(points: result.points, pins: result.pins)
-                    .frame(height: 340)
-
-                VStack(alignment: .leading, spacing: 18) {
-                    if isMonthRecord {
-                        Label("Longest walk this month", systemImage: "trophy.fill")
-                            .font(.opaw(14, .heavy))
-                            .foregroundStyle(Color.opawOnInk)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
-                            .background(Color.opawInk, in: Capsule())
-                    }
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(Walk.title(for: result.startedAt))
-                            .font(.opawDisplay(32))
-                        Text("Today \(result.startedAt.formatted(date: .omitted, time: .shortened)) · with \(dog.name)")
-                            .font(.opaw(15, .semibold))
-                            .foregroundStyle(Color.opawMuted)
-                    }
-                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-                        RecordTile(value: OpawFormat.distance(meters: stats.distanceMeters), label: "Distance")
-                        RecordTile(value: OpawFormat.duration(stats.elapsedSeconds), label: "Duration")
-                        RecordTile(value: OpawFormat.pace(minutesPerKm: stats.paceMinutesPerKm), label: "Pace /km")
-                        RecordTile(value: "\(peeCount) · \(poopCount)", label: "Pee · poop")
-                    }
-                    weekProgress
-                    TextField("How was the walk?", text: $note, axis: .vertical)
-                        .font(.opaw(15, .medium))
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 14)
-                        .background(Color.opawChip, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                    if pack.isSignedIn {
-                        Toggle(isOn: $shareToPack) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Share with the pack")
-                                    .font(.opaw(15, .heavy))
-                                Text("The start and end of your route are hidden so your home stays private.")
-                                    .font(.opaw(12, .medium))
-                                    .foregroundStyle(Color.opawMuted)
-                            }
-                        }
-                        .tint(Color.opawInk)
-                    }
-                    if let error {
-                        Text(error)
-                            .font(.opaw(14, .semibold))
-                            .foregroundStyle(Color.opawAlert)
-                    }
-                    Button(isSaving ? "Saving…" : "Save walk") { Task { await save() } }
-                        .buttonStyle(.opawPrimary)
-                        .disabled(isSaving)
-                }
-                .padding(Space.l)
-                .padding(.top, 4)
-                .background(
-                    Color.opawSurface,
-                    in: UnevenRoundedRectangle(topLeadingRadius: Radius.sheet, bottomLeadingRadius: 0, bottomTrailingRadius: 0, topTrailingRadius: Radius.sheet)
-                )
-                .offset(y: -32)
-            }
-        }
-        .background(Color.opawSurface.ignoresSafeArea())
-        .ignoresSafeArea(edges: .top)
-        .interactiveDismissDisabled()
+        WalkStoryView(
+            points: result.points,
+            pins: result.pins,
+            title: Walk.title(for: result.startedAt, activity: activity),
+            subtitle: WalkStoryView.subtitle(start: result.startedAt, dog: dog),
+            stats: WalkCalculator.stats(for: result.points),
+            isRecord: isRecord,
+            dog: dog,
+            extraKm: saved == nil ? WalkCalculator.stats(for: result.points).distanceMeters / 1000 : 0,
+            onBack: { dismiss() }
+        )
+        .onAppear(perform: save)
     }
 
-    private var weekProgress: some View {
-        let interval = Calendar.current.dateInterval(of: .weekOfYear, for: Date()) ?? DateInterval(start: Date(), duration: 1)
-        let before = dog.walkedKm(from: interval.start, to: interval.end)
-        let total = before + stats.distanceMeters / 1000
-        let goal = max(0.5, dog.traits.recommendedWeeklyKm)
-        return VStack(alignment: .leading, spacing: 8) {
-            Text("\(total.formatted(.number.precision(.fractionLength(1)))) / \(goal.formatted(.number.precision(.fractionLength(0...1)))) km this week")
-                .font(.opaw(15, .heavy))
-            GeometryReader { proxy in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Color.opawChip)
-                    Capsule().fill(Color.opawInk)
-                        .frame(width: proxy.size.width * min(1, total / goal))
-                }
-            }
-            .frame(height: 10)
-        }
-    }
+    private func save() {
+        guard saved == nil else { return }
+        let stats = WalkCalculator.stats(for: result.points)
+        let monthStart = Calendar.current.dateInterval(of: .month, for: Date())?.start ?? Date()
+        let best = (dog.walks ?? []).filter { $0.startedAt >= monthStart }.map(\.distanceMeters).max() ?? 0
+        isRecord = stats.distanceMeters > 200 && stats.distanceMeters > best
 
-    private func save() async {
-        isSaving = true
-        defer { isSaving = false }
         let walk = Walk(startedAt: result.startedAt, endedAt: result.endedAt, route: result.points, pins: result.pins, dog: dog)
-        walk.note = note
+        walk.activityRaw = activity.rawValue
         modelContext.insert(walk)
         // Pins dropped on the walk count as care logs too.
         for pin in result.pins {
@@ -587,73 +581,198 @@ private struct WalkSummarySheet: View {
         }
         BadgeService.refresh(dog)
         try? modelContext.save()
-        if shareToPack {
-            do {
-                try await pack.shareWalk(walk, dog: dog, caption: note)
-                try? modelContext.save()
-            } catch {
-                self.error = "Saved, but sharing failed: \(error.localizedDescription)"
-                return
-            }
-        }
+        saved = walk
         Haptics.success()
-        dismiss()
     }
 }
 
-// MARK: - Detail
-
+/// A past walk, opened from Memories.
 struct WalkDetailView: View {
     let walk: Walk
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
+        WalkStoryView(
+            points: walk.route,
+            pins: walk.pins,
+            title: walk.title,
+            subtitle: walk.dog.map { WalkStoryView.subtitle(start: walk.startedAt, dog: $0) } ?? walk.startedAt.formatted(date: .abbreviated, time: .shortened),
+            stats: walk.stats,
+            isRecord: false,
+            dog: walk.dog,
+            extraKm: 0,
+            onBack: { dismiss() }
+        )
+        .toolbar(.hidden, for: .navigationBar)
+        .hidesFloatingTabBar()
+    }
+}
+
+/// The 3e layout: route map, back and share, then the sheet with the proud pet, stats and weekly progress.
+private struct WalkStoryView: View {
+    let points: [GeoPoint]
+    let pins: [WalkPin]
+    let title: String
+    let subtitle: String
+    let stats: WalkStats
+    let isRecord: Bool
+    let dog: Dog?
+    let extraKm: Double
+    let onBack: () -> Void
+
+    static func subtitle(start: Date, dog: Dog) -> String {
+        let day = Calendar.current.isDateInToday(start) ? "Today" : start.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated))
+        let walker = OpawDefaults.shared.string(forKey: OpawDefaults.caretakerKey) ?? ""
+        let with = walker.isEmpty ? dog.name : "\(dog.name) and \(walker)"
+        return "\(day) \(start.formatted(date: .omitted, time: .shortened)) · with \(with)"
+    }
+
+    private var peeCount: Int { pins.filter { $0.kind == CareKind.pee.rawValue }.count }
+    private var poopCount: Int { pins.filter { $0.kind == CareKind.poop.rawValue }.count }
+
+    var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                ZStack(alignment: .topLeading) {
-                    RouteMap(points: walk.route, pins: walk.pins)
-                        .frame(height: 380)
-                    Button { dismiss() } label: { RoundIcon(symbol: "chevron.left") }
-                        .buttonStyle(.pressable)
-                        .padding(.leading, 14)
+            VStack(spacing: 0) {
+                RouteMap(points: points, pins: pins)
+                    .frame(height: 400)
+                    .overlay(alignment: .top) {
+                        HStack {
+                            Button(action: onBack) { RoundIcon(symbol: "chevron.left") }
+                                .buttonStyle(.pressable)
+                                .accessibilityLabel("Back")
+                            Spacer()
+                            ShareLink(item: shareText) { RoundIcon(symbol: "square.and.arrow.up") }
+                                .buttonStyle(.pressable)
+                                .accessibilityLabel("Share walk")
+                        }
+                        .padding(.horizontal, 14)
                         .padding(.top, 62)
-                        .accessibilityLabel("Back")
-                }
-                VStack(alignment: .leading, spacing: 18) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(walk.title)
-                            .font(.opawDisplay(32))
-                        Text(walk.startedAt.formatted(date: .abbreviated, time: .shortened))
-                            .font(.opaw(15, .semibold))
-                            .foregroundStyle(Color.opawMuted)
                     }
-                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-                        RecordTile(value: OpawFormat.distance(meters: walk.distanceMeters), label: "Distance")
-                        RecordTile(value: OpawFormat.duration(walk.elapsedSeconds), label: "Duration")
-                        RecordTile(value: OpawFormat.pace(minutesPerKm: walk.stats.paceMinutesPerKm), label: "Pace /km")
-                        RecordTile(
-                            value: "\(walk.pins.filter { $0.kind == CareKind.pee.rawValue }.count) · \(walk.pins.filter { $0.kind == CareKind.poop.rawValue }.count)",
-                            label: "Pee · poop"
-                        )
-                    }
-                    if !walk.note.isEmpty {
-                        Text(walk.note)
-                            .font(.opaw(16, .semibold))
-                    }
-                }
-                .padding(Space.l)
-                .padding(.bottom, 100)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    Color.opawSurface,
-                    in: UnevenRoundedRectangle(topLeadingRadius: Radius.sheet, bottomLeadingRadius: 0, bottomTrailingRadius: 0, topTrailingRadius: Radius.sheet)
-                )
-                .offset(y: -32)
+                sheet
+                    .padding(.top, -30)
             }
         }
-        .background(Color.opawSurface.ignoresSafeArea())
+        .scrollIndicators(.hidden)
+        .background(Color.opawCream)
         .ignoresSafeArea(edges: .top)
-        .toolbar(.hidden, for: .navigationBar)
+    }
+
+    private var sheet: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if isRecord {
+                HStack(spacing: 6) {
+                    Image(systemName: "sparkle")
+                        .font(.system(size: 12, weight: .black))
+                    Text("Longest walk this month")
+                        .font(.opaw(13, .heavy))
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .background(Color(hex: 0x111111), in: Capsule())
+                .padding(.bottom, 10)
+            }
+            Text(title)
+                .font(.opaw(30, .black))
+                .foregroundStyle(Color.opawInk)
+            Text(subtitle)
+                .font(.opaw(15, .medium))
+                .foregroundStyle(Color.opawMuted)
+                .padding(.trailing, 120)
+            statsGrid
+                .padding(.top, 16)
+            if let dog { progress(dog: dog).padding(.top, 12) }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 22)
+        .padding(.bottom, 40)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            Color.opawCream
+                .clipShape(UnevenRoundedRectangle(topLeadingRadius: 36, bottomLeadingRadius: 0, bottomTrailingRadius: 0, topTrailingRadius: 36))
+        )
+        .overlay(alignment: .topTrailing) {
+            if let data = dog?.cutoutData ?? dog?.photoData, let image = UIImage(data: data) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 110, height: 120)
+                    .sticker(edge: 5, blur: 7, y: 10)
+                    .loopMotion(.bob, duration: 1.2)
+                    .padding(.trailing, 18)
+                    .offset(y: -62)
+            }
+        }
+    }
+
+    private var statsGrid: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 0) {
+                cell(OpawFormat.distance(meters: stats.distanceMeters), label: "Distance")
+                Rectangle().fill(Color.opawHairline).frame(width: 1)
+                cell(OpawFormat.duration(stats.elapsedSeconds), label: "Duration")
+            }
+            Rectangle().fill(Color.opawHairline).frame(height: 1)
+            HStack(spacing: 0) {
+                cell(OpawFormat.pace(minutesPerKm: stats.paceMinutesPerKm), label: "Pace /km")
+                Rectangle().fill(Color.opawHairline).frame(width: 1)
+                cell("\(peeCount) · \(poopCount)", label: "Pee · poop")
+            }
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.vertical, 6)
+        .whiteCard()
+    }
+
+    /// A value such as "2.41 km" with the unit drawn small and gray.
+    private func cell(_ value: String, label: String) -> some View {
+        let parts = value.split(separator: " ", maxSplits: 1).map(String.init)
+        let unit = parts.count == 2 && parts[1].allSatisfy(\.isLetter) ? parts[1] : nil
+        return VStack(alignment: .leading, spacing: 0) {
+            Group {
+                if let unit {
+                    Text(parts[0]) + Text(" \(unit)").font(.opaw(14, .black)).foregroundColor(Color.opawMuted)
+                } else {
+                    Text(value)
+                }
+            }
+            .font(.opaw(26, .black))
+            .foregroundStyle(Color.opawInk)
+            .lineLimit(1)
+            .minimumScaleFactor(0.6)
+            Text(label)
+                .font(.opaw(13, .semibold))
+                .foregroundStyle(Color.opawMuted)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+    }
+
+    private func progress(dog: Dog) -> some View {
+        var calendar = Calendar.current
+        calendar.firstWeekday = 2
+        let interval = calendar.dateInterval(of: .weekOfYear, for: Date()) ?? DateInterval(start: Date(), duration: 1)
+        let total = dog.walkedKm(from: interval.start, to: interval.end) + extraKm
+        let goal = max(0.5, dog.traits.recommendedWeeklyKm)
+        return HStack(spacing: 10) {
+            GeometryReader { proxy in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.opawTrack)
+                    Capsule().fill(Color.opawInk)
+                        .frame(width: proxy.size.width * min(1, total / goal))
+                }
+            }
+            .frame(height: 10)
+            Text("\(total.formatted(.number.precision(.fractionLength(1)))) / \(goal.formatted(.number.precision(.fractionLength(0...1)))) km this week")
+                .font(.opaw(15, .bold))
+                .foregroundStyle(Color.opawInk)
+                .fixedSize()
+        }
+    }
+
+    private var shareText: String {
+        "\(title): \(OpawFormat.distance(meters: stats.distanceMeters)) in \(OpawFormat.duration(stats.elapsedSeconds)) with \(dog?.name ?? "my dog"). Logged with Opaw."
     }
 }
 
@@ -672,12 +791,7 @@ struct RouteMap: View {
                 }
             }
             if let first = points.first {
-                Annotation("", coordinate: first.coordinate) {
-                    Circle()
-                        .fill(Color.white)
-                        .frame(width: 18, height: 18)
-                        .overlay(Circle().stroke(Color(hex: 0x111111), lineWidth: 4))
-                }
+                Annotation("", coordinate: first.coordinate) { StartDot() }
             }
         }
         .mapStyle(.standard(pointsOfInterest: .excludingAll))

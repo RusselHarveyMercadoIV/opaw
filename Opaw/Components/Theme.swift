@@ -54,6 +54,14 @@ extension Color {
     /// Only for things that need attention: overdue meds, warnings.
     static let opawAlert = Color(hex: 0xEC3013)
 
+    /// Quieter text steps used by the design: #AAA, #777, #BBB.
+    static let opawFaint = Color(uiColor: .opaw(light: 0xAAAAAA, dark: 0x7C7C80))
+    static let opawSoftText = Color(uiColor: .opaw(light: 0x777777, dark: 0xA1A1A6))
+    static let opawGhost = Color(uiColor: .opaw(light: 0xBBBBBB, dark: 0x5C5C60))
+
+    /// Empty bar and track fills.
+    static let opawTrack = Color(uiColor: .opaw(light: 0xE6E6E8, dark: 0x2C2C2E))
+
     /// Mood dots.
     static let opawGood = Color(hex: 0x34C759)
     static let opawWarn = Color(hex: 0xF5B300)
@@ -75,19 +83,30 @@ enum Radius {
 }
 
 extension Font {
-    /// Rounded heavy display type, close to Nunito Black.
+    /// The Nunito face for a weight. The design uses 500 to 900 only.
+    static func nunitoName(_ weight: Font.Weight) -> String {
+        switch weight {
+        case .black: "Nunito-Black"
+        case .heavy: "Nunito-ExtraBold"
+        case .bold: "Nunito-Bold"
+        case .semibold: "Nunito-SemiBold"
+        default: "Nunito-Medium"
+        }
+    }
+
+    /// Nunito Black display type (900).
     static func opawDisplay(_ size: CGFloat, weight: Font.Weight = .black) -> Font {
-        .system(size: size, weight: weight == .regular ? .bold : weight == .semibold ? .black : weight, design: .rounded)
+        .custom(nunitoName(weight), size: size)
     }
 
-    /// Rounded text at a given weight.
+    /// Nunito at a weight: .medium 500, .semibold 600, .bold 700, .heavy 800, .black 900.
     static func opaw(_ size: CGFloat, _ weight: Font.Weight = .bold) -> Font {
-        .system(size: size, weight: weight, design: .rounded)
+        .custom(nunitoName(weight), size: size)
     }
 
-    /// Rounded numerals for stats.
+    /// Nunito Black numerals for stats.
     static func opawNumber(_ size: CGFloat) -> Font {
-        .system(size: size, weight: .black, design: .rounded).monospacedDigit()
+        .custom("Nunito-Black", size: size).monospacedDigit()
     }
 }
 
@@ -120,6 +139,9 @@ struct CardModifier: ViewModifier {
 /// A pet cutout printed like a sticker: a thick white edge and a soft drop shadow.
 struct StickerModifier: ViewModifier {
     var edge: CGFloat = 5
+    var shadowBlur: CGFloat = 7
+    var shadowY: CGFloat = 10
+    var shadowOpacity: Double = 0.16
 
     func body(content: Content) -> some View {
         content
@@ -127,14 +149,33 @@ struct StickerModifier: ViewModifier {
             .shadow(color: .white, radius: 0, x: -edge, y: 0)
             .shadow(color: .white, radius: 0, x: 0, y: edge)
             .shadow(color: .white, radius: 0, x: 0, y: -edge)
-            .shadow(color: .black.opacity(0.16), radius: 7, y: 10)
+            .shadow(color: .black.opacity(shadowOpacity), radius: shadowBlur, y: shadowY)
+    }
+}
+
+/// A white rounded card with the design's soft shadow, at any radius.
+struct WhiteCardModifier: ViewModifier {
+    var radius: CGFloat = 30
+    var shadowOpacity: Double = 0.05
+
+    func body(content: Content) -> some View {
+        content
+            .background(Color.opawSurface, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+            .shadow(color: .black.opacity(shadowOpacity), radius: 15, y: 12)
     }
 }
 
 extension View {
     func card(padding: CGFloat = 20) -> some View { modifier(CardModifier(padding: padding)) }
 
-    func sticker(edge: CGFloat = 5) -> some View { modifier(StickerModifier(edge: edge)) }
+    func sticker(edge: CGFloat = 5, blur: CGFloat = 7, y: CGFloat = 10, opacity: Double = 0.16) -> some View {
+        modifier(StickerModifier(edge: edge, shadowBlur: blur, shadowY: y, shadowOpacity: opacity))
+    }
+
+    /// White rounded background with the soft card shadow; no padding or sizing.
+    func whiteCard(radius: CGFloat = 30, shadow: Double = 0.05) -> some View {
+        modifier(WhiteCardModifier(radius: radius, shadowOpacity: shadow))
+    }
 
     /// Screen background.
     func opawBackground() -> some View {
@@ -155,7 +196,7 @@ struct OpawPrimaryButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.opaw(17, .heavy))
+            .font(.opaw(17, .bold))
             .foregroundStyle(Color.opawOnInk)
             .frame(maxWidth: .infinity, minHeight: 62)
             .background(Color.opawInk.opacity(isEnabled ? 1 : 0.18), in: Capsule())
@@ -258,6 +299,160 @@ struct ScreenHeader<Leading: View, Trailing: View>: View {
 }
 
 // MARK: - Shared pieces
+
+/// The pet switcher chip in screen headers: a small avatar and the pet's name.
+struct PetChip: View {
+    let dog: Dog?
+
+    var body: some View {
+        HStack(spacing: 8) {
+            DogThumbnail(data: dog?.cutoutData ?? dog?.photoData, size: 36)
+                .overlay(Circle().strokeBorder(Color.opawSurface, lineWidth: 3))
+            Text(dog?.name ?? "Pet")
+                .font(.opaw(15, .heavy))
+                .foregroundStyle(Color.opawInk)
+                .lineLimit(1)
+        }
+        .padding(.vertical, 5)
+        .padding(.leading, 5)
+        .padding(.trailing, 14)
+        .background(Color.opawSurface, in: Capsule())
+        .floatingShadow()
+    }
+}
+
+/// A centered stat: big number over a quiet label.
+struct StatColumn: View {
+    let value: String
+    let label: String
+    var valueSize: CGFloat = 21
+    var labelSize: CGFloat = 14
+    var valueColor: Color = .opawInk
+
+    var body: some View {
+        VStack(spacing: 2) {
+            Text(value)
+                .font(.opaw(valueSize, .black))
+                .foregroundStyle(valueColor)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .contentTransition(.numericText())
+            Text(label)
+                .font(.opaw(labelSize, .medium))
+                .foregroundStyle(Color.opawMuted)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+/// A filter pill on the ground: black when selected, white with a soft shadow otherwise.
+struct FilterPill: View {
+    let title: String
+    let isSelected: Bool
+    var verticalPadding: CGFloat = 10
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.opaw(14, .bold))
+                .foregroundStyle(isSelected ? Color.opawOnInk : Color.opawInk)
+                .padding(.horizontal, 18)
+                .padding(.vertical, verticalPadding)
+                .background(isSelected ? Color.opawInk : Color.opawSurface, in: Capsule())
+                .shadow(color: .black.opacity(isSelected ? 0 : 0.05), radius: 8, y: 6)
+        }
+        .buttonStyle(.pressable)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
+/// Text with a thick white outline, like a sticker label.
+struct OutlinedText: View {
+    let text: String
+    var size: CGFloat = 28
+
+    var body: some View {
+        Text(text)
+            .font(.opaw(size, .black))
+            .foregroundStyle(Color(hex: 0x111111))
+            .shadow(color: .white, radius: 0, x: 3, y: 0)
+            .shadow(color: .white, radius: 0, x: -3, y: 0)
+            .shadow(color: .white, radius: 0, x: 0, y: 3)
+            .shadow(color: .white, radius: 0, x: 0, y: -3)
+            .shadow(color: .white, radius: 0, x: 2, y: 2)
+            .shadow(color: .white, radius: 0, x: -2, y: -2)
+            .shadow(color: .black.opacity(0.15), radius: 5, y: 6)
+    }
+}
+
+/// The design's small repeating motions.
+enum LoopMotion {
+    case bob, breathe, droop, trot, tagPop
+
+    var duration: Double {
+        switch self {
+        case .bob: 1.4
+        case .breathe: 3.2
+        case .droop: 4
+        case .trot: 0.5
+        case .tagPop: 1.6
+        }
+    }
+}
+
+struct LoopMotionModifier: ViewModifier {
+    let motion: LoopMotion
+    var duration: Double?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        if reduceMotion {
+            content
+        } else {
+            content.phaseAnimator([false, true]) { view, up in
+                switch motion {
+                case .bob:
+                    view.offset(y: up ? -10 : 0).rotationEffect(.degrees(up ? 1.5 : -1.5))
+                case .breathe:
+                    view.scaleEffect(up ? 1.03 : 1)
+                case .droop:
+                    view.offset(y: up ? 12 : 8).rotationEffect(.degrees(up ? -1 : -3))
+                case .trot:
+                    view.offset(y: up ? -5 : 0).rotationEffect(.degrees(up ? 3 : 0))
+                case .tagPop:
+                    view.rotationEffect(.degrees(up ? -6 : -12)).scaleEffect(up ? 1.12 : 1)
+                }
+            } animation: { _ in
+                .easeInOut(duration: (duration ?? motion.duration) / 2)
+            }
+        }
+    }
+}
+
+extension View {
+    func loopMotion(_ motion: LoopMotion, duration: Double? = nil) -> some View {
+        modifier(LoopMotionModifier(motion: motion, duration: duration))
+    }
+}
+
+/// A dot that fades in and out, for "recording".
+struct PulseDot: View {
+    var color: Color = .opawAlert
+    var size: CGFloat = 9
+    @State private var dim = false
+
+    var body: some View {
+        Circle()
+            .fill(color)
+            .frame(width: size, height: size)
+            .opacity(dim ? 0.25 : 1)
+            .animation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true), value: dim)
+            .onAppear { dim = true }
+    }
+}
 
 struct StatTile: View {
     let title: String
@@ -365,11 +560,11 @@ enum OpawAppearance {
         appearance.configureWithTransparentBackground()
         appearance.backgroundColor = .opaw(light: 0xF4F4F5, dark: 0x0B0B0C)
         appearance.shadowColor = .clear
-        if let rounded = UIFont.systemFont(ofSize: 34, weight: .black).fontDescriptor.withDesign(.rounded) {
-            appearance.largeTitleTextAttributes = [.font: UIFont(descriptor: rounded, size: 34)]
+        if let large = UIFont(name: "Nunito-Black", size: 34) {
+            appearance.largeTitleTextAttributes = [.font: large]
         }
-        if let rounded = UIFont.systemFont(ofSize: 18, weight: .black).fontDescriptor.withDesign(.rounded) {
-            appearance.titleTextAttributes = [.font: UIFont(descriptor: rounded, size: 18)]
+        if let title = UIFont(name: "Nunito-Black", size: 18) {
+            appearance.titleTextAttributes = [.font: title]
         }
         UINavigationBar.appearance().standardAppearance = appearance
         UINavigationBar.appearance().scrollEdgeAppearance = appearance

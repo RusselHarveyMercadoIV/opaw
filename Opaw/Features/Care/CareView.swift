@@ -3,7 +3,7 @@ import SwiftData
 import SwiftUI
 import WidgetKit
 
-/// Care: one-tap logs with today's counts, the streak, and today's log.
+/// Care (3a): the streak, one-tap log circles, and who's been caring today.
 struct CareView: View {
     @Binding var selectedTab: AppTab
 
@@ -12,6 +12,7 @@ struct CareView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var showPoop = false
     @State private var detailKind: CareKind?
+    @State private var showCustom = false
     @State private var toast: CareToast?
     @State private var celebration: Badge?
 
@@ -19,27 +20,20 @@ struct CareView: View {
         dogs.first { $0.id.uuidString == activeDogID } ?? dogs.first
     }
 
-    /// Log types in the grid, in the design's order.
-    static let gridKinds: [CareKind] = [.meal, .water, .pee, .poop, .meds, .bath, .brush, .nails, .weight, .vet, .play]
+    /// Log types in the grid, in the design's order. "Custom" follows.
+    static let gridKinds: [CareKind] = [.meal, .water, .pee, .poop, .meds, .bath, .brush, .nails, .weight, .vet]
 
     var body: some View {
         NavigationStack {
-            ZStack(alignment: .bottom) {
+            ZStack {
                 if let dog {
                     TimelineView(.periodic(from: .now, by: 60)) { context in
                         content(dog: dog, now: context.date)
                     }
                 }
-                if let toast {
-                    CareToastView(toast: toast)
-                        .padding(.horizontal, Space.l)
-                        .padding(.bottom, 96)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                        .onTapGesture { withAnimation { self.toast = nil } }
-                }
                 if showPoop, let dog {
                     PoopLogOverlay(dog: dog) { event in
-                        if let event { log(event, dog: dog) }
+                        if let event { record(event, dog: dog) }
                         withAnimation(.spring(response: 0.45, dampingFraction: 0.9)) { showPoop = false }
                     }
                     .transition(.opacity)
@@ -47,10 +41,16 @@ struct CareView: View {
                 }
             }
             .opawBackground()
+            .careToast($toast, bottom: 110)
             .toolbar(.hidden, for: .navigationBar)
             .sheet(item: $detailKind) { kind in
                 if let dog {
-                    CareLogSheet(dog: dog, initialKind: kind) { didLog(kind, dog: dog, before: nil) }
+                    CareLogSheet(dog: dog, initialKind: kind) { }
+                }
+            }
+            .sheet(isPresented: $showCustom) {
+                if let dog {
+                    CareLogSheet(dog: dog, initialKind: .play) { }
                 }
             }
             .alert(item: $celebration) { badge in
@@ -65,39 +65,47 @@ struct CareView: View {
 
     private func content(dog: Dog, now: Date) -> some View {
         ScrollView {
-            VStack(spacing: Space.l) {
-                ScreenHeader(title: "Care") {
-                    HStack(spacing: 8) {
-                        DogThumbnail(data: dog.cutoutData ?? dog.photoData, size: 36)
-                            .overlay(Circle().stroke(Color.opawSurface, lineWidth: 3))
-                        Text(dog.name)
-                            .font(.opaw(15, .heavy))
-                            .lineLimit(1)
+            VStack(spacing: 0) {
+                HStack {
+                    Menu {
+                        ForEach(dogs) { item in
+                            Button(item.name) {
+                                activeDogID = item.id.uuidString
+                                WidgetCenter.shared.reloadTimelines(ofKind: OpawWidgetKind.quickLog)
+                            }
+                        }
+                    } label: {
+                        PetChip(dog: dog)
                     }
-                    .padding(5)
-                    .padding(.trailing, 9)
-                    .background(Color.opawSurface, in: Capsule())
-                    .floatingShadow()
-                } trailing: {
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    Text("Care")
+                        .font(.opaw(22, .black))
+                        .foregroundStyle(Color.opawInk)
                     NavigationLink {
                         ScheduleView(dog: dog)
                     } label: {
-                        RoundIcon(symbol: "bell.fill", tint: dog.medsStatus(now: now).overdue ? .opawAlert : .opawInk)
+                        RoundIcon(symbol: "bell.fill")
                     }
                     .buttonStyle(.pressable)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
                     .accessibilityLabel("Schedule and reminders")
                 }
+                .padding(.horizontal, 20)
+                .padding(.top, 10)
 
                 streakCard(dog: dog)
-                    .padding(.horizontal, Space.l)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 16)
 
                 grid(dog: dog, now: now)
-                    .padding(.horizontal, Space.l)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 22)
 
-                todayCard(dog: dog, now: now)
-                    .padding(.horizontal, Space.l)
+                caringCard(dog: dog, now: now)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 22)
             }
-            .padding(.bottom, 100)
+            .padding(.bottom, 120)
         }
         .scrollIndicators(.hidden)
     }
@@ -105,26 +113,36 @@ struct CareView: View {
     private func streakCard(dog: Dog) -> some View {
         let streak = dog.careStreak
         let counts = dog.lastSevenDayCounts
-        return HStack(spacing: Space.m) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(streak == 1 ? "1-day streak" : "\(streak)-day streak")
-                    .font(.opaw(22, .black))
-                    .foregroundStyle(Color.opawInk)
-                Text("Log 3 things a day to keep it going")
-                    .font(.opaw(14, .medium))
-                    .foregroundStyle(Color.opawMuted)
-            }
-            Spacer(minLength: 0)
-            HStack(alignment: .bottom, spacing: 5) {
-                ForEach(Array(counts.enumerated()), id: \.offset) { index, count in
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(count >= 3 ? Color.opawInk : Color.opawChip)
-                        .frame(width: 12, height: index == counts.count - 1 ? 30 : 22)
+        // Today sits fifth, as in the design: four days before it and two still to come.
+        let bars: [Int?] = Array(counts.suffix(5)).map { Optional($0) } + [nil, nil]
+        return NavigationLink {
+            HistoryView(dog: dog)
+        } label: {
+            HStack(spacing: 16) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(streak == 1 ? "1-day streak" : "\(streak)-day streak")
+                        .font(.opaw(22, .black))
+                        .foregroundStyle(Color.opawInk)
+                    Text("Log 3 things a day to keep it going")
+                        .font(.opaw(14, .medium))
+                        .foregroundStyle(Color.opawMuted)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                HStack(alignment: .center, spacing: 5) {
+                    ForEach(Array(bars.enumerated()), id: \.offset) { index, count in
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill((count ?? 0) >= 3 ? Color.opawInk : Color.opawTrack)
+                            .frame(width: 12, height: index == 4 ? 30 : 22)
+                    }
+                }
+                .accessibilityHidden(true)
             }
-            .accessibilityHidden(true)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+            .whiteCard()
         }
-        .card(padding: 20)
+        .buttonStyle(.pressable)
     }
 
     private func grid(dog: Dog, now: Date) -> some View {
@@ -136,36 +154,7 @@ struct CareView: View {
                 Button {
                     tap(kind, dog: dog)
                 } label: {
-                    VStack(spacing: 6) {
-                        ZStack(alignment: .topTrailing) {
-                            Image(systemName: kind.symbol)
-                                .font(.system(size: 24, weight: .semibold))
-                                .foregroundStyle(alert ? Color.opawAlert : Color.opawInk)
-                                .frame(width: 68, height: 68)
-                                .background(Color.opawSurface, in: Circle())
-                                .overlay {
-                                    if alert { Circle().strokeBorder(Color.opawAlert, lineWidth: 2.5) }
-                                }
-                                .shadow(color: .black.opacity(0.06), radius: 12, y: 10)
-                            if alert || count > 0 {
-                                Text(alert ? "!" : "\(count)")
-                                    .font(.opaw(12, .heavy))
-                                    .foregroundStyle(.white)
-                                    .frame(minWidth: 22, minHeight: 22)
-                                    .padding(.horizontal, alert ? 0 : 2)
-                                    .background(alert ? Color.opawAlert : Color(hex: 0x111111), in: Capsule())
-                                    .overlay(Capsule().stroke(Color.opawCream, lineWidth: 2))
-                                    .offset(x: 2, y: -2)
-                                    .contentTransition(.numericText())
-                            }
-                        }
-                        Text(kind.shortTitle)
-                            .font(.opaw(13, .bold))
-                            .foregroundStyle(Color.opawInk)
-                            .lineLimit(1)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .contentShape(Rectangle())
+                    circle(symbol: kind.symbol, label: kind.shortTitle, badge: alert ? "!" : (count > 0 ? "\(count)" : nil), alert: alert)
                 }
                 .buttonStyle(.pressable)
                 .contextMenu {
@@ -178,62 +167,111 @@ struct CareView: View {
                 .accessibilityLabel("Log \(kind.title), \(count) today")
             }
             Button {
-                detailKind = .meal
+                showCustom = true
             } label: {
-                VStack(spacing: 6) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 24, weight: .semibold))
-                        .foregroundStyle(Color.opawInk)
-                        .frame(width: 68, height: 68)
-                        .background(Color.opawSurface, in: Circle())
-                        .shadow(color: .black.opacity(0.06), radius: 12, y: 10)
-                    Text("More")
-                        .font(.opaw(13, .bold))
-                        .foregroundStyle(Color.opawInk)
-                }
-                .frame(maxWidth: .infinity)
+                circle(symbol: "plus", label: "Custom", badge: nil, alert: false)
             }
             .buttonStyle(.pressable)
-            .accessibilityLabel("Log with details")
+            .accessibilityLabel("Custom log")
         }
     }
 
-    private func todayCard(dog: Dog, now: Date) -> some View {
-        let events = dog.events(on: now).sorted { $0.date > $1.date }
-        return VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text("Today's log")
-                    .font(.opaw(17, .black))
-                Spacer()
-                NavigationLink {
-                    HistoryView(dog: dog)
-                } label: {
-                    HStack(spacing: 4) {
-                        Text("History")
-                        Image(systemName: "chevron.right")
+    private func circle(symbol: String, label: String, badge: String?, alert: Bool) -> some View {
+        VStack(spacing: 6) {
+            Image(systemName: symbol)
+                .font(.system(size: 24, weight: .semibold))
+                .foregroundStyle(alert ? Color.opawAlert : Color.opawInk)
+                .frame(width: 68, height: 68)
+                .background(Color.opawSurface, in: Circle())
+                .overlay {
+                    if alert { Circle().strokeBorder(Color.opawAlert, lineWidth: 2.5) }
+                }
+                .shadow(color: .black.opacity(0.06), radius: 12, y: 10)
+                .overlay(alignment: .topTrailing) {
+                    if let badge {
+                        Text(badge)
+                            .font(.opaw(12, .heavy))
+                            .foregroundStyle(.white)
+                            .frame(minWidth: 22, minHeight: 22)
+                            .background(alert ? Color.opawAlert : Color(hex: 0x111111), in: Capsule())
+                            .padding(2)
+                            .background(Color.opawCream, in: Capsule())
+                            .offset(x: 4, y: -4)
+                            .contentTransition(.numericText())
                     }
-                    .font(.opaw(14, .bold))
-                    .foregroundStyle(Color.opawMuted)
+                }
+            Text(label)
+                .font(.opaw(13, .bold))
+                .foregroundStyle(Color.opawInk)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity)
+        .contentShape(Rectangle())
+    }
+
+    private func caringCard(dog: Dog, now: Date) -> some View {
+        let events = dog.events(on: now).sorted { $0.date > $1.date }
+        let people = events.map { CareRecorder.name($0.loggedBy) }.reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
+        return VStack(spacing: 0) {
+            HStack {
+                Text("Who's caring today")
+                    .font(.opaw(17, .black))
+                    .foregroundStyle(Color.opawInk)
+                Spacer()
+                HStack(spacing: -12) {
+                    ForEach(people.prefix(3), id: \.self) { name in
+                        MiniFace(data: nil, size: 32, rim: 3, fill: Color.opawTrack, initial: String(name.prefix(1)))
+                    }
                 }
             }
-            .padding(.vertical, 12)
+            .padding(.top, 12)
+            .padding(.bottom, 8)
             if events.isEmpty {
                 Text("Nothing yet. Tap a circle above to log.")
                     .font(.opaw(15, .semibold))
                     .foregroundStyle(Color.opawMuted)
-                    .padding(.vertical, 10)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .overlay(alignment: .top) { Divider().overlay(Color.opawHairline) }
-            }
-            ForEach(events.prefix(8)) { event in
-                CareEventRow(event: event)
+                    .padding(.vertical, 10)
                     .overlay(alignment: .top) { Rectangle().fill(Color.opawHairline).frame(height: 1) }
+            }
+            ForEach(events.prefix(6)) { event in
+                HStack(spacing: 0) {
+                    Text(event.date.formatted(date: .omitted, time: .shortened))
+                        .foregroundStyle(Color.opawFaint)
+                        .frame(width: 52, alignment: .leading)
+                    Text(caringLine(event))
+                        .foregroundStyle(Color.opawInk)
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                }
+                .font(.opaw(15, .semibold))
+                .padding(.vertical, 10)
+                .overlay(alignment: .top) { Rectangle().fill(Color.opawHairline).frame(height: 1) }
             }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 6)
-        .background(Color.opawSurface, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
-        .shadow(color: .black.opacity(0.05), radius: 15, y: 12)
+        .whiteCard()
+    }
+
+    private func caringLine(_ event: CareEvent) -> String {
+        let who = CareRecorder.name(event.loggedBy)
+        let detail = event.summary.split(separator: " · ").dropFirst().joined(separator: " · ")
+        let what: String
+        switch event.kind {
+        case .meal: what = "a meal"
+        case .water: what = "water"
+        case .pee: what = "a pee"
+        case .poop: what = "a poop"
+        case .meds: what = "meds"
+        case .bath: what = "a bath"
+        case .brush: what = "a brush"
+        case .nails: what = "a nail trim"
+        case .weight: what = "a weigh-in"
+        case .vet: what = "a vet visit"
+        case .play: what = "play time"
+        }
+        return detail.isEmpty ? "\(who) logged \(what)" : "\(who) logged \(what) · \(detail)"
     }
 
     // MARK: Logging
@@ -246,121 +284,21 @@ struct CareView: View {
         case .weight, .vet:
             detailKind = kind
         default:
-            log(CareEvent(kind: kind, dog: dog), dog: dog)
+            record(CareEvent(kind: kind, dog: dog), dog: dog)
         }
     }
 
-    private func log(_ event: CareEvent, dog: Dog) {
-        let before = dog.careReport().score
-        modelContext.insert(event)
-        try? modelContext.save()
-        didLog(event.kind, dog: dog, before: before)
-    }
-
-    private func didLog(_ kind: CareKind, dog: Dog, before: Int?) {
-        Haptics.success()
-        WidgetCenter.shared.reloadTimelines(ofKind: OpawWidgetKind.quickLog)
-        if let badge = BadgeService.refresh(dog).first {
-            celebration = badge
-        }
-        try? modelContext.save()
-        let after = dog.careReport().score
-        let newToast = CareToast(kind: kind, image: dog.cutoutData ?? dog.photoData, before: before ?? after, after: after)
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) { toast = newToast }
-        Task {
-            try? await Task.sleep(for: .seconds(3))
-            if toast?.id == newToast.id {
-                withAnimation(.easeInOut(duration: 0.35)) { toast = nil }
-            }
-        }
+    private func record(_ event: CareEvent, dog: Dog) {
+        let result = CareRecorder.log(event, dog: dog, in: modelContext)
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) { toast = result.toast }
+        if let badge = result.badge { celebration = badge }
     }
 }
 
-extension CareKind {
-    /// A short label that fits under a circle.
-    var shortTitle: String {
-        self == .vet ? "Vet" : title
-    }
-
-    /// What the avatar says right after this is logged.
-    var reaction: String {
-        switch self {
-        case .meal: return "Yum. Seconds?"
-        case .water: return "Ahh, refreshing."
-        case .pee: return "Much better."
-        case .poop: return "Ahh, that's the spot."
-        case .bath: return "Squeaky clean. Hmph."
-        case .brush: return "So fluffy now."
-        case .nails: return "No more click-clack."
-        case .meds: return "Not my favourite, but thanks."
-        case .vet: return "Brave dog award, please."
-        case .weight: return "Don't tell me the number."
-        case .play: return "Again! Again!"
-        }
-    }
-}
-
-// MARK: - Reaction toast
-
-struct CareToast: Identifiable, Equatable {
-    let id = UUID()
-    let kind: CareKind
-    let image: Data?
-    let before: Int
-    let after: Int
-}
-
-private struct CareToastView: View {
-    let toast: CareToast
-
-    var body: some View {
-        HStack(spacing: 14) {
-            Group {
-                if let data = toast.image, let image = UIImage(data: data) {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFit()
-                        .sticker(edge: 3)
-                } else {
-                    Image(systemName: "dog.fill")
-                        .font(.system(size: 34))
-                        .foregroundStyle(Color.opawInk)
-                }
-            }
-            .frame(width: 64, height: 64)
-            .phaseAnimator([false, true]) { view, up in
-                view.offset(y: up ? -4 : 0)
-            } animation: { _ in .easeInOut(duration: 0.4) }
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text("\u{201C}\(toast.kind.reaction)\u{201D}")
-                    .font(.opaw(16, .heavy))
-                    .foregroundStyle(Color.opawInk)
-                Text("\(toast.kind.title) logged · score \(toast.before) → \(toast.after)")
-                    .font(.opaw(13, .semibold))
-                    .foregroundStyle(Color.opawMuted)
-            }
-            Spacer(minLength: 0)
-            if toast.after > toast.before {
-                Text("+\(toast.after - toast.before)")
-                    .font(.opaw(14, .heavy))
-                    .foregroundStyle(Color.opawOnInk)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Color.opawInk, in: Capsule())
-            }
-        }
-        .padding(14)
-        .background(Color.opawSurface, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .shadow(color: .black.opacity(0.14), radius: 20, y: 14)
-        .accessibilityElement(children: .combine)
-    }
-}
-
-// MARK: - Poop log
+// MARK: - Poop log (3b)
 
 /// Poop logging over a dimmed screen, with the avatar asking for privacy.
-private struct PoopLogOverlay: View {
+struct PoopLogOverlay: View {
     let dog: Dog
     let onDone: (CareEvent?) -> Void
 
@@ -368,37 +306,33 @@ private struct PoopLogOverlay: View {
     @State private var color: PoopColor = .brown
     @State private var note = ""
     @State private var date = Date()
+    @State private var editTime = false
     @State private var appeared = false
-
-    private var isConcerning: Bool { consistency.isConcerning || color.isConcerning }
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            Color(red: 0.08, green: 0.08, blue: 0.09).opacity(0.38)
+            Color(red: 20 / 255, green: 20 / 255, blue: 22 / 255).opacity(0.38)
                 .ignoresSafeArea()
                 .onTapGesture { onDone(nil) }
 
-            VStack(spacing: 0) {
-                HStack(alignment: .top, spacing: 0) {
-                    avatar
-                        .frame(width: 130, height: 150)
-                    Text("a little privacy, please")
-                        .font(.opaw(16, .heavy))
-                        .foregroundStyle(Color(hex: 0x111111))
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                        .background(Color.white, in: UnevenRoundedRectangle(topLeadingRadius: 22, bottomLeadingRadius: 6, bottomTrailingRadius: 22, topTrailingRadius: 22))
-                        .shadow(color: .black.opacity(0.12), radius: 12, y: 10)
-                        .padding(.top, 8)
-                    Spacer(minLength: 0)
-                }
-                .padding(.leading, 30)
-                .offset(y: 28)
-                .zIndex(1)
-
+            ZStack(alignment: .topLeading) {
+                avatar
+                    .frame(width: 130, height: 150)
+                    .padding(.leading, 40)
+                    .padding(.top, 14)
+                Text("a little privacy, please")
+                    .font(.opaw(16, .heavy))
+                    .foregroundStyle(Color(hex: 0x111111))
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(Color.white, in: UnevenRoundedRectangle(topLeadingRadius: 22, bottomLeadingRadius: 6, bottomTrailingRadius: 22, topTrailingRadius: 22))
+                    .shadow(color: .black.opacity(0.12), radius: 12, y: 10)
+                    .padding(.leading, 170)
+                    .padding(.top, 20)
                 logSheet
+                    .padding(.top, 120)
             }
-            .offset(y: appeared ? 0 : 700)
+            .offset(y: appeared ? 0 : 800)
         }
         .onAppear {
             withAnimation(.spring(response: 0.5, dampingFraction: 0.86)) { appeared = true }
@@ -411,10 +345,8 @@ private struct PoopLogOverlay: View {
             Image(uiImage: image)
                 .resizable()
                 .scaledToFit()
-                .sticker()
-                .phaseAnimator([false, true]) { view, up in
-                    view.scaleEffect(up ? 1.03 : 1, anchor: .bottom)
-                } animation: { _ in .easeInOut(duration: 1.3) }
+                .sticker(edge: 5, blur: 7, y: 10)
+                .loopMotion(.breathe, duration: 2.6)
         } else {
             Image(systemName: "dog.fill")
                 .font(.system(size: 80))
@@ -422,94 +354,181 @@ private struct PoopLogOverlay: View {
         }
     }
 
+    private var timeLabel: String {
+        let time = date.formatted(date: .omitted, time: .shortened)
+        return abs(date.timeIntervalSinceNow) < 120 ? "Now · \(time)" : time
+    }
+
     private var logSheet: some View {
         VStack(alignment: .leading, spacing: 18) {
             Capsule()
-                .fill(Color.opawChip)
+                .fill(Color(hex: 0xDDDDDD))
                 .frame(width: 40, height: 5)
                 .frame(maxWidth: .infinity)
             HStack {
                 Text("Poop")
                     .font(.opaw(30, .black))
+                    .foregroundStyle(Color(hex: 0x111111))
                 Spacer()
-                DatePicker("When", selection: $date, in: ...Date(), displayedComponents: [.hourAndMinute])
-                    .labelsHidden()
-                    .tint(Color.opawInk)
-            }
-            VStack(alignment: .leading, spacing: 10) {
-                Eyebrow(text: "Consistency")
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        ForEach(PoopConsistency.pickerCases) { option in
-                            ChoiceChip(title: option.title, isSelected: option == consistency) {
-                                consistency = option
-                                Haptics.select()
-                            }
-                        }
-                    }
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) { editTime.toggle() }
+                } label: {
+                    Text(timeLabel)
+                        .font(.opaw(14, .bold))
+                        .foregroundStyle(Color(hex: 0x111111))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 9)
+                        .background(Color(hex: 0xF1F1F2), in: Capsule())
                 }
+                .buttonStyle(.pressable)
+                .accessibilityLabel("Time: \(timeLabel). Change")
+            }
+            if editTime {
+                DatePicker("When", selection: $date, in: ...Date(), displayedComponents: [.date, .hourAndMinute])
+                    .datePickerStyle(.compact)
+                    .font(.opaw(15, .bold))
+                    .tint(Color(hex: 0x111111))
             }
             VStack(alignment: .leading, spacing: 10) {
-                Eyebrow(text: "Color")
-                HStack {
+                label("Consistency")
+                FlowChips(items: PoopConsistency.pickerCases, selection: $consistency)
+            }
+            VStack(alignment: .leading, spacing: 10) {
+                label("Color")
+                HStack(spacing: 0) {
                     ForEach(PoopColor.allCases) { option in
-                        Button {
-                            color = option
-                            Haptics.select()
-                        } label: {
-                            VStack(spacing: 6) {
-                                Circle()
-                                    .fill(option.swatch)
-                                    .frame(width: 44, height: 44)
-                                    .overlay(Circle().stroke(Color.black.opacity(0.08), lineWidth: 1))
-                                    .padding(option == color ? 3 : 0)
-                                    .overlay {
-                                        if option == color {
-                                            Circle().stroke(Color.opawInk, lineWidth: 2.5)
-                                        }
-                                    }
-                                    .frame(width: 52, height: 52)
-                                Text(option.title)
-                                    .font(.opaw(12, .semibold))
-                                    .foregroundStyle(option == color ? Color.opawInk : Color.opawMuted)
-                                    .lineLimit(1)
-                                    .fixedSize()
-                            }
-                            .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.pressable)
-                        .accessibilityLabel(option.title)
-                        .accessibilityAddTraits(option == color ? .isSelected : [])
+                        if option != PoopColor.allCases.first { Spacer(minLength: 0) }
+                        swatch(option)
                     }
                 }
             }
-            if isConcerning {
-                Label("Keep an eye on this. If it lasts more than a day, or you see black or red, call your vet.", systemImage: "exclamationmark.triangle.fill")
-                    .font(.opaw(14, .semibold))
-                    .foregroundStyle(Color.opawAlert)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            TextField("Add a note (optional)", text: $note)
+            TextField("", text: $note, prompt: Text("Add a note (optional)").foregroundStyle(Color(hex: 0xAAAAAA)))
                 .font(.opaw(15, .medium))
+                .foregroundStyle(Color(hex: 0x111111))
                 .padding(.horizontal, 18)
                 .padding(.vertical, 14)
-                .background(Color.opawChip, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-            Button("Log poop") {
+                .background(Color(hex: 0xF6F6F7), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            Button {
                 let event = CareEvent(kind: .poop, date: date, note: note.trimmingCharacters(in: .whitespacesAndNewlines), dog: dog)
                 event.poopConsistency = consistency
                 event.poopColor = color
                 onDone(event)
+            } label: {
+                Text("Log poop")
+                    .font(.opaw(17, .heavy))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 62)
+                    .background(Color(hex: 0x111111), in: Capsule())
             }
-            .buttonStyle(.opawPrimary)
+            .buttonStyle(.pressable)
         }
         .padding(.horizontal, 24)
         .padding(.top, 12)
         .padding(.bottom, 24)
         .background(
-            Color.opawSurface,
-            in: UnevenRoundedRectangle(topLeadingRadius: Radius.sheet, bottomLeadingRadius: 0, bottomTrailingRadius: 0, topTrailingRadius: Radius.sheet)
+            Color.white
+                .clipShape(UnevenRoundedRectangle(topLeadingRadius: 40, bottomLeadingRadius: 0, bottomTrailingRadius: 0, topTrailingRadius: 40))
+                .ignoresSafeArea(edges: .bottom)
         )
-        .animation(.easeInOut(duration: 0.2), value: isConcerning)
+    }
+
+    private func label(_ text: String) -> some View {
+        Text(text)
+            .font(.opaw(14, .bold))
+            .foregroundStyle(Color(hex: 0x999999))
+    }
+
+    private func swatch(_ option: PoopColor) -> some View {
+        let selected = option == color
+        return Button {
+            color = option
+            Haptics.select()
+        } label: {
+            VStack(spacing: 6) {
+                Circle()
+                    .fill(option.swatch)
+                    .overlay(Circle().strokeBorder(Color.black.opacity(selected ? 0 : 0.08), lineWidth: 1))
+                    .frame(width: 44, height: 44)
+                    .padding(5.5)
+                    .overlay {
+                        if selected { Circle().strokeBorder(Color(hex: 0x111111), lineWidth: 2.5) }
+                    }
+                    .frame(width: 44, height: 44)
+                Text(option.title)
+                    .font(.opaw(12, .semibold))
+                    .foregroundStyle(selected ? Color(hex: 0x111111) : Color(hex: 0x999999))
+                    .lineLimit(1)
+                    .fixedSize()
+            }
+        }
+        .buttonStyle(.pressable)
+        .accessibilityLabel(option.title)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+}
+
+/// Wrapping chips: black when selected, light gray otherwise.
+private struct FlowChips: View {
+    let items: [PoopConsistency]
+    @Binding var selection: PoopConsistency
+
+    var body: some View {
+        WrapLayout(spacing: 6) {
+            ForEach(items) { option in
+                let selected = option == selection
+                Button {
+                    selection = option
+                    Haptics.select()
+                } label: {
+                    Text(option.title)
+                        .font(.opaw(14, .bold))
+                        .foregroundStyle(selected ? Color.white : Color(hex: 0x555555))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(selected ? Color(hex: 0x111111) : Color(hex: 0xF1F1F2), in: Capsule())
+                }
+                .buttonStyle(.pressable)
+                .accessibilityAddTraits(selected ? .isSelected : [])
+            }
+        }
+    }
+}
+
+/// Lays children out in rows, wrapping when a row is full.
+struct WrapLayout: Layout {
+    var spacing: CGFloat = 6
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? .infinity
+        var x: CGFloat = 0, y: CGFloat = 0, rowHeight: CGFloat = 0, maxX: CGFloat = 0
+        for view in subviews {
+            let size = view.sizeThatFits(.unspecified)
+            if x > 0 && x + size.width > width {
+                x = 0
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            x += size.width + spacing
+            maxX = max(maxX, x - spacing)
+            rowHeight = max(rowHeight, size.height)
+        }
+        return CGSize(width: proposal.width ?? maxX, height: y + rowHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX, y = bounds.minY, rowHeight: CGFloat = 0
+        for view in subviews {
+            let size = view.sizeThatFits(.unspecified)
+            if x > bounds.minX && x + size.width > bounds.maxX {
+                x = bounds.minX
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            view.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
     }
 }
 

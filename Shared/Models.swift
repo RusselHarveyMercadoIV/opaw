@@ -31,6 +31,8 @@ final class Dog {
     var createdAt: Date = Date()
     var lastBadgeEarnedAt: Date?
     var earnedBadgesRaw: [String] = []
+    /// The dog's family tree (parents, siblings), stored as JSON.
+    var relativesData: Data?
 
     @Relationship(deleteRule: .cascade, inverse: \CareEvent.dog) var careEvents: [CareEvent]? = []
     @Relationship(deleteRule: .cascade, inverse: \Walk.dog) var walks: [Walk]? = []
@@ -69,6 +71,11 @@ final class Dog {
         set { earnedBadgesRaw = newValue.map(\.rawValue).sorted() }
     }
 
+    var relatives: [Relative] {
+        get { relativesData.flatMap { try? JSONDecoder().decode([Relative].self, from: $0) } ?? [] }
+        set { relativesData = try? JSONEncoder().encode(newValue) }
+    }
+
     var ageYears: Double { Dog.age(from: birthDate) }
 
     var traits: DogTraits { DogTraits(size: size, energy: energy, ageYears: ageYears) }
@@ -88,6 +95,8 @@ final class CareEvent {
     var poopConsistencyRaw: String?
     var poopColorRaw: String?
     var weightKg: Double?
+    /// Who logged it, such as "You" or a walker's name.
+    var loggedBy: String = ""
     var dog: Dog?
 
     init(kind: CareKind, date: Date = Date(), note: String = "", dog: Dog?) {
@@ -95,6 +104,7 @@ final class CareEvent {
         self.kindRaw = kind.rawValue
         self.date = date
         self.note = note
+        self.loggedBy = OpawDefaults.shared.string(forKey: OpawDefaults.caretakerKey) ?? ""
         self.dog = dog
     }
 
@@ -131,6 +141,9 @@ final class Walk {
     var pinsData: Data?
     var note: String = ""
     var sharedToPack: Bool = false
+    /// "walk", "run" or "hike".
+    var activityRaw: String = "walk"
+    var isFavorite: Bool = false
     var dog: Dog?
 
     init(startedAt: Date, endedAt: Date, route: [GeoPoint], pins: [WalkPin], dog: Dog?) {
@@ -169,6 +182,7 @@ final class Memory {
     var caption: String = ""
     @Attribute(.externalStorage) var photoData: Data?
     var walkID: UUID?
+    var isFavorite: Bool = false
     var dog: Dog?
 
     init(date: Date = Date(), caption: String, photoData: Data?, walkID: UUID? = nil, dog: Dog?) {
@@ -189,16 +203,91 @@ final class Reminder {
     var hour: Int = 8
     var minute: Int = 0
     var isEnabled: Bool = true
+    /// A short detail, such as "with food".
+    var note: String = ""
+    var repeatRaw: String = ReminderRepeat.daily.rawValue
+    /// The first day of a repeating reminder that isn't daily.
+    var startDate: Date = Date()
     var dog: Dog?
 
-    init(title: String, kind: CareKind, hour: Int, minute: Int, dog: Dog?) {
+    init(title: String, kind: CareKind, hour: Int, minute: Int, repeats: ReminderRepeat = .daily, startDate: Date = Date(), note: String = "", dog: Dog?) {
         self.id = UUID()
         self.title = title
         self.kindRaw = kind.rawValue
         self.hour = hour
         self.minute = minute
+        self.repeatRaw = repeats.rawValue
+        self.startDate = startDate
+        self.note = note
         self.dog = dog
     }
 
     var kind: CareKind { CareKind(rawValue: kindRaw) ?? .meal }
+
+    var repeats: ReminderRepeat {
+        get { ReminderRepeat(rawValue: repeatRaw) ?? .daily }
+        set { repeatRaw = newValue.rawValue }
+    }
+
+    /// The next day on or after `day` this reminder falls on.
+    func nextOccurrence(onOrAfter day: Date, calendar: Calendar = .current) -> Date {
+        let start = calendar.startOfDay(for: startDate)
+        let target = calendar.startOfDay(for: day)
+        guard repeats != .daily, target > start else { return max(start, target) }
+        switch repeats {
+        case .daily:
+            return target
+        case .monthly:
+            var months = calendar.dateComponents([.month], from: start, to: target).month ?? 0
+            while true {
+                let candidate = calendar.date(byAdding: .month, value: months, to: start) ?? target
+                if candidate >= target { return candidate }
+                months += 1
+            }
+        case .weekly, .everyThreeWeeks:
+            let step = repeats == .weekly ? 7 : 21
+            let days = calendar.dateComponents([.day], from: start, to: target).day ?? 0
+            let periods = (days + step - 1) / step
+            return calendar.date(byAdding: .day, value: periods * step, to: start) ?? target
+        }
+    }
+}
+
+enum ReminderRepeat: String, CaseIterable, Codable, Identifiable {
+    case daily, weekly, everyThreeWeeks, monthly
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .daily: "Daily"
+        case .weekly: "Weekly"
+        case .everyThreeWeeks: "Every 3 weeks"
+        case .monthly: "Monthly"
+        }
+    }
+}
+
+
+/// A member of a dog's family tree.
+struct Relative: Codable, Identifiable, Hashable {
+    enum Role: String, Codable, CaseIterable {
+        case mom, dad, brother, sister
+
+        var title: String {
+            switch self {
+            case .mom: "Mom"
+            case .dad: "Dad"
+            case .brother: "Brother"
+            case .sister: "Sister"
+            }
+        }
+    }
+
+    var id = UUID()
+    var name: String
+    var role: Role
+    /// Where they live, or "on the app".
+    var place: String = ""
+    var photoData: Data?
 }

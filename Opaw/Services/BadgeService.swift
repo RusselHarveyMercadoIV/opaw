@@ -25,6 +25,14 @@ enum BadgeService {
         )
     }
 
+    private static func newestKey(_ dog: Dog) -> String { "newestBadge." + dog.id.uuidString }
+
+    /// The badge earned most recently, while it's still new (three days).
+    static func newestBadge(for dog: Dog, now: Date = Date()) -> Badge? {
+        guard let earnedAt = dog.lastBadgeEarnedAt, now.timeIntervalSince(earnedAt) < 3 * 86_400 else { return nil }
+        return OpawDefaults.shared.string(forKey: newestKey(dog)).flatMap(Badge.init(rawValue:))
+    }
+
     /// Awards any newly earned badges and returns them, so the UI can celebrate.
     @discardableResult
     static func refresh(_ dog: Dog, friendsCount: Int = 0) -> [Badge] {
@@ -32,27 +40,14 @@ enum BadgeService {
         guard !new.isEmpty else { return [] }
         dog.earnedBadges = dog.earnedBadges.union(new)
         dog.lastBadgeEarnedAt = Date()
+        if let newest = new.first {
+            OpawDefaults.shared.set(newest.rawValue, forKey: newestKey(dog))
+        }
         return new
     }
 
     /// Snapshot used by the mood engine.
     static func careSnapshot(for dog: Dog, now: Date = Date()) -> CareSnapshot {
-        var last: [CareKind: Date] = [:]
-        for event in dog.careEvents ?? [] {
-            if let existing = last[event.kind], existing >= event.date { continue }
-            last[event.kind] = event.date
-        }
-        let startOfDay = Calendar.current.startOfDay(for: now)
-        let walkMinutes = (dog.walks ?? [])
-            .filter { $0.startedAt >= startOfDay }
-            .reduce(0) { $0 + $1.movingSeconds / 60 }
-        let playMinutes = Double((dog.careEvents ?? []).filter { $0.kind == .play && $0.date >= startOfDay }.count * 15)
-        return CareSnapshot(
-            lastEvent: last,
-            activityMinutesToday: walkMinutes + playMinutes,
-            dailyActivityGoalMinutes: Double(dog.dailyGoalMinutes),
-            lastBadgeEarnedAt: dog.lastBadgeEarnedAt,
-            mealHours: dog.mealHours
-        )
+        dog.careSnapshot(now: now)
     }
 }

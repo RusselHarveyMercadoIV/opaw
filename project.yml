@@ -68,6 +68,12 @@ targets:
         SupabaseHost: $(SUPABASE_HOST)
         SupabaseAnonKey: $(SUPABASE_ANON_KEY)
         AppGroupID: group.app.opaw.shared
+        UIAppFonts:
+          - Nunito-Medium.ttf
+          - Nunito-SemiBold.ttf
+          - Nunito-Bold.ttf
+          - Nunito-ExtraBold.ttf
+          - Nunito-Black.ttf
 
   OpawWidgets:
     type: app-extension
@@ -93,6 +99,12 @@ targets:
       properties:
         CFBundleDisplayName: Opaw Widgets
         AppGroupID: group.app.opaw.shared
+        UIAppFonts:
+          - Nunito-Medium.ttf
+          - Nunito-SemiBold.ttf
+          - Nunito-Bold.ttf
+          - Nunito-ExtraBold.ttf
+          - Nunito-Black.ttf
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
 

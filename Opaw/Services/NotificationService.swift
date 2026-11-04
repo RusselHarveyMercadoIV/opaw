@@ -19,14 +19,30 @@ enum NotificationService {
             let body: String
             let hour: Int
             let minute: Int
+            /// Set for reminders that aren't daily: fire once, the evening before.
+            var day: Date?
         }
+        let calendar = Calendar.current
         let items = reminders.filter(\.isEnabled).map { reminder in
-            Item(
+            let name = reminder.dog?.name ?? "your dog"
+            if reminder.repeats == .daily {
+                return Item(
+                    id: prefix + reminder.id.uuidString,
+                    title: reminder.title,
+                    body: "\(reminder.kind.emoji) Time for \(name)'s \(reminder.kind.title.lowercased()).",
+                    hour: reminder.hour,
+                    minute: reminder.minute
+                )
+            }
+            let tomorrow = calendar.date(byAdding: .day, value: 1, to: Date()) ?? Date()
+            let next = reminder.nextOccurrence(onOrAfter: tomorrow)
+            return Item(
                 id: prefix + reminder.id.uuidString,
                 title: reminder.title,
-                body: "\(reminder.kind.emoji) Time for \(reminder.dog?.name ?? "your dog")'s \(reminder.kind.title.lowercased()).",
-                hour: reminder.hour,
-                minute: reminder.minute
+                body: "\(reminder.kind.emoji) \(reminder.title) for \(name) is tomorrow.",
+                hour: 19,
+                minute: 0,
+                day: calendar.date(byAdding: .day, value: -1, to: next)
             )
         }
 
@@ -40,10 +56,10 @@ enum NotificationService {
             content.title = item.title
             content.body = item.body
             content.sound = .default
-            var components = DateComponents()
+            var components = item.day.map { calendar.dateComponents([.year, .month, .day], from: $0) } ?? DateComponents()
             components.hour = item.hour
             components.minute = item.minute
-            let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: true)
+            let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: item.day == nil)
             try? await center.add(UNNotificationRequest(identifier: item.id, content: content, trigger: trigger))
         }
     }

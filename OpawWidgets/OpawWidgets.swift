@@ -8,6 +8,7 @@ import OpawKit
 struct OpawWidgetsBundle: WidgetBundle {
     var body: some Widget {
         QuickLogWidget()
+        CareScoreWidget()
         WalkLiveActivity()
     }
 }
@@ -53,22 +54,37 @@ struct QuickLogWidgetView: View {
 
     var body: some View {
         Group {
-            if family == .accessoryRectangular {
+            if family == .accessoryCircular {
+                poopCircle
+            } else if family == .accessoryRectangular {
                 lockScreen
             } else {
                 homeScreen
             }
         }
         .containerBackground(for: .widget) {
-            family == .accessoryRectangular ? Color.clear : Color(red: 0.957, green: 0.957, blue: 0.961)
+            family == .accessoryRectangular || family == .accessoryCircular ? Color.clear : Color(red: 0.957, green: 0.957, blue: 0.961)
         }
+    }
+
+    /// Lock Screen circle: log a poop with one tap.
+    private var poopCircle: some View {
+        Button(intent: LogCareIntent(kind: .poop)) {
+            ZStack {
+                AccessoryWidgetBackground()
+                Image(systemName: CareKind.poop.symbol)
+                    .font(.system(size: 22, weight: .bold))
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Log poop")
     }
 
     /// Lock Screen: three one-tap logs.
     private var lockScreen: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(entry.dogName ?? "Opaw")
-                .font(.system(size: 13, weight: .heavy, design: .rounded))
+                .font(.custom("Nunito-ExtraBold", size: 13))
                 .lineLimit(1)
             HStack(spacing: 6) {
                 ForEach([CareKind.meal, .pee, .poop]) { kind in
@@ -90,14 +106,14 @@ struct QuickLogWidgetView: View {
             HStack {
                 Image(systemName: "pawprint.fill")
                 Text(entry.dogName ?? "Opaw")
-                    .font(.system(size: 16, weight: .black, design: .rounded))
+                    .font(.custom("Nunito-Black", size: 16))
                     .lineLimit(1)
                 Spacer(minLength: 0)
             }
             .foregroundStyle(Color.opawWidgetInk)
             if entry.dogName == nil {
                 Text("Open Opaw to add your dog.")
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .font(.custom("Nunito-SemiBold", size: 13))
                     .foregroundStyle(.secondary)
             } else {
                 let columns = family == .systemSmall ? 2 : 4
@@ -108,7 +124,7 @@ struct QuickLogWidgetView: View {
                                 Image(systemName: kind.symbol)
                                     .font(.system(size: 17, weight: .semibold))
                                 Text("\(entry.counts[kind] ?? 0)")
-                                    .font(.system(size: 11, weight: .heavy, design: .rounded).monospacedDigit())
+                                    .font(.custom("Nunito-ExtraBold", size: 11).monospacedDigit())
                                     .foregroundStyle(.secondary)
                             }
                             .foregroundStyle(Color.opawWidgetInk)
@@ -131,7 +147,73 @@ struct QuickLogWidget: Widget {
         }
         .configurationDisplayName("Quick log")
         .description("Log meals, water and potty breaks with one tap.")
-        .supportedFamilies([.systemSmall, .systemMedium, .accessoryRectangular])
+        .supportedFamilies([.systemSmall, .systemMedium, .accessoryRectangular, .accessoryCircular])
+    }
+}
+
+// MARK: - Care score (Lock Screen ring)
+
+struct CareScoreEntry: TimelineEntry {
+    let date: Date
+    let dogName: String?
+    let score: Int
+}
+
+struct CareScoreProvider: TimelineProvider {
+    func placeholder(in context: Context) -> CareScoreEntry {
+        CareScoreEntry(date: Date(), dogName: "Miso", score: 92)
+    }
+
+    func getSnapshot(in context: Context, completion: @escaping (CareScoreEntry) -> Void) {
+        Task { @MainActor in completion(entry(at: Date())) }
+    }
+
+    func getTimeline(in context: Context, completion: @escaping (Timeline<CareScoreEntry>) -> Void) {
+        Task { @MainActor in
+            // The score drifts as time passes since the last meal or walk, so refresh every half hour.
+            let now = Date()
+            completion(Timeline(entries: [entry(at: now)], policy: .after(now.addingTimeInterval(30 * 60))))
+        }
+    }
+
+    @MainActor
+    private func entry(at date: Date) -> CareScoreEntry {
+        let score = CareLogger.todayScore()
+        return CareScoreEntry(date: date, dogName: score?.dogName, score: score?.score ?? 0)
+    }
+}
+
+struct CareScoreWidgetView: View {
+    let entry: CareScoreEntry
+
+    var body: some View {
+        ZStack {
+            AccessoryWidgetBackground()
+            Circle()
+                .stroke(.white.opacity(0.25), lineWidth: 5)
+                .padding(6)
+            Circle()
+                .trim(from: 0, to: Double(entry.score) / 100)
+                .stroke(.white, style: StrokeStyle(lineWidth: 5, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+                .padding(6)
+            Text(entry.dogName == nil ? "–" : "\(entry.score)")
+                .font(.custom("Nunito-Black", size: 18))
+        }
+        .widgetAccentable()
+        .containerBackground(for: .widget) { Color.clear }
+        .accessibilityLabel("\(entry.dogName ?? "Your pet")'s care score: \(entry.score)")
+    }
+}
+
+struct CareScoreWidget: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: OpawWidgetKind.careScore, provider: CareScoreProvider()) { entry in
+            CareScoreWidgetView(entry: entry)
+        }
+        .configurationDisplayName("Care score")
+        .description("How your pet is doing today, out of 100.")
+        .supportedFamilies([.accessoryCircular])
     }
 }
 
@@ -141,37 +223,74 @@ struct WalkLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: WalkActivityAttributes.self) { context in
             WalkActivityLockScreenView(context: context)
-                .activityBackgroundTint(Color.white)
-                .activitySystemActionForegroundColor(Color.opawWidgetInk)
+                .activityBackgroundTint(Color(red: 0.067, green: 0.067, blue: 0.067))
+                .activitySystemActionForegroundColor(.white)
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    Label(context.attributes.dogName, systemImage: "pawprint.fill")
-                        .font(.system(size: 16, weight: .heavy, design: .rounded))
-                        .foregroundStyle(.white)
+                    PetStickerImage(size: 44)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     WalkTimerText(state: context.state)
-                        .font(.system(size: 20, weight: .heavy, design: .rounded).monospacedDigit())
+                        .font(.custom("Nunito-ExtraBold", size: 20).monospacedDigit())
                         .foregroundStyle(.white)
+                        .multilineTextAlignment(.trailing)
+                        .frame(maxWidth: 90, alignment: .trailing)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    Text(OpawFormat.distance(meters: context.state.distanceMeters))
-                        .font(.system(size: 28, weight: .black, design: .rounded).monospacedDigit())
-                        .foregroundStyle(.white)
+                    HStack(alignment: .firstTextBaseline) {
+                        DistanceText(meters: context.state.distanceMeters, size: 30)
+                        Spacer()
+                        Text("\(context.state.peeCount) pee · \(context.state.poopCount) poop")
+                            .font(.custom("Nunito-Medium", size: 13))
+                            .foregroundStyle(Color(white: 0.67))
+                    }
                 }
             } compactLeading: {
-                Image(systemName: "figure.walk")
-                    .foregroundStyle(.white)
+                PetStickerImage(size: 26)
+                    .clipShape(Circle())
             } compactTrailing: {
-                Text(OpawFormat.distance(meters: context.state.distanceMeters))
-                    .font(.system(size: 12, weight: .heavy, design: .rounded).monospacedDigit())
+                WalkTimerText(state: context.state)
+                    .font(.custom("Nunito-ExtraBold", size: 14).monospacedDigit())
                     .foregroundStyle(.white)
+                    .frame(maxWidth: 52)
             } minimal: {
-                Image(systemName: "pawprint.fill")
-                    .foregroundStyle(.white)
+                PetStickerImage(size: 24)
+                    .clipShape(Circle())
             }
         }
+    }
+}
+
+/// The pet's sticker saved by the app when a walk starts, or a paw.
+struct PetStickerImage: View {
+    let size: CGFloat
+
+    var body: some View {
+        if let data = PetSticker.load(), let image = UIImage(data: data) {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFit()
+                .frame(width: size, height: size)
+        } else {
+            Image(systemName: "pawprint.fill")
+                .font(.system(size: size * 0.45, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: size, height: size)
+        }
+    }
+}
+
+/// "1.84 km" with the unit small and gray.
+struct DistanceText: View {
+    let meters: Double
+    let size: CGFloat
+
+    var body: some View {
+        (Text((meters / 1000).formatted(.number.precision(.fractionLength(2))))
+            + Text(" km").font(.custom("Nunito-Black", size: 15)).foregroundColor(Color(white: 0.67)))
+            .font(.custom("Nunito-Black", size: size).monospacedDigit())
+            .foregroundStyle(.white)
     }
 }
 
@@ -187,31 +306,45 @@ struct WalkTimerText: View {
     }
 }
 
+/// Lock Screen Live Activity (3g): a black card with the pet, the walk, distance and time.
 struct WalkActivityLockScreenView: View {
     let context: ActivityViewContext<WalkActivityAttributes>
 
     var body: some View {
-        HStack(spacing: 14) {
-            Image(systemName: "pawprint.fill")
-                .font(.system(size: 20, weight: .bold))
-                .foregroundStyle(.white)
-                .frame(width: 48, height: 48)
-                .background(Color.opawWidgetInk, in: Circle())
-            VStack(alignment: .leading, spacing: 2) {
-                Text(context.isStale ? "Updating…" : context.state.isPaused ? "Walk paused" : "Walking with \(context.attributes.dogName)")
-                    .font(.system(size: 16, weight: .heavy, design: .rounded))
-                HStack(alignment: .firstTextBaseline, spacing: 14) {
-                    Text(OpawFormat.distance(meters: context.state.distanceMeters))
-                        .font(.system(size: 26, weight: .black, design: .rounded).monospacedDigit())
-                    WalkTimerText(state: context.state)
-                        .font(.system(size: 18, weight: .bold, design: .rounded).monospacedDigit())
-                        .foregroundStyle(.secondary)
+        VStack(spacing: 12) {
+            HStack(spacing: 12) {
+                PetStickerImage(size: 52)
+                    .shadow(color: .white, radius: 0, x: 2)
+                    .shadow(color: .white, radius: 0, x: -2)
+                    .shadow(color: .white, radius: 0, y: 2)
+                    .shadow(color: .white, radius: 0, y: -2)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(context.isStale ? "Updating…" : context.state.isPaused ? "Walk paused" : "Walking with \(context.attributes.dogName)")
+                        .font(.custom("Nunito-ExtraBold", size: 16))
+                        .foregroundStyle(.white)
+                    Text("\(context.state.peeCount) pee · \(context.state.poopCount) poop")
+                        .font(.custom("Nunito-Medium", size: 13))
+                        .foregroundStyle(Color(white: 0.67))
                 }
+                Spacer(minLength: 0)
+                Image(systemName: context.state.isPaused ? "play.fill" : "pause.fill")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 44, height: 44)
+                    .background(Color(red: 0.165, green: 0.165, blue: 0.173), in: Circle())
             }
-            .foregroundStyle(Color.opawWidgetInk)
-            Spacer(minLength: 0)
+            HStack(alignment: .firstTextBaseline) {
+                DistanceText(meters: context.state.distanceMeters, size: 34)
+                Spacer()
+                WalkTimerText(state: context.state)
+                    .font(.custom("Nunito-ExtraBold", size: 20).monospacedDigit())
+                    .foregroundStyle(.white)
+                    .multilineTextAlignment(.trailing)
+                    .frame(maxWidth: 110, alignment: .trailing)
+            }
         }
-        .padding(16)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 16)
     }
 }
 

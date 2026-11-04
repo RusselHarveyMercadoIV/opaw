@@ -4,6 +4,24 @@ import OpawKit
 
 enum OpawWidgetKind {
     static let quickLog = "QuickLogWidget"
+    static let careScore = "CareScoreWidget"
+}
+
+/// A small copy of the active pet's sticker, shared with the widgets and Live Activity.
+enum PetSticker {
+    private static var url: URL? {
+        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: OpawDefaults.appGroupID)?
+            .appendingPathComponent("pet-sticker.png")
+    }
+
+    static func save(_ data: Data?) {
+        guard let url else { return }
+        if let data { try? data.write(to: url, options: .atomic) } else { try? FileManager.default.removeItem(at: url) }
+    }
+
+    static func load() -> Data? {
+        url.flatMap { try? Data(contentsOf: $0) }
+    }
 }
 
 /// Version 1 of the on-device database. Add a new version and a migration stage
@@ -25,6 +43,8 @@ enum OpawMigrationPlan: SchemaMigrationPlan {
 enum OpawDefaults {
     static let appGroupID = "group.app.opaw.shared"
     static let activeDogKey = "activeDogID"
+    /// The name shown when this phone logs care, such as "Sam".
+    static let caretakerKey = "caretakerName"
 
     static var shared: UserDefaults {
         UserDefaults(suiteName: appGroupID) ?? .standard
@@ -99,6 +119,13 @@ enum CareLogger {
         return dog.name
     }
 
+    /// The active dog's care score, for the Lock Screen widget.
+    static func todayScore(in context: ModelContext? = nil) -> (dogName: String, score: Int)? {
+        let context = context ?? OpawStore.container.mainContext
+        guard let dog = OpawStore.activeDog(in: context) else { return nil }
+        return (dog.name, CareScore.report(for: dog.careSnapshot()).score)
+    }
+
     /// Today's count per kind for the active dog, used by the widget.
     static func todayCounts(in context: ModelContext? = nil) -> (dogName: String?, counts: [CareKind: Int]) {
         let context = context ?? OpawStore.container.mainContext
@@ -109,5 +136,28 @@ enum CareLogger {
             counts[event.kind, default: 0] += 1
         }
         return (dog.name, counts)
+    }
+}
+
+extension Dog {
+    /// What the mood engine and care score read: last log per kind, today's activity, meal times.
+    func careSnapshot(now: Date = Date()) -> CareSnapshot {
+        var last: [CareKind: Date] = [:]
+        for event in careEvents ?? [] {
+            if let existing = last[event.kind], existing >= event.date { continue }
+            last[event.kind] = event.date
+        }
+        let startOfDay = Calendar.current.startOfDay(for: now)
+        let walkMinutes = (walks ?? [])
+            .filter { $0.startedAt >= startOfDay }
+            .reduce(0) { $0 + $1.movingSeconds / 60 }
+        let playMinutes = Double((careEvents ?? []).filter { $0.kind == .play && $0.date >= startOfDay }.count * 15)
+        return CareSnapshot(
+            lastEvent: last,
+            activityMinutesToday: walkMinutes + playMinutes,
+            dailyActivityGoalMinutes: Double(dailyGoalMinutes),
+            lastBadgeEarnedAt: lastBadgeEarnedAt,
+            mealHours: mealHours
+        )
     }
 }

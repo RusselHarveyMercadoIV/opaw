@@ -143,6 +143,7 @@ final class WalkRecorder: NSObject {
             longitude: location.coordinate.longitude,
             date: Date()
         ))
+        updateLiveActivity(force: true)
     }
 
     private func handle(_ locations: [CLLocation]) {
@@ -170,7 +171,9 @@ final class WalkRecorder: NSObject {
             distanceMeters: stats.distanceMeters,
             timerStart: Date().addingTimeInterval(-elapsed),
             isPaused: state == .paused,
-            pausedElapsedSeconds: elapsed
+            pausedElapsedSeconds: elapsed,
+            peeCount: pins.filter { $0.kind == CareKind.pee.rawValue }.count,
+            poopCount: pins.filter { $0.kind == CareKind.poop.rawValue }.count
         )
     }
 

@@ -40,6 +40,7 @@ struct RootView: View {
 
 struct MainTabView: View {
     @State private var selection: AppTab = .home
+    @State private var tabBar = TabBarVisibility()
     @Environment(WalkRecorder.self) private var recorder
 
     var body: some View {
@@ -57,13 +58,14 @@ struct MainTabView: View {
                 .tag(AppTab.memories)
                 .toolbar(.hidden, for: .tabBar)
         }
+        .environment(tabBar)
         .overlay(alignment: .bottom) {
-            if recorder.state == .idle {
+            if recorder.state == .idle && tabBar.hiddenCount == 0 {
                 FloatingTabBar(selection: $selection)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: recorder.state == .idle)
+        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: recorder.state == .idle && tabBar.hiddenCount == 0)
     }
 }
 
@@ -111,7 +113,6 @@ struct FloatingTabBar: View {
             }
         }
         .padding(.horizontal, Space.l)
-        .padding(.bottom, 4)
     }
 
     @ViewBuilder
@@ -119,7 +120,7 @@ struct FloatingTabBar: View {
         if selection == tab {
             HStack(spacing: 10) {
                 Image(systemName: tab.symbol)
-                    .font(.system(size: 20, weight: .bold))
+                    .font(.system(size: 22, weight: .bold))
                 Text(tab.title)
                     .font(.opaw(16, .heavy))
                     .lineLimit(1)
@@ -136,7 +137,7 @@ struct FloatingTabBar: View {
             .shadow(color: .black.opacity(0.22), radius: 14, y: 14)
         } else {
             Image(systemName: tab.symbol)
-                .font(.system(size: 20, weight: .bold))
+                .font(.system(size: 22, weight: .bold))
                 .foregroundStyle(Color.opawInk)
                 .frame(width: 64, height: 64)
                 .background(Color.opawSurface, in: Circle())
@@ -149,5 +150,27 @@ extension View {
     /// Leaves room under scrolling content for the floating tab bar.
     func tabBarInset() -> some View {
         safeAreaInset(edge: .bottom) { Color.clear.frame(height: 76) }
+    }
+}
+
+/// Detail screens hide the floating tab bar while they're on screen, as in the design.
+@Observable
+final class TabBarVisibility {
+    var hiddenCount = 0
+}
+
+private struct HidesFloatingTabBar: ViewModifier {
+    @Environment(TabBarVisibility.self) private var tabBar: TabBarVisibility?
+
+    func body(content: Content) -> some View {
+        content
+            .onAppear { tabBar?.hiddenCount += 1 }
+            .onDisappear { tabBar.map { $0.hiddenCount = max(0, $0.hiddenCount - 1) } }
+    }
+}
+
+extension View {
+    func hidesFloatingTabBar() -> some View {
+        modifier(HidesFloatingTabBar())
     }
 }

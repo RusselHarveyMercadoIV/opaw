@@ -9,6 +9,8 @@ struct WalkActivityAttributes: ActivityAttributes {
         var timerStart: Date
         var isPaused: Bool
         var pausedElapsedSeconds: Double
+        var peeCount: Int = 0
+        var poopCount: Int = 0
     }
 
     var dogName: String

@@ -3,7 +3,7 @@ import SwiftData
 import SwiftUI
 import WidgetKit
 
-/// Home: the pet as a big living sticker. Swipe between pets; the last page adds a new one.
+/// Home (2a): the pet as a big living sticker. Swipe between pets; the last page adds a new one (2h).
 struct HomeView: View {
     @Binding var selectedTab: AppTab
 
@@ -11,27 +11,46 @@ struct HomeView: View {
     @AppStorage(OpawDefaults.activeDogKey, store: OpawDefaults.shared) private var activeDogID = ""
     @State private var page = ""
     @State private var sheet: HomeSheet?
+    @State private var path = NavigationPath()
 
     private static let addPage = "add"
 
+    private var currentDog: Dog? {
+        dogs.first { $0.id.uuidString == page } ?? dogs.first { $0.id.uuidString == activeDogID } ?? dogs.first
+    }
+
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                topBar
+        NavigationStack(path: $path) {
+            ZStack(alignment: .top) {
                 TabView(selection: $page) {
                     ForEach(dogs) { dog in
-                        PetPage(dog: dog, selectedTab: $selectedTab)
+                        PetPage(dog: dog, dots: dots) { path.append(HomeRoute.today(dog.id)) }
                             .tag(dog.id.uuidString)
                     }
-                    AddPetPage { sheet = .addDog }
+                    AddPetPage(dots: dots) { sheet = .addDog }
                         .tag(Self.addPage)
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
-                pageDots
-                    .padding(.bottom, 92)
+                .ignoresSafeArea(edges: .bottom)
+
+                topBar
             }
             .opawBackground()
             .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(for: HomeRoute.self) { route in
+                switch route {
+                case .today(let id):
+                    if let dog = dogs.first(where: { $0.id == id }) { TodayView(dog: dog) }
+                case .family(let id):
+                    if let dog = dogs.first(where: { $0.id == id }) {
+                        FamilyTreeView(dog: dog) { selected in
+                            page = selected.id.uuidString
+                        }
+                    }
+                case .studio(let id):
+                    if let dog = dogs.first(where: { $0.id == id }) { AvatarStudioView(dog: dog) }
+                }
+            }
             .onAppear {
                 if page.isEmpty { page = dogs.first { $0.id.uuidString == activeDogID }?.id.uuidString ?? dogs.first?.id.uuidString ?? "" }
             }
@@ -43,169 +62,248 @@ struct HomeView: View {
             }
             .sheet(item: $sheet) { sheet in
                 switch sheet {
-                case .family: ProfileView()
                 case .nearby: PackView()
-                case .challenges: ChallengesView()
                 case .addDog: AddDogSheet()
                 }
             }
         }
     }
 
+    // MARK: Top bar
+
     private var topBar: some View {
         HStack(spacing: 10) {
             Button {
-                sheet = .family
+                if let dog = currentDog { path.append(HomeRoute.family(dog.id)) }
             } label: {
-                HStack(spacing: 8) {
-                    HStack(spacing: -12) {
-                        ForEach(dogs.prefix(3)) { dog in
-                            DogThumbnail(data: dog.cutoutData ?? dog.photoData, size: 36)
-                                .overlay(Circle().stroke(Color.opawSurface, lineWidth: 3))
-                        }
-                    }
-                    Text("Family")
-                        .font(.opaw(15, .heavy))
-                        .foregroundStyle(Color.opawInk)
-                }
-                .padding(5)
-                .padding(.trailing, 9)
-                .background(Color.opawSurface, in: Capsule())
-                .floatingShadow()
+                familyChip
             }
             .buttonStyle(.pressable)
+            .accessibilityLabel("Family")
             Spacer()
-            Button { sheet = .nearby } label: { RoundIcon(symbol: "location.fill") }
-                .buttonStyle(.pressable)
-                .accessibilityLabel("Nearby pets")
-            Button { sheet = .challenges } label: { RoundIcon(symbol: "trophy.fill") }
-                .buttonStyle(.pressable)
-                .accessibilityLabel("Challenges and badges")
+            if page != Self.addPage, let dog = currentDog {
+                Button { sheet = .nearby } label: { TopCircle { Image(systemName: "heart.fill").font(.system(size: 20, weight: .bold)) } }
+                    .buttonStyle(.pressable)
+                    .accessibilityLabel("Friends nearby")
+                ShareAvatarButton(dog: dog)
+            }
         }
-        .padding(.horizontal, Space.l)
+        .padding(.horizontal, 20)
         .padding(.top, 10)
     }
 
-    private var pageDots: some View {
-        HStack(spacing: 6) {
-            ForEach(dogs.map(\.id.uuidString) + [Self.addPage], id: \.self) { id in
-                Capsule()
-                    .fill(id == page ? Color.opawInk : Color.opawInk.opacity(0.15))
-                    .frame(width: id == page ? 18 : 6, height: 6)
+    private var familyChip: some View {
+        let faces: [Data?] = {
+            var result = dogs.prefix(2).map { $0.cutoutData ?? $0.photoData }
+            if result.count < 2, let relative = currentDog?.relatives.first { result.append(relative.photoData) }
+            while result.count < 2 { result.append(nil) }
+            return result
+        }()
+        return HStack(spacing: 10) {
+            HStack(spacing: -16) {
+                ForEach(Array(faces.enumerated()), id: \.offset) { index, data in
+                    MiniFace(data: data, size: 42, fill: index == 0 ? Color.opawChip : Color.opawTrack)
+                }
             }
+            Text("Family")
+                .font(.opaw(15, .heavy))
+                .foregroundStyle(Color.opawInk)
+            Image(systemName: "chevron.right")
+                .font(.system(size: 13, weight: .heavy))
+                .foregroundStyle(Color.opawInk)
         }
-        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: page)
-        .accessibilityHidden(true)
+        .padding(.leading, 8)
+        .padding(.trailing, 18)
+        .frame(height: 58)
+        .background(Color.opawSurface, in: Capsule())
+        .floatingShadow()
+    }
+
+    /// Page dots: one per pet, then a dashed circle for "add".
+    private var dots: AnyView {
+        let ids = dogs.map(\.id.uuidString)
+        let current = page
+        return AnyView(
+            HStack(spacing: 6) {
+                ForEach(ids, id: \.self) { id in
+                    Capsule()
+                        .fill(id == current ? Color.opawInk : Color(hex: 0xCCCCCC))
+                        .frame(width: id == current ? 22 : 8, height: 8)
+                }
+                if current == Self.addPage {
+                    Capsule().fill(Color.opawInk).frame(width: 22, height: 8)
+                } else {
+                    Button {
+                        withAnimation { page = Self.addPage }
+                    } label: {
+                        Circle()
+                            .strokeBorder(Color.opawGhost, style: StrokeStyle(lineWidth: 2, dash: [3, 2.5]))
+                            .frame(width: 16, height: 16)
+                            .padding(.leading, 2)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Add a pet")
+                }
+            }
+            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: current)
+        )
     }
 }
 
 enum HomeSheet: String, Identifiable {
-    case family, nearby, challenges, addDog
+    case nearby, addDog
     var id: String { rawValue }
+}
+
+enum HomeRoute: Hashable {
+    case today(UUID)
+    case family(UUID)
+    case studio(UUID)
+}
+
+/// A 58pt white circle used in the Home top bar.
+private struct TopCircle<Content: View>: View {
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        content
+            .foregroundStyle(Color.opawInk)
+            .frame(width: 58, height: 58)
+            .background(Color.opawSurface, in: Circle())
+            .floatingShadow()
+    }
+}
+
+/// Shares the pet's sticker image.
+private struct ShareAvatarButton: View {
+    let dog: Dog
+
+    var body: some View {
+        Group {
+            if let data = dog.cutoutData ?? dog.photoData, let image = UIImage(data: data) {
+                let picture = Image(uiImage: image)
+                ShareLink(item: picture, preview: SharePreview(dog.name, image: picture)) { label }
+            } else {
+                ShareLink(item: "Meet \(dog.name) on Opaw.") { label }
+            }
+        }
+        .buttonStyle(.pressable)
+        .accessibilityLabel("Share \(dog.name)")
+    }
+
+    private var label: some View {
+        TopCircle {
+            Image(systemName: "point.3.filled.connected.trianglepath.dotted")
+                .font(.system(size: 19, weight: .bold))
+        }
+    }
+}
+
+/// A small round face with a white rim.
+struct MiniFace: View {
+    let data: Data?
+    var size: CGFloat = 42
+    var rim: CGFloat = 3
+    var fill: Color = .opawChip
+    var initial: String?
+
+    var body: some View {
+        ZStack {
+            Circle().fill(fill)
+            if let data, let image = UIImage(data: data) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else if let initial {
+                Text(initial)
+                    .font(.opaw(size * 0.4, .black))
+                    .foregroundStyle(Color.opawMuted)
+            }
+        }
+        .frame(width: size - rim * 2, height: size - rim * 2)
+        .clipShape(Circle())
+        .padding(rim)
+        .background(Color.opawSurface, in: Circle())
+    }
 }
 
 // MARK: - Pet page
 
 private struct PetPage: View {
     let dog: Dog
-    @Binding var selectedTab: AppTab
+    let dots: AnyView
+    let openToday: () -> Void
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 60)) { context in
             let report = dog.careReport(now: context.date)
             let mood = MoodEngine.mood(for: BadgeService.careSnapshot(for: dog, now: context.date), now: context.date)
             ScrollView {
-                VStack(spacing: Space.m) {
+                VStack(spacing: 0) {
                     stage(report: report, mood: mood)
-                    identity
-                    Text("\u{201C}\(report.line)\u{201D}")
-                        .font(.opaw(17, .bold))
-                        .foregroundStyle(Color.opawInk.opacity(0.75))
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, Space.l)
-                        .contentTransition(.opacity)
+                    VStack(spacing: 10) {
+                        Text(dog.name)
+                            .font(.opaw(50, .black))
+                            .tracking(-0.5)
+                            .foregroundStyle(Color.opawInk)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.5)
+                        dots
+                        chipRow
+                        Text("\u{201C}\(report.line)\u{201D}")
+                            .font(.opaw(17, .medium))
+                            .foregroundStyle(Color.opawSoftText)
+                            .lineSpacing(4)
+                            .multilineTextAlignment(.center)
+                            .contentTransition(.opacity)
+                    }
+                    .padding(.horizontal, 36)
+                    .padding(.top, 14)
                     stats(now: context.date)
-                        .padding(.horizontal, Space.l)
+                        .padding(.horizontal, 20)
+                        .padding(.top, 18)
                 }
-                .padding(.top, Space.s)
-                .padding(.bottom, Space.m)
+                .padding(.top, 92)
+                .padding(.bottom, 120)
             }
             .scrollIndicators(.hidden)
         }
     }
 
     private func stage(report: CareReport, mood: AvatarMood) -> some View {
-        NavigationLink {
-            AvatarStudioView(dog: dog)
-        } label: {
+        NavigationLink(value: HomeRoute.studio(dog.id)) {
             ZStack(alignment: .topTrailing) {
-                ZStack(alignment: .bottom) {
-                    Ellipse()
-                        .fill(Color.black.opacity(0.07))
-                        .frame(width: 190, height: 18)
-                        .blur(radius: 7)
-                    TierMotion(tier: report.tier) {
-                        AvatarView(dog: dog, mood: mood)
-                            .sticker()
-                    }
-                    .frame(height: 300)
-                    .padding(.bottom, 8)
-                }
-                .frame(maxWidth: .infinity)
-
-                VStack(alignment: .trailing, spacing: 8) {
-                    Text(report.tier.sound)
-                        .font(.opaw(16, .heavy))
-                        .foregroundStyle(Color.opawInk)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 9)
-                        .background(Color.opawSurface, in: UnevenRoundedRectangle(topLeadingRadius: 20, bottomLeadingRadius: 6, bottomTrailingRadius: 20, topTrailingRadius: 20))
-                        .floatingShadow()
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(report.tier.color)
-                            .frame(width: 8, height: 8)
-                        Text("\(report.score)")
-                            .font(.opawNumber(15))
-                            .contentTransition(.numericText())
-                        Text(report.tier.title)
-                            .font(.opaw(13, .bold))
-                            .foregroundStyle(Color.opawMuted)
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 7)
-                    .background(Color.opawSurface, in: Capsule())
-                    .floatingShadow()
-                }
-                .padding(.trailing, Space.l)
-                .padding(.top, 24)
+                AvatarView(dog: dog, mood: mood)
+                    .sticker(edge: 7, blur: 13, y: 22)
+                    .loopMotion(report.tier.motion)
+                    .opacity(report.tier == .needsYou ? 0.6 : 1)
+                    .padding(.horizontal, 78)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                OutlinedText(text: report.tier.sound, size: 28)
+                    .loopMotion(.tagPop)
+                    .padding(.trailing, 52)
+                    .padding(.top, 90)
+                    .allowsHitTesting(false)
             }
-            .opacity(report.tier == .needsYou ? 0.8 : 1)
+            .frame(height: 290)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(dog.name), \(report.tier.title), care score \(report.score). Open avatar studio.")
+        .accessibilityLabel("\(dog.name), \(report.tier.title). Open avatar studio.")
     }
 
-    private var identity: some View {
-        VStack(spacing: 10) {
-            Text(dog.name)
-                .font(.opawDisplay(44))
-                .foregroundStyle(Color.opawInk)
-                .lineLimit(1)
-                .minimumScaleFactor(0.5)
-            HStack(spacing: 6) {
-                ForEach(chips, id: \.self) { chip in
-                    Text(chip)
-                        .font(.opaw(13, .bold))
-                        .foregroundStyle(Color.opawInk)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
-                        .background(Color.opawSurface, in: Capsule())
-                        .floatingShadow()
-                }
+    private var chipRow: some View {
+        HStack(spacing: 8) {
+            ForEach(chips, id: \.self) { chip in
+                Text(chip)
+                    .font(.opaw(14, .heavy))
+                    .foregroundStyle(Color.opawInk)
+                    .lineLimit(1)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 7)
+                    .background(Color.opawSurface, in: Capsule())
+                    .shadow(color: .black.opacity(0.06), radius: 8, y: 6)
             }
         }
-        .padding(.horizontal, Space.l)
     }
 
     private var chips: [String] {
@@ -221,85 +319,22 @@ private struct PetPage: View {
         let meals = dog.count(.meal, on: now)
         let mealGoal = max(1, dog.mealHours.count)
         let meds = dog.medsStatus(now: now)
-        return HStack(spacing: 10) {
-            HomeStat(value: "\(meals)/\(mealGoal)", label: "Meals")
-            Button {
-                selectedTab = .activity
-            } label: {
-                HomeStat(value: OpawFormat.distance(meters: dog.walkedKm(on: now) * 1000), label: "Walked")
-            }
-            .buttonStyle(.pressable)
-            Button {
-                selectedTab = .care
-            } label: {
-                HomeStat(
+        return Button(action: openToday) {
+            HStack(spacing: 0) {
+                StatColumn(value: "\(meals)/\(mealGoal)", label: "Meals")
+                StatColumn(value: OpawFormat.distance(meters: dog.walkedKm(on: now) * 1000), label: "Walked")
+                StatColumn(
                     value: meds.next.map { $0.formatted(date: .omitted, time: .shortened) } ?? "None",
-                    label: meds.overdue ? "Meds late" : "Meds due",
-                    alert: meds.overdue
+                    label: "Meds due",
+                    valueColor: meds.next == nil ? .opawInk : .opawAlert
                 )
             }
-            .buttonStyle(.pressable)
+            .padding(.vertical, 18)
+            .padding(.horizontal, 12)
+            .whiteCard()
         }
-    }
-}
-
-private struct HomeStat: View {
-    let value: String
-    let label: String
-    var alert = false
-
-    var body: some View {
-        VStack(spacing: 2) {
-            Text(value)
-                .font(.opawNumber(20))
-                .foregroundStyle(alert ? Color.opawAlert : Color.opawInk)
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
-            Text(label)
-                .font(.opaw(13, .bold))
-                .foregroundStyle(alert ? Color.opawAlert : Color.opawMuted)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 16)
-        .background(Color.opawSurface, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .overlay {
-            if alert {
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .strokeBorder(Color.opawAlert, lineWidth: 2)
-            }
-        }
-        .shadow(color: .black.opacity(0.05), radius: 15, y: 12)
-    }
-}
-
-/// Moves the avatar to match how it's doing: a bouncy bob, a slow breath, or a droop.
-struct TierMotion<Content: View>: View {
-    let tier: CareTier
-    @ViewBuilder var content: Content
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    var body: some View {
-        content
-            .phaseAnimator([false, true]) { view, up in
-                switch tier {
-                case .thriving:
-                    view
-                        .offset(y: up && !reduceMotion ? -10 : 0)
-                        .rotationEffect(.degrees(reduceMotion ? 0 : (up ? 1.5 : -1.5)), anchor: .bottom)
-                case .okay:
-                    view.scaleEffect(up && !reduceMotion ? 1.03 : 1, anchor: .bottom)
-                case .needsYou:
-                    view
-                        .offset(y: up && !reduceMotion ? 12 : 8)
-                        .rotationEffect(.degrees(up ? -1 : -3), anchor: .bottom)
-                }
-            } animation: { _ in
-                switch tier {
-                case .thriving: return .easeInOut(duration: 0.7)
-                case .okay: return .easeInOut(duration: 1.6)
-                case .needsYou: return .easeInOut(duration: 2)
-                }
-            }
+        .buttonStyle(.pressable)
+        .accessibilityHint("Opens today's log")
     }
 }
 
@@ -311,79 +346,187 @@ extension CareTier {
         case .needsYou: return .opawAlert
         }
     }
-}
 
-// MARK: - Add a pet
-
-private struct AddPetPage: View {
-    let onAdd: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Space.m) {
-            Spacer()
-            Button(action: onAdd) {
-                ZStack {
-                    Circle()
-                        .strokeBorder(Color.opawInk.opacity(0.25), style: StrokeStyle(lineWidth: 3, dash: [10, 10]))
-                    Image(systemName: "plus")
-                        .font(.system(size: 54, weight: .bold))
-                        .foregroundStyle(Color.opawInk)
-                }
-                .frame(width: 240, height: 240)
-                .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.pressable)
-            .accessibilityLabel("Add a new pet")
-            Spacer()
-            Text("Add a new pet")
-                .font(.opawDisplay(40))
-                .foregroundStyle(Color.opawInk)
-            Text("Snap a photo of another dog and they'll come to life too.")
-                .font(.opaw(17, .semibold))
-                .foregroundStyle(Color.opawMuted)
-                .fixedSize(horizontal: false, vertical: true)
-            Button(action: onAdd) {
-                Label("Snap a photo", systemImage: "camera.fill")
-            }
-            .buttonStyle(.opawPrimary)
-            .padding(.top, Space.s)
+    /// How the avatar moves: a bouncy bob, a slow breath, or a droop.
+    var motion: LoopMotion {
+        switch self {
+        case .thriving: return .bob
+        case .okay: return .breathe
+        case .needsYou: return .droop
         }
-        .padding(.horizontal, Space.l)
-        .padding(.bottom, Space.m)
     }
 }
 
-/// A row in a log list, reused by Care and History.
+// MARK: - Add a pet (2h)
+
+private struct AddPetPage: View {
+    let dots: AnyView
+    let onAdd: () -> Void
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 0) {
+                ZStack(alignment: .top) {
+                    GhostCycle()
+                        .frame(width: 190, height: 210)
+                        .padding(.top, 70)
+                    Button(action: onAdd) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 32, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 88, height: 88)
+                            .background(Color(hex: 0x111111), in: Circle())
+                            .shadow(color: .black.opacity(0.25), radius: 18, y: 18)
+                    }
+                    .buttonStyle(.pressable)
+                    .padding(.top, 150)
+                    .accessibilityLabel("Add a new pet")
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 340, alignment: .top)
+
+                VStack(spacing: 10) {
+                    Text("Add a new pet")
+                        .font(.opaw(40, .black))
+                        .foregroundStyle(Color.opawInk)
+                    dots
+                    Text("Snap a photo of another dog, cat or bunny and they'll come to life too.")
+                        .font(.opaw(17, .medium))
+                        .foregroundStyle(Color.opawSoftText)
+                        .lineSpacing(4)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.horizontal, 40)
+                .padding(.top, 14)
+            }
+            .padding(.top, 72)
+            .padding(.bottom, 120)
+        }
+        .scrollIndicators(.hidden)
+    }
+}
+
+/// Three faint silhouettes (dog, cat, bunny) taking turns to appear, every 9 seconds.
+private struct GhostCycle: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        TimelineView(.animation(paused: reduceMotion)) { context in
+            let time = context.date.timeIntervalSinceReferenceDate
+            ZStack {
+                ForEach(0..<3, id: \.self) { index in
+                    let state = Self.state(at: time - Double(index) * 3)
+                    GhostShape(kind: index)
+                        .fill(Color(hex: 0x111111).opacity(0.09))
+                        .opacity(reduceMotion ? (index == 0 ? 1 : 0) : state.opacity)
+                        .scaleEffect(reduceMotion ? 1 : state.scale)
+                }
+            }
+        }
+        .accessibilityHidden(true)
+    }
+
+    /// The design's ghost-cycle keyframes: fade in by 6%, hold to 28%, fade out by 34%.
+    static func state(at time: Double) -> (opacity: Double, scale: Double) {
+        let t = (time.truncatingRemainder(dividingBy: 9) + 9).truncatingRemainder(dividingBy: 9) / 9
+        switch t {
+        case ..<0.06:
+            let p = t / 0.06
+            return (p, 0.94 + 0.06 * p)
+        case ..<0.28:
+            return (1, 1)
+        case ..<0.34:
+            let p = (t - 0.28) / 0.06
+            return (1 - p, 1 + 0.03 * p)
+        default:
+            return (0, 1.03)
+        }
+    }
+}
+
+/// Silhouettes drawn in a 200×220 box: 0 dog, 1 cat, 2 bunny.
+private struct GhostShape: Shape {
+    let kind: Int
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        func ellipse(_ cx: CGFloat, _ cy: CGFloat, _ rx: CGFloat, _ ry: CGFloat, rotate degrees: CGFloat = 0) {
+            let oval = Path(ellipseIn: CGRect(x: -rx, y: -ry, width: rx * 2, height: ry * 2))
+            let transform = CGAffineTransform(rotationAngle: degrees * .pi / 180).concatenating(CGAffineTransform(translationX: cx, y: cy))
+            path.addPath(oval, transform: transform)
+        }
+        func pill(_ x: CGFloat, _ y: CGFloat, _ w: CGFloat, _ h: CGFloat) {
+            path.addRoundedRect(in: CGRect(x: x, y: y, width: w, height: h), cornerSize: CGSize(width: w / 2, height: w / 2))
+        }
+        switch kind {
+        case 0:
+            ellipse(100, 165, 56, 50)
+            ellipse(100, 78, 40, 40)
+            ellipse(64, 70, 13, 30, rotate: 22)
+            ellipse(136, 70, 13, 30, rotate: -22)
+            ellipse(100, 100, 20, 15)
+            pill(70, 180, 20, 36)
+            pill(110, 180, 20, 36)
+        case 1:
+            ellipse(100, 160, 46, 56)
+            ellipse(100, 82, 36, 36)
+            path.addLines([CGPoint(x: 68, y: 66), CGPoint(x: 74, y: 28), CGPoint(x: 96, y: 52)])
+            path.closeSubpath()
+            path.addLines([CGPoint(x: 132, y: 66), CGPoint(x: 126, y: 28), CGPoint(x: 104, y: 52)])
+            path.closeSubpath()
+            var tail = Path()
+            tail.move(to: CGPoint(x: 144, y: 196))
+            tail.addCurve(to: CGPoint(x: 164, y: 134), control1: CGPoint(x: 174, y: 190), control2: CGPoint(x: 180, y: 156))
+            path.addPath(tail.strokedPath(StrokeStyle(lineWidth: 14, lineCap: .round)))
+            pill(76, 184, 18, 32)
+            pill(106, 184, 18, 32)
+        default:
+            ellipse(100, 168, 50, 46)
+            ellipse(100, 104, 32, 32)
+            ellipse(84, 48, 11, 38, rotate: -8)
+            ellipse(116, 48, 11, 38, rotate: 8)
+            ellipse(150, 186, 14, 14)
+        }
+        let scale = min(rect.width / 200, rect.height / 220)
+        return path.applying(CGAffineTransform(scaleX: scale, y: scale).concatenating(CGAffineTransform(translationX: rect.minX, y: rect.minY)))
+    }
+}
+
+/// A row in a log list, reused by History.
 struct CareEventRow: View {
     let event: CareEvent
 
     var body: some View {
-        HStack(spacing: 12) {
-            Text(event.date, style: .time)
-                .font(.opaw(14, .bold))
-                .foregroundStyle(Color.opawMuted)
-                .frame(width: 52, alignment: .leading)
-            Text(title)
+        HStack(spacing: 0) {
+            Text(event.date.formatted(date: .omitted, time: .shortened))
+                .font(.opaw(15, .semibold))
+                .foregroundStyle(Color.opawFaint)
+                .frame(width: 56, alignment: .leading)
+            Text(event.summary)
                 .font(.opaw(15, .semibold))
                 .foregroundStyle(Color.opawInk)
             Spacer(minLength: 0)
         }
-        .padding(.vertical, 10)
+        .padding(.vertical, 13)
     }
+}
 
-    private var title: String {
-        var text = event.kind.title
-        if let consistency = event.poopConsistency {
+extension CareEvent {
+    /// "Poop · normal", "Weight · 9.8 kg", "Breakfast · 120 g".
+    var summary: String {
+        var text = kind.title
+        if let consistency = poopConsistency {
             text += " · \(consistency.title.lowercased())"
         }
-        if let color = event.poopColor, color != .brown {
+        if let color = poopColor, color != .brown {
             text += " · \(color.title.lowercased())"
         }
-        if let weight = event.weightKg {
+        if let weight = weightKg {
             text += " · \(weight.formatted(.number.precision(.fractionLength(1)))) kg"
         }
-        if !event.note.isEmpty {
-            text += " · \(event.note)"
+        if !note.isEmpty {
+            text += " · \(note)"
         }
         return text
     }

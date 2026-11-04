@@ -30,9 +30,31 @@ extension Dog {
         (reminders ?? []).filter(\.isEnabled).sorted { ($0.hour, $0.minute) < ($1.hour, $1.minute) }
     }
 
+    /// Reminders that fall on a day: every daily one, plus repeating ones due that day.
+    func reminders(on day: Date, calendar: Calendar = .current) -> [Reminder] {
+        enabledReminders.filter {
+            $0.repeats == .daily || calendar.isDate($0.nextOccurrence(onOrAfter: day), inSameDayAs: day)
+        }
+    }
+
+    /// Repeating reminders after today, soonest first.
+    func upcomingReminders(after day: Date = Date(), calendar: Calendar = .current) -> [(date: Date, reminder: Reminder)] {
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: day)) ?? day
+        return enabledReminders
+            .filter { $0.repeats != .daily }
+            .map { ($0.nextOccurrence(onOrAfter: tomorrow), $0) }
+            .sorted { $0.0 < $1.0 }
+    }
+
+    /// Days since the last log of a kind, if there is one.
+    func daysSince(_ kinds: Set<CareKind>, now: Date = Date(), calendar: Calendar = .current) -> Int? {
+        guard let last = (careEvents ?? []).filter({ kinds.contains($0.kind) && $0.date <= now }).map(\.date).max() else { return nil }
+        return calendar.dateComponents([.day], from: calendar.startOfDay(for: last), to: calendar.startOfDay(for: now)).day
+    }
+
     /// The meds reminder that is late or comes next today, if any.
     func medsStatus(now: Date = Date()) -> (overdue: Bool, next: Date?) {
-        let meds = enabledReminders.filter { $0.kind == .meds }
+        let meds = reminders(on: now).filter { $0.kind == .meds }
         let pending = meds.filter { !$0.isDone(on: now, for: self) }.map { $0.dueDate(on: now) }
         let overdue = pending.contains { now.timeIntervalSince($0) > 30 * 60 }
         return (overdue, pending.min())
