@@ -3,7 +3,7 @@ import SwiftData
 import SwiftUI
 import WidgetKit
 
-/// Profile (5e): the pet, the Premium banner for free users, then household, settings and Premium features.
+/// Settings (5e): the pet, the Premium banner for free users, then household, settings and Premium features.
 struct ProfileView: View {
     @Query(sort: \Dog.createdAt) private var dogs: [Dog]
     @AppStorage(OpawDefaults.activeDogKey, store: OpawDefaults.shared) private var activeDogID = ""
@@ -13,6 +13,7 @@ struct ProfileView: View {
     @State private var showPaywall = false
     @State private var showWidgetHelp = false
     @State private var showBackupNote = false
+    @State private var showNearby = false
 
     private var dog: Dog? {
         dogs.first { $0.id.uuidString == activeDogID } ?? dogs.first
@@ -21,7 +22,7 @@ struct ProfileView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                ScreenHeader(title: "Profile") {
+                ScreenHeader(title: "Settings") {
                     Button { dismiss() } label: { RoundIcon(symbol: "chevron.left") }
                         .buttonStyle(.pressable)
                         .accessibilityLabel("Back")
@@ -38,6 +39,7 @@ struct ProfileView: View {
                                 if let url = URL(string: UIApplication.openNotificationSettingsURLString) { openURL(url) }
                             }
                             linkRow(.ruler, "Units") { UnitsView() }
+                            actionRow(.heart, "Friends nearby") { showNearby = true }
                         }
                         card {
                             premiumRow(.grid, "Home Screen widgets", first: true) { showWidgetHelp = true }
@@ -65,6 +67,7 @@ struct ProfileView: View {
             .toolbar(.hidden, for: .navigationBar)
         }
         .premiumPaywall(isPresented: $showPaywall)
+        .sheet(isPresented: $showNearby) { PackView() }
         .alert("Add an Opaw widget", isPresented: $showWidgetHelp) {
             Button("OK", role: .cancel) {}
         } message: {

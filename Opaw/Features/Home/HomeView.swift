@@ -64,7 +64,7 @@ struct HomeView: View {
             }
             .sheet(item: $sheet) { sheet in
                 switch sheet {
-                case .nearby: PackView()
+                case .settings: ProfileView()
                 case .addDog: AddDogSheet()
                 case .petLimit: PetLimitSheet(dog: currentDog ?? dogs.first) { showPaywall = true }
                 }
@@ -86,10 +86,10 @@ struct HomeView: View {
             .accessibilityLabel("Family")
             Spacer()
             if page != Self.addPage, let dog = currentDog {
-                Button { sheet = .nearby } label: { TopCircle { Icon(.heart, size: 22) } }
-                    .buttonStyle(.pressable)
-                    .accessibilityLabel("Friends nearby")
                 ShareAvatarButton(dog: dog)
+                Button { sheet = .settings } label: { TopCircle { Icon(.settings, size: 23) } }
+                    .buttonStyle(.pressable)
+                    .accessibilityLabel("Settings")
             }
         }
         .padding(.horizontal, 20)
@@ -154,7 +154,7 @@ struct HomeView: View {
 }
 
 enum HomeSheet: String, Identifiable {
-    case nearby, addDog, petLimit
+    case settings, addDog, petLimit
     var id: String { rawValue }
 }
 
