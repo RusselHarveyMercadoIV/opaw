@@ -6,6 +6,7 @@ enum DesignIcon: String, CaseIterable {
     case back, chevronRight, plus, check, home, paw, activity, photo
     case heart, share, upload, bell, calendar, trophy, camera, sparkle, document, pause
     case meal, water, pee, poop, meds, bath, brush, nails, weight, vet
+    case close, chevronDown, refresh, link, location, lock, chart, users, cloud, help, grid, ruler, clock, pets
 
     /// How the icon is painted: an outline, or solid shapes.
     enum Style { case stroke, fill }
@@ -35,6 +36,7 @@ enum DesignIcon: String, CaseIterable {
         case .chevronRight: return 3
         case .meal, .water, .pee, .poop, .meds, .bath, .brush, .nails, .weight, .vet: return 2.3
         case .calendar, .camera, .document: return 2.4
+        case .refresh, .link, .location, .chart, .users, .cloud, .help, .grid, .ruler, .pets: return 2.4
         case .sparkle: return 2.2
         default: return 2.6
         }
@@ -85,6 +87,24 @@ enum DesignIcon: String, CaseIterable {
             return [.circle(12, 5, 3), .path("M6.5 8a2 2 0 0 0-1.9 1.46L2.1 18.5A2 2 0 0 0 4 21h16a2 2 0 0 0 1.93-2.54L19.4 9.5A2 2 0 0 0 17.48 8Z")]
         case .vet:
             return [.path("M11 2v2M5 2v2M5 3H4a2 2 0 0 0-2 2v4a6 6 0 0 0 12 0V5a2 2 0 0 0-2-2h-1"), .path("M8 15a6 6 0 0 0 12 0v-3"), .circle(20, 10, 2)]
+        case .close: return [.path("M18 6 6 18M6 6l12 12")]
+        case .chevronDown: return [.path("m6 9 6 6 6-6")]
+        case .refresh:
+            return [.path("M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"), .path("M21 3v5h-5"), .path("M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"), .path("M8 16H3v5")]
+        case .link:
+            return [.path("M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"), .path("M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71")]
+        case .location: return [.path("M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"), .circle(12, 10, 3)]
+        case .lock: return [.rect(4, 11, 16, 10, 3), .path("M8 11V7a4 4 0 0 1 8 0v4")]
+        case .chart: return [.path("M3 3v18h18"), .path("M8 16v-4M13 16V8M18 16v-7")]
+        case .users: return [.path("M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"), .circle(9, 7, 4), .path("M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75")]
+        case .cloud: return [.path("M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z")]
+        case .help: return [.circle(12, 12, 9), .path("M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01")]
+        case .grid: return [.rect(3, 3, 7, 7, 2), .rect(14, 3, 7, 7, 2), .rect(14, 14, 7, 7, 2), .rect(3, 14, 7, 7, 2)]
+        case .ruler:
+            return [.path("M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.4 2.4 0 0 1 0-3.4l2.6-2.6a2.4 2.4 0 0 1 3.4 0Z"), .path("m7.5 10.5 2-2M10.5 13.5l2-2M13.5 16.5l2-2")]
+        case .clock: return [.circle(12, 12, 9), .path("M12 7v5l3 2")]
+        case .pets:
+            return [.circle(5, 10, 2), .circle(9, 5.5, 2), .circle(15, 5.5, 2), .circle(19, 10, 2), .path("M12 11c-3 0-6 4.5-6 7 0 2 1.5 3 3 3 1.2 0 2-.6 3-.6s1.8.6 3 .6c1.5 0 3-1 3-3 0-2.5-3-7-6-7Z")]
         }
     }
 

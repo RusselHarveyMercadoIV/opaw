@@ -6,6 +6,9 @@ options:
   createIntermediateGroups: true
   developmentLanguage: en
 
+fileGroups:
+  - Config
+
 configFiles:
   Debug: Config/Base.xcconfig
   Release: Config/Base.xcconfig
@@ -116,5 +119,6 @@ schemes:
         OpawWidgets: all
     run:
       config: Debug
+      storeKitConfiguration: Config/Opaw.storekit
     archive:
       config: Release

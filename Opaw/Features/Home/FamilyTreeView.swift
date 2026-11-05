@@ -13,6 +13,9 @@ struct FamilyTreeView: View {
     @State private var editing: Relative?
     @State private var showProfile = false
     @State private var showAddDog = false
+    @State private var showPetLimit = false
+    @State private var showPaywall = false
+    @Environment(PremiumStore.self) private var premium
 
     private var mom: Relative? { dog.relatives.first { $0.role == .mom } }
     private var dad: Relative? { dog.relatives.first { $0.role == .dad } }
@@ -65,6 +68,8 @@ struct FamilyTreeView: View {
         }
         .sheet(isPresented: $showProfile) { ProfileView() }
         .sheet(isPresented: $showAddDog) { AddDogSheet() }
+        .sheet(isPresented: $showPetLimit) { PetLimitSheet(dog: dog) { showPaywall = true } }
+        .premiumPaywall(isPresented: $showPaywall)
     }
 
     // MARK: Tree
@@ -197,7 +202,7 @@ struct FamilyTreeView: View {
                         .buttonStyle(.pressable)
                         .accessibilityLabel(item.name)
                     }
-                    Button { showAddDog = true } label: {
+                    Button { if premium.isPremium { showAddDog = true } else { showPetLimit = true } } label: {
                         Icon(.plus, size: 20)
                             .foregroundStyle(Color.opawMuted)
                             .frame(width: 58, height: 58)

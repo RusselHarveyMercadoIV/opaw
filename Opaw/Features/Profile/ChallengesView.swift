@@ -44,7 +44,7 @@ struct ChallengesView: View {
         let done = dog.walkedKm(from: month.start, to: month.end)
         let daysLeft = max(0, calendar.dateComponents([.day], from: calendar.startOfDay(for: Date()), to: month.end).day ?? 0)
         return HStack(spacing: 20) {
-            GoalRing(progress: done / goal, value: done.formatted(.number.precision(.fractionLength(1))), caption: "of \(Int(goal)) km")
+            GoalRing(progress: done / goal, value: OpawFormat.longDistance(km: done).formatted(.number.precision(.fractionLength(1))), caption: "of \(Int(OpawFormat.longDistance(km: goal).rounded())) \(OpawFormat.distanceUnit)")
                 .frame(width: 120, height: 120)
             VStack(alignment: .leading, spacing: 4) {
                 Text(Date().formatted(.dateTime.month(.wide)))

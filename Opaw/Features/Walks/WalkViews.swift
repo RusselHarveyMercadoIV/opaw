@@ -143,7 +143,7 @@ private struct ActivityView: View {
         let goal = max(0.5, dog.traits.recommendedWeeklyKm)
         let done = dog.walkedKm(from: week.start, to: week.end)
         return HStack(spacing: 18) {
-            GoalRing(progress: done / goal, value: done.formatted(.number.precision(.fractionLength(1))), caption: "of \(goal.formatted(.number.precision(.fractionLength(0...1)))) km")
+            GoalRing(progress: done / goal, value: OpawFormat.longDistance(km: done).formatted(.number.precision(.fractionLength(1))), caption: "of \(OpawFormat.longDistance(km: goal).formatted(.number.precision(.fractionLength(0...1)))) \(OpawFormat.distanceUnit)")
                 .frame(width: 118, height: 118)
             VStack(alignment: .leading, spacing: 4) {
                 Text("Weekly goal")
@@ -202,10 +202,10 @@ private struct ActivityView: View {
         }
         who.append(dog.breed.isEmpty ? "\(dog.size.title.lowercased()) dog" : dog.breed)
         var text = "Set for a \(who.joined(separator: " "))"
-        if let weight = dog.weightKg { text += " at \(weight.formatted(.number.precision(.fractionLength(0...1)))) kg" }
+        if let weight = dog.weightKg { text += " at \(OpawFormat.weight(kg: weight))" }
         text += "."
         let left = goal - done
-        text += left > 0.05 ? " \(left.formatted(.number.precision(.fractionLength(1)))) km to go." : " Goal reached. Good dog!"
+        text += left > 0.05 ? " \(OpawFormat.longDistance(km: left).formatted(.number.precision(.fractionLength(1)))) \(OpawFormat.distanceUnit) to go." : " Goal reached. Good dog!"
         return text
     }
 
@@ -218,7 +218,7 @@ private struct ActivityView: View {
                 .padding(.top, 12)
                 .padding(.bottom, 6)
             recordRow("Longest walk", longest > 0 ? OpawFormat.distance(meters: longest) : "–")
-            recordRow("Fastest km", fastest.map { OpawFormat.pace(minutesPerKm: $0) } ?? "–")
+            recordRow(OpawFormat.usesImperial ? "Fastest mile" : "Fastest km", fastest.map { OpawFormat.pace(minutesPerKm: $0) } ?? "–")
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 6)
@@ -462,7 +462,7 @@ private struct LiveWalkView: View {
                     .padding(.top, 6)
                 HStack(spacing: 0) {
                     StatColumn(value: OpawFormat.duration(recorder.elapsed(at: context.date)), label: "Time")
-                    StatColumn(value: OpawFormat.pace(minutesPerKm: recorder.stats.paceMinutesPerKm), label: "Pace /km")
+                    StatColumn(value: OpawFormat.pace(minutesPerKm: recorder.stats.paceMinutesPerKm), label: "Pace /\(OpawFormat.distanceUnit)")
                     StatColumn(value: "\(Walk.sniffStops(in: recorder.points))", label: "Sniff stops")
                 }
                 .environment(\.colorScheme, .light)
@@ -709,7 +709,7 @@ private struct WalkStoryView: View {
             }
             Rectangle().fill(Color.opawHairline).frame(height: 1)
             HStack(spacing: 0) {
-                cell(OpawFormat.pace(minutesPerKm: stats.paceMinutesPerKm), label: "Pace /km")
+                cell(OpawFormat.pace(minutesPerKm: stats.paceMinutesPerKm), label: "Pace /\(OpawFormat.distanceUnit)")
                 Rectangle().fill(Color.opawHairline).frame(width: 1)
                 cell("\(peeCount) · \(poopCount)", label: "Pee · poop")
             }
@@ -759,7 +759,7 @@ private struct WalkStoryView: View {
                 }
             }
             .frame(height: 10)
-            Text("\(total.formatted(.number.precision(.fractionLength(1)))) / \(goal.formatted(.number.precision(.fractionLength(0...1)))) km this week")
+            Text("\(OpawFormat.longDistance(km: total).formatted(.number.precision(.fractionLength(1)))) / \(OpawFormat.longDistance(km: goal).formatted(.number.precision(.fractionLength(0...1)))) \(OpawFormat.distanceUnit) this week")
                 .font(.opaw(15, .bold))
                 .foregroundStyle(Color.opawInk)
                 .fixedSize()

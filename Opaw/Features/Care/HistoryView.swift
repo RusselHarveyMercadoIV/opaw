@@ -179,7 +179,7 @@ struct HistoryView: View {
                     .font(.opaw(17, .black))
                 Spacer()
                 if let latest = weightPoints.last {
-                    (Text(latest.kg.formatted(.number.precision(.fractionLength(1)))) + Text(" kg").font(.opaw(14, .black)).foregroundColor(Color.opawMuted))
+                    (Text(OpawFormat.weightValue(kg: latest.kg).formatted(.number.precision(.fractionLength(1)))) + Text(" \(OpawFormat.weightUnit)").font(.opaw(14, .black)).foregroundColor(Color.opawMuted))
                         .font(.opaw(22, .black))
                 }
             }
@@ -285,7 +285,7 @@ struct HistoryView: View {
         var profile: [String] = []
         if !dog.breed.isEmpty { profile.append(dog.breed) }
         if let age = dog.ageDescription { profile.append(age) }
-        if let weight = dog.weightKg { profile.append("\(weight.formatted(.number.precision(.fractionLength(1)))) kg") }
+        if let weight = dog.weightKg { profile.append(OpawFormat.weight(kg: weight)) }
         if !profile.isEmpty { lines.append(profile.joined(separator: " · ")) }
         lines.append("")
         lines.append(weeklySummary)

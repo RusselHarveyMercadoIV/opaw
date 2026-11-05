@@ -5,6 +5,7 @@ import SwiftUI
 struct OpawApp: App {
     @State private var walkRecorder = WalkRecorder()
     @State private var pack = PackService()
+    @State private var premium = PremiumStore()
 
     init() {
         OpawAppearance.apply()
@@ -15,6 +16,7 @@ struct OpawApp: App {
             RootView()
                 .environment(walkRecorder)
                 .environment(pack)
+                .environment(premium)
                 .tint(.opawOrange)
         }
         .modelContainer(OpawStore.container)

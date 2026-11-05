@@ -33,6 +33,13 @@ final class Dog {
     var earnedBadgesRaw: [String] = []
     /// The dog's family tree (parents, siblings), stored as JSON.
     var relativesData: Data?
+    /// "dog", "cat" or "bunny".
+    var species: String = "dog"
+    /// "female", "male", or empty when not set.
+    var sex: String = ""
+    var isNeutered: Bool = false
+    /// Care kinds shown on the Care screen, picked during onboarding. Empty means all of them.
+    var trackedKindsRaw: [String] = []
 
     @Relationship(deleteRule: .cascade, inverse: \CareEvent.dog) var careEvents: [CareEvent]? = []
     @Relationship(deleteRule: .cascade, inverse: \Walk.dog) var walks: [Walk]? = []

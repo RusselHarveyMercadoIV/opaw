@@ -177,11 +177,12 @@ final class TraitsAndFormatTests: XCTestCase {
     }
 
     func testFormatting() {
-        XCTAssertEqual(OpawFormat.distance(meters: 850), "850 m")
-        XCTAssertEqual(OpawFormat.distance(meters: 1240), "1.24 km")
+        XCTAssertEqual(OpawFormat.distance(meters: 850, imperial: false), "850 m")
+        XCTAssertEqual(OpawFormat.distance(meters: 1240, imperial: false), "1.24 km")
+        XCTAssertEqual(OpawFormat.distance(meters: 1609.344, imperial: true), "1.00 mi")
         XCTAssertEqual(OpawFormat.duration(725), "12:05")
         XCTAssertEqual(OpawFormat.duration(3909), "1:05:09")
-        XCTAssertEqual(OpawFormat.pace(minutesPerKm: 12.5), "12'30\" /km")
+        XCTAssertEqual(OpawFormat.pace(minutesPerKm: 12.5, imperial: false), "12'30\" /km")
         XCTAssertEqual(OpawFormat.pace(minutesPerKm: nil), "--")
     }
 }

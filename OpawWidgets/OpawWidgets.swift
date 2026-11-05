@@ -284,8 +284,8 @@ struct DistanceText: View {
     let size: CGFloat
 
     var body: some View {
-        (Text((meters / 1000).formatted(.number.precision(.fractionLength(2))))
-            + Text(" km").font(.custom("Nunito-Black", size: 15)).foregroundColor(Color(white: 0.67)))
+        (Text(OpawFormat.longDistance(km: meters / 1000).formatted(.number.precision(.fractionLength(2))))
+            + Text(" \(OpawFormat.distanceUnit)").font(.custom("Nunito-Black", size: 15)).foregroundColor(Color(white: 0.67)))
             .font(.custom("Nunito-Black", size: size).monospacedDigit())
             .foregroundStyle(.white)
     }

@@ -11,6 +11,8 @@ struct HomeView: View {
     @AppStorage(OpawDefaults.activeDogKey, store: OpawDefaults.shared) private var activeDogID = ""
     @State private var page = ""
     @State private var sheet: HomeSheet?
+    @State private var showPaywall = false
+    @Environment(PremiumStore.self) private var premium
     @State private var path = NavigationPath()
 
     private static let addPage = "add"
@@ -27,7 +29,7 @@ struct HomeView: View {
                         PetPage(dog: dog, dots: dots) { path.append(HomeRoute.today(dog.id)) }
                             .tag(dog.id.uuidString)
                     }
-                    AddPetPage(dots: dots) { sheet = .addDog }
+                    AddPetPage(dots: dots, locked: !premium.isPremium && !dogs.isEmpty) { sheet = premium.isPremium || dogs.isEmpty ? .addDog : .petLimit }
                         .tag(Self.addPage)
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
@@ -64,8 +66,10 @@ struct HomeView: View {
                 switch sheet {
                 case .nearby: PackView()
                 case .addDog: AddDogSheet()
+                case .petLimit: PetLimitSheet(dog: currentDog ?? dogs.first) { showPaywall = true }
                 }
             }
+            .premiumPaywall(isPresented: $showPaywall)
         }
     }
 
@@ -150,7 +154,7 @@ struct HomeView: View {
 }
 
 enum HomeSheet: String, Identifiable {
-    case nearby, addDog
+    case nearby, addDog, petLimit
     var id: String { rawValue }
 }
 
@@ -308,7 +312,7 @@ private struct PetPage: View {
         var result: [String] = []
         if !dog.breed.isEmpty { result.append(dog.breed) }
         if let age = dog.ageDescription { result.append(age) }
-        if let weight = dog.weightKg { result.append("\(weight.formatted(.number.precision(.fractionLength(0...1)))) kg") }
+        if let weight = dog.weightKg { result.append(OpawFormat.weight(kg: weight)) }
         if result.isEmpty { result.append(dog.size.title) }
         return result
     }
@@ -359,6 +363,7 @@ extension CareTier {
 
 private struct AddPetPage: View {
     let dots: AnyView
+    var locked = false
     let onAdd: () -> Void
 
     var body: some View {
@@ -374,6 +379,16 @@ private struct AddPetPage: View {
                             .frame(width: 88, height: 88)
                             .background(Color(hex: 0x111111), in: Circle())
                             .shadow(color: .black.opacity(0.25), radius: 18, y: 18)
+                            .overlay(alignment: .topTrailing) {
+                                if locked {
+                                    Icon(.lock, size: 16)
+                                        .foregroundStyle(.white)
+                                        .frame(width: 34, height: 34)
+                                        .background(Color(hex: 0x111111), in: Circle())
+                                        .overlay(Circle().strokeBorder(Color.opawCream, lineWidth: 3))
+                                        .offset(x: 6, y: -6)
+                                }
+                            }
                     }
                     .buttonStyle(.pressable)
                     .padding(.top, 150)
@@ -520,7 +535,7 @@ extension CareEvent {
             text += " · \(color.title.lowercased())"
         }
         if let weight = weightKg {
-            text += " · \(weight.formatted(.number.precision(.fractionLength(1)))) kg"
+            text += " · \(OpawFormat.weight(kg: weight))"
         }
         if !note.isEmpty {
             text += " · \(note)"

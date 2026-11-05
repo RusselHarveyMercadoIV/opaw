@@ -3,11 +3,16 @@ import SwiftData
 import SwiftUI
 import WidgetKit
 
-/// The dog's profile, badges, reminders and app settings.
+/// Profile (5e): the pet, the Premium banner for free users, then household, settings and Premium features.
 struct ProfileView: View {
     @Query(sort: \Dog.createdAt) private var dogs: [Dog]
     @AppStorage(OpawDefaults.activeDogKey, store: OpawDefaults.shared) private var activeDogID = ""
-    @State private var showAddDog = false
+    @Environment(PremiumStore.self) private var premium
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
+    @State private var showPaywall = false
+    @State private var showWidgetHelp = false
+    @State private var showBackupNote = false
 
     private var dog: Dog? {
         dogs.first { $0.id.uuidString == activeDogID } ?? dogs.first
@@ -15,75 +20,257 @@ struct ProfileView: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                if let dog {
-                    Section {
-                        HStack(spacing: 16) {
-                            DogThumbnail(data: dog.cutoutData ?? dog.photoData, size: 72)
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(dog.name).font(.title2.bold())
-                                Text([dog.breed, ageText(dog), dog.size.title].filter { !$0.isEmpty }.joined(separator: " · "))
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
+            VStack(spacing: 0) {
+                ScreenHeader(title: "Profile") {
+                    Button { dismiss() } label: { RoundIcon(symbol: "chevron.left") }
+                        .buttonStyle(.pressable)
+                        .accessibilityLabel("Back")
+                } trailing: {
+                    Color.clear.frame(width: 54, height: 54)
+                }
+                ScrollView {
+                    VStack(spacing: 12) {
+                        if let dog { petHeader(dog) }
+                        if !premium.isPremium { banner }
+                        card {
+                            linkRow(.users, "Household", first: true) { HouseholdView(petName: dog?.name ?? "your pet") }
+                            actionRow(.bell, "Notifications") {
+                                if let url = URL(string: UIApplication.openNotificationSettingsURLString) { openURL(url) }
+                            }
+                            linkRow(.ruler, "Units") { UnitsView() }
+                        }
+                        card {
+                            premiumRow(.grid, "Home Screen widgets", first: true) { showWidgetHelp = true }
+                            premiumRow(.cloud, "iCloud backup") { showBackupNote = true }
+                            if premium.isPremium, let dog {
+                                linkRow(.chart, "Full history") { HistoryView(dog: dog) }
+                            } else {
+                                premiumRow(.chart, "Full history") {}
                             }
                         }
-                        NavigationLink("Edit profile") { EditDogView(dog: dog) }
-                        NavigationLink("Avatar") { AvatarStudioView(dog: dog) }
-                        NavigationLink("Reminders") { RemindersView(dog: dog) }
-                        NavigationLink("Care history") { CareHistoryView(dog: dog) }
-                    }
-
-                    Section("Badges") {
-                        BadgeGrid(dog: dog)
-                    }
-                }
-
-                Section("Your dogs") {
-                    ForEach(dogs) { item in
-                        Button {
-                            activeDogID = item.id.uuidString
-                            WidgetCenter.shared.reloadTimelines(ofKind: OpawWidgetKind.quickLog)
-                        } label: {
-                            HStack {
-                                DogThumbnail(data: item.cutoutData ?? item.photoData, size: 36)
-                                Text(item.name)
-                                Spacer()
-                                if item.id == dog?.id {
-                                    Image(systemName: "checkmark").foregroundStyle(Color.opawOrange)
-                                }
+                        card {
+                            linkRow(.sparkle, "Subscription", value: planName, first: true) { SubscriptionView() }
+                            actionRow(.help, "Help") {
+                                openURL(URL(string: "https://github.com/RusselHarveyMercadoIV/opaw/issues")!)
                             }
                         }
-                        .foregroundStyle(.primary)
                     }
-                    Button {
-                        showAddDog = true
-                    } label: {
-                        Label("Add another dog", systemImage: "plus")
-                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 18)
+                    .padding(.bottom, 40)
                 }
-
-                Section("About") {
-                    LabeledContent("Version", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "")
-                    Text("Your care logs, walks and memories stay on your iPhone. Only what you choose to share with the Pack is uploaded.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                    Link("Privacy policy", destination: URL(string: "https://github.com/RusselHarveyMercadoIV/opaw/blob/main/docs/PRIVACY.md")!)
-                }
+                .scrollIndicators(.hidden)
             }
-            .navigationTitle("Profile")
-            .sheet(isPresented: $showAddDog) {
-                AddDogSheet()
-            }
+            .opawBackground()
+            .toolbar(.hidden, for: .navigationBar)
+        }
+        .premiumPaywall(isPresented: $showPaywall)
+        .alert("Add an Opaw widget", isPresented: $showWidgetHelp) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Touch and hold your Home Screen or Lock Screen, tap Edit, then Add Widget, and pick Opaw.")
+        }
+        .alert("iCloud backup", isPresented: $showBackupNote) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Backup to iCloud is coming soon. For now, everything stays on this iPhone.")
         }
     }
 
-    private func ageText(_ dog: Dog) -> String {
-        guard dog.birthDate != nil else { return "" }
-        let years = dog.ageYears
-        if years < 1 {
-            return "\(max(1, Int(years * 12))) months"
+    private var planName: String {
+        guard let status = premium.status else { return "Free" }
+        return status.isTrial ? "Trial" : status.plan.title
+    }
+
+    // MARK: Pieces
+
+    private func petHeader(_ dog: Dog) -> some View {
+        NavigationLink {
+            EditDogView(dog: dog)
+        } label: {
+            HStack(spacing: 14) {
+                MiniFace(data: dog.cutoutData ?? dog.photoData, size: 64, rim: 4, fill: Color.opawTrack)
+                    .shadow(color: .black.opacity(0.06), radius: 10, y: 8)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(dog.name)
+                        .font(.opaw(22, .black))
+                        .foregroundStyle(Color.opawInk)
+                    Text(subtitle(dog))
+                        .font(.opaw(14, .medium))
+                        .foregroundStyle(Color.opawMuted)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+            }
         }
-        return "\(Int(years)) years"
+        .buttonStyle(.pressable)
+        .padding(.bottom, 6)
+    }
+
+    private func subtitle(_ dog: Dog) -> String {
+        var parts: [String] = []
+        if !dog.breed.isEmpty { parts.append(dog.breed) }
+        if dog.birthDate != nil {
+            let years = Int(dog.ageYears)
+            parts.append(years < 1 ? "\(max(1, Int(dog.ageYears * 12))) mo" : (years == 1 ? "1 yr" : "\(years) yrs"))
+        }
+        if let status = premium.status {
+            parts.append(status.isTrial ? "Premium trial" : "Premium")
+        } else {
+            parts.append("Free plan")
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    private var banner: some View {
+        Button { showPaywall = true } label: {
+            HStack(spacing: 10) {
+                Icon(.sparkle, size: 18, weight: 2.4)
+                Text("Try Opaw Premium")
+                    .font(.opaw(15, .heavy))
+                Spacer(minLength: 0)
+                Text("7 days free")
+                    .font(.opaw(13, .bold))
+                    .foregroundStyle(Color(hex: 0xAAAAAA))
+                Icon(.chevronRight, size: 16, weight: 2.6)
+            }
+            .foregroundStyle(.white)
+            .padding(.leading, 18)
+            .padding(.trailing, 16)
+            .frame(height: 50)
+            .background(Color(hex: 0x111111), in: Capsule())
+        }
+        .buttonStyle(.pressable)
+        .padding(.bottom, 0)
+    }
+
+    private func card<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        VStack(spacing: 0) { content() }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 4)
+            .whiteCard()
+    }
+
+    private func rowLabel(_ icon: DesignIcon, _ title: String, first: Bool, @ViewBuilder trailing: () -> some View) -> some View {
+        HStack(spacing: 14) {
+            RowIcon(icon: icon)
+            Text(title)
+                .font(.opaw(16, .bold))
+                .foregroundStyle(Color.opawInk)
+            Spacer(minLength: 8)
+            trailing()
+        }
+        .padding(.vertical, 13)
+        .contentShape(Rectangle())
+        .overlay(alignment: .top) {
+            if !first { Rectangle().fill(Color.opawHairline).frame(height: 1) }
+        }
+    }
+
+    private var chevron: some View {
+        Icon(.chevronRight, size: 16, weight: 2.6).foregroundStyle(Color.opawGhost)
+    }
+
+    private func linkRow<Destination: View>(_ icon: DesignIcon, _ title: String, value: String? = nil, first: Bool = false, @ViewBuilder destination: @escaping () -> Destination) -> some View {
+        NavigationLink {
+            destination()
+        } label: {
+            rowLabel(icon, title, first: first) {
+                if let value {
+                    Text(value)
+                        .font(.opaw(14, .semibold))
+                        .foregroundStyle(Color.opawMuted)
+                }
+                chevron
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func actionRow(_ icon: DesignIcon, _ title: String, first: Bool = false, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            rowLabel(icon, title, first: first) { chevron }
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// A row free users see locked; tapping it opens the paywall until Premium is on.
+    private func premiumRow(_ icon: DesignIcon, _ title: String, first: Bool = false, action: @escaping () -> Void) -> some View {
+        Button {
+            if premium.isPremium { action() } else { showPaywall = true }
+        } label: {
+            rowLabel(icon, title, first: first) {
+                if premium.isPremium { chevron } else { PremiumTag() }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// Profile > Units: kilometres and kilograms, or miles and pounds.
+struct UnitsView: View {
+    @AppStorage(OpawFormat.imperialKey, store: OpawDefaults.shared) private var imperial = false
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ScreenHeader(title: "Units") {
+                Button { dismiss() } label: { RoundIcon(symbol: "chevron.left") }
+                    .buttonStyle(.pressable)
+                    .accessibilityLabel("Back")
+            } trailing: {
+                Color.clear.frame(width: 54, height: 54)
+            }
+            VStack(spacing: 0) {
+                option("Metric", detail: "Kilometres and kilograms", selected: !imperial, first: true) { imperial = false }
+                option("Imperial", detail: "Miles and pounds", selected: imperial) { imperial = true }
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 4)
+            .whiteCard()
+            .padding(.horizontal, 20)
+            .padding(.top, 18)
+            Spacer()
+        }
+        .opawBackground()
+        .toolbar(.hidden, for: .navigationBar)
+        .onChange(of: imperial) { _, _ in
+            WidgetCenter.shared.reloadAllTimelines()
+        }
+    }
+
+    private func option(_ title: String, detail: String, selected: Bool, first: Bool = false, action: @escaping () -> Void) -> some View {
+        Button {
+            Haptics.select()
+            action()
+        } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(title)
+                        .font(.opaw(16, .heavy))
+                        .foregroundStyle(Color.opawInk)
+                    Text(detail)
+                        .font(.opaw(13, .medium))
+                        .foregroundStyle(Color.opawMuted)
+                }
+                Spacer()
+                ZStack {
+                    if selected {
+                        Circle().fill(Color(hex: 0x111111))
+                        Icon(.check, size: 12).foregroundStyle(.white)
+                    } else {
+                        Circle().strokeBorder(Color(hex: 0xD4D4D8), lineWidth: 2)
+                    }
+                }
+                .frame(width: 22, height: 22)
+            }
+            .padding(.vertical, 14)
+            .contentShape(Rectangle())
+            .overlay(alignment: .top) {
+                if !first { Rectangle().fill(Color.opawHairline).frame(height: 1) }
+            }
+        }
+        .buttonStyle(.plain)
     }
 }
 
