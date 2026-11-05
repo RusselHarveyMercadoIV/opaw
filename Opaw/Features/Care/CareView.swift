@@ -146,11 +146,11 @@ struct CareView: View {
     }
 
     private func grid(dog: Dog, now: Date) -> some View {
-        let medsLate = dog.medsStatus(now: now).overdue
+        let due = dog.dueKinds(now: now)
         return LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0), count: 4), spacing: 16) {
             ForEach(Self.gridKinds) { kind in
                 let count = dog.count(kind, on: now)
-                let alert = kind == .meds && medsLate
+                let alert = due.contains(kind)
                 Button {
                     tap(kind, dog: dog)
                 } label: {

@@ -125,17 +125,17 @@ struct TodayView: View {
         let mealGoal = max(1, dog.mealHours.count)
         let medsNeeded = dog.reminders(on: day).filter { $0.kind == .meds }.count
         let medsTaken = dog.count(.meds, on: day)
-        let medsAlert = isToday && medsNeeded > 0 && medsTaken < medsNeeded && dog.medsStatus(now: now).next.map { $0 <= now.addingTimeInterval(3 * 3600) } == true
+        let due = isToday ? dog.dueKinds(now: now) : []
         let bath = dog.daysSince([.bath], now: reference)
         let groom = dog.daysSince([.brush, .nails], now: reference)
 
         return LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
-            tile(.meal, value: "\(meals)", suffix: "/\(mealGoal)", label: "Food")
-            tile(.pee, value: "\(dog.count(.pee, on: day))", label: "Pee")
-            tile(.poop, value: "\(dog.count(.poop, on: day))", label: "Poop")
-            tile(.bath, value: bath.map { "\($0)d" } ?? "–", label: "Bath")
-            tile(.meds, value: medsNeeded > 0 ? "\(medsTaken)/\(medsNeeded)" : "\(medsTaken)", label: "Meds", alert: medsAlert)
-            tile(.brush, value: groom.map { "\($0)d" } ?? "–", label: "Groom")
+            tile(.meal, value: "\(meals)", suffix: "/\(mealGoal)", label: "Food", alert: due.contains(.meal))
+            tile(.pee, value: "\(dog.count(.pee, on: day))", label: "Pee", alert: due.contains(.pee))
+            tile(.poop, value: "\(dog.count(.poop, on: day))", label: "Poop", alert: due.contains(.poop))
+            tile(.bath, value: bath.map { "\($0)d" } ?? "–", label: "Bath", alert: due.contains(.bath))
+            tile(.meds, value: medsNeeded > 0 ? "\(medsTaken)/\(medsNeeded)" : "\(medsTaken)", label: "Meds", alert: due.contains(.meds))
+            tile(.brush, value: groom.map { "\($0)d" } ?? "–", label: "Groom", alert: !due.isDisjoint(with: [.brush, .nails]))
         }
     }
 

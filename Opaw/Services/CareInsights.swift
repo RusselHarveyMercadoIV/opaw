@@ -46,6 +46,37 @@ extension Dog {
             .sorted { $0.0 < $1.0 }
     }
 
+    /// The day's reminders that have a log. Each log counts for one reminder only, so a single
+    /// meal can't tick off breakfast and dinner, and a log just before a reminder counts for it
+    /// rather than for the one before.
+    func doneReminderIDs(on day: Date) -> Set<UUID> {
+        let todays = reminders(on: day).sorted { $0.dueDate(on: day) < $1.dueDate(on: day) }
+        let logs = (careEvents ?? []).sorted { $0.date < $1.date }
+        var used = Set<UUID>()
+        var done = Set<UUID>()
+        for (index, reminder) in todays.enumerated() {
+            let due = reminder.dueDate(on: day)
+            var end = due.addingTimeInterval(6 * 3600)
+            if let next = todays[(index + 1)...].first(where: { $0.kind == reminder.kind }) {
+                end = min(end, next.dueDate(on: day).addingTimeInterval(-90 * 60))
+            }
+            let start = due.addingTimeInterval(-90 * 60)
+            if let log = logs.first(where: { !used.contains($0.id) && $0.kind == reminder.kind && $0.date >= start && $0.date < end }) {
+                used.insert(log.id)
+                done.insert(reminder.id)
+            }
+        }
+        return done
+    }
+
+    /// Care kinds with a reminder that isn't done and is late or due within three hours.
+    func dueKinds(now: Date = Date()) -> Set<CareKind> {
+        let done = doneReminderIDs(on: now)
+        return Set(reminders(on: now).filter {
+            !done.contains($0.id) && $0.dueDate(on: now).timeIntervalSince(now) < 3 * 3600
+        }.map(\.kind))
+    }
+
     /// Days since the last log of a kind, if there is one.
     func daysSince(_ kinds: Set<CareKind>, now: Date = Date(), calendar: Calendar = .current) -> Int? {
         guard let last = (careEvents ?? []).filter({ kinds.contains($0.kind) && $0.date <= now }).map(\.date).max() else { return nil }
@@ -113,11 +144,9 @@ extension Reminder {
         calendar.date(bySettingHour: hour, minute: minute, second: 0, of: day) ?? day
     }
 
-    /// Done when a matching log falls between 90 minutes before and 6 hours after the due time.
+    /// Done when a log of its kind falls from 90 minutes before to 6 hours after it is due
+    /// and no other reminder has claimed that log.
     func isDone(on day: Date, for dog: Dog) -> Bool {
-        let due = dueDate(on: day)
-        return (dog.careEvents ?? []).contains {
-            $0.kind == kind && $0.date >= due.addingTimeInterval(-90 * 60) && $0.date <= due.addingTimeInterval(6 * 3600)
-        }
+        dog.doneReminderIDs(on: day).contains(id)
     }
 }
