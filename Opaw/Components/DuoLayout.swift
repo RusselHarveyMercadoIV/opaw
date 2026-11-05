@@ -8,6 +8,10 @@ private struct DuoOpenKey: EnvironmentKey {
     static let defaultValue = false
 }
 
+private struct DuoClosedKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
 private struct WindowWidthKey: EnvironmentKey {
     static let defaultValue: CGFloat = 0
 }
@@ -17,6 +21,13 @@ extension EnvironmentValues {
     var duoOpen: Bool {
         get { self[DuoOpenKey.self] }
         set { self[DuoOpenKey.self] = newValue }
+    }
+
+    /// True on a short, wide-ish portrait display like the closed outer screen (about 466 × 678),
+    /// where Home tightens its vertical spacing (6d).
+    var duoClosed: Bool {
+        get { self[DuoClosedKey.self] }
+        set { self[DuoClosedKey.self] = newValue }
     }
 
     /// The window's full width, so panes can find the fold wherever they sit.
@@ -39,6 +50,10 @@ enum Duo {
     static func isOpen(_ size: CGSize) -> Bool {
         size.width >= 700 && size.width > size.height && size.height >= 500
     }
+
+    static func isClosed(_ size: CGSize) -> Bool {
+        size.height > size.width && size.height < 760 && size.width / size.height > 0.62
+    }
 }
 
 extension View {
@@ -54,6 +69,7 @@ private struct DuoEnvironmentModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .environment(\.duoOpen, Duo.isOpen(size))
+            .environment(\.duoClosed, Duo.isClosed(size))
             .environment(\.windowWidth, size.width)
             .background {
                 GeometryReader { proxy in

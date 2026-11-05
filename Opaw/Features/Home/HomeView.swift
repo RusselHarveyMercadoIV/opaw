@@ -16,6 +16,7 @@ struct HomeView: View {
     @Environment(PremiumStore.self) private var premium
     @State private var path = NavigationPath()
     @Environment(\.duoOpen) private var duoOpen
+    @Environment(\.duoClosed) private var duoClosed
     @Environment(TabReselect.self) private var reselect: TabReselect?
 
     private static let addPage = "add"
@@ -31,7 +32,7 @@ struct HomeView: View {
                     duoHome
                 } else {
                     ZStack(alignment: .top) {
-                        pager(compact: false)
+                        pager(compact: duoClosed)
                             .ignoresSafeArea(edges: .bottom)
                         topBar
                     }
@@ -113,7 +114,7 @@ struct HomeView: View {
         Button {
             if let dog = currentDog { path.append(HomeRoute.family(dog.id)) }
         } label: {
-            familyChip(compact: duoOpen)
+            familyChip(compact: duoOpen || duoClosed)
         }
         .buttonStyle(.pressable)
         .accessibilityLabel("Family")
@@ -126,14 +127,14 @@ struct HomeView: View {
             familyButton
             Spacer()
             if page != Self.addPage, let dog = currentDog {
-                ShareAvatarButton(dog: dog)
-                Button { showSettings = true } label: { TopCircle { Icon(.settings, size: 23) } }
+                ShareAvatarButton(dog: dog, size: duoClosed ? 54 : 58)
+                Button { showSettings = true } label: { TopCircle(size: duoClosed ? 54 : 58) { Icon(.settings, size: duoClosed ? 22 : 23) } }
                     .buttonStyle(.pressable)
                     .accessibilityLabel("Settings")
             }
         }
         .padding(.horizontal, 20)
-        .padding(.top, 10)
+        .padding(.top, duoClosed ? 8 : 10)
     }
 
     /// The design's family chip: 58 high with a chevron on the phone, 54 high without one on the open display.
@@ -281,6 +282,7 @@ private struct PetPage: View {
     let dots: AnyView
     var compact = false
     let openToday: () -> Void
+    @Environment(\.duoClosed) private var duoClosed
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 60)) { context in
@@ -294,7 +296,8 @@ private struct PetPage: View {
         }
     }
 
-    /// The open display's left pane (6a): avatar, name, dots and chips, without the quote and stats.
+    /// The open display's left pane (6a) and the closed display (6d): avatar, name, dots and chips,
+    /// without the quote and stats.
     private func compactPage(report: CareReport, mood: AvatarMood) -> some View {
         ScrollView {
             VStack(spacing: 0) {
@@ -303,17 +306,17 @@ private struct PetPage: View {
                         .sticker(edge: 6, blur: 12, y: 14)
                         .loopMotion(report.tier.motion)
                         .opacity(report.tier == .needsYou ? 0.6 : 1)
-                        .frame(width: 220, height: 250)
+                        .frame(width: duoClosed ? 210 : 220, height: duoClosed ? 230 : 250)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("\(dog.name), \(report.tier.title). Open avatar studio.")
                 Text(dog.name)
-                    .font(.opaw(46, .black))
-                    .tracking(-0.46)
+                    .font(.opaw(duoClosed ? 44 : 46, .black))
+                    .tracking(duoClosed ? -0.44 : -0.46)
                     .foregroundStyle(Color.opawInk)
                     .lineLimit(1)
                     .minimumScaleFactor(0.5)
-                    .padding(.top, 14)
+                    .padding(.top, duoClosed ? 12 : 14)
                 dots
                     .padding(.top, 10)
                 chipRow
@@ -321,7 +324,7 @@ private struct PetPage: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.top, 78)
-            .padding(.bottom, 24)
+            .padding(.bottom, duoClosed ? 110 : 24)
         }
         .scrollIndicators(.hidden)
     }

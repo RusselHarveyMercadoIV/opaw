@@ -20,91 +20,15 @@ struct PaywallView: View {
     private var surface: Color { dark ? Color(hex: 0x1C1C1F) : .white }
     private var background: Color { dark ? Color(hex: 0x0D0D0F) : Color(hex: 0xF4F4F5) }
 
+    @Environment(\.duoOpen) private var duoOpen
+
     var body: some View {
-        VStack(spacing: 0) {
-            StickerPet(image: petImage, edge: 5, motion: .bob, duration: 3.2)
-                .frame(width: 112, height: 126)
-                .frame(height: 132)
-                .padding(.top, 4)
-            VStack(spacing: 4) {
-                Text("Opaw Premium")
-                    .font(.opaw(13, .heavy))
-                    .foregroundStyle(muted)
-                Text("Give \(petName) the best care")
-                    .font(.opaw(30, .black))
-                    .foregroundStyle(ink)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.7)
+        Group {
+            if duoOpen {
+                duoBody
+            } else {
+                phoneBody
             }
-            .padding(.top, 8)
-            .padding(.horizontal, 20)
-
-            features
-                .padding(.horizontal, 24)
-                .padding(.top, 16)
-
-            VStack(spacing: 8) {
-                planRow(.yearly)
-                planRow(.monthly)
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 18)
-
-            Button {
-                Task { await buy() }
-            } label: {
-                if store.isPurchasing {
-                    ProgressView().tint(dark ? Color(hex: 0x111111) : .white)
-                } else {
-                    Text(trialEligible ? "Start 7-day free trial" : "Continue")
-                }
-            }
-            .buttonStyle(BlackPillButtonStyle(height: 62, inverted: dark))
-            .disabled(store.product(plan) == nil || store.isPurchasing)
-            .padding(.horizontal, 20)
-            .padding(.top, 16)
-
-            Text(caption)
-                .font(.opaw(14, .semibold))
-                .foregroundStyle(muted)
-                .padding(.top, 10)
-
-            if trialEligible {
-                timeline
-                    .padding(.horizontal, 36)
-                    .padding(.top, 14)
-            }
-
-            Spacer(minLength: 12)
-
-            HStack(spacing: 18) {
-                Button("Restore purchases") {
-                    Task {
-                        await store.restore()
-                        if store.isPremium { onClose(true) }
-                    }
-                }
-                Link("Terms", destination: URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!)
-                Link("Privacy", destination: URL(string: "https://github.com/RusselHarveyMercadoIV/opaw/blob/main/docs/PRIVACY.md")!)
-            }
-            .font(.opaw(13, .bold))
-            .foregroundStyle(muted)
-            .padding(.bottom, 12)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .overlay(alignment: .topLeading) {
-            Button { onClose(false) } label: {
-                Icon(.close, size: 22)
-                    .foregroundStyle(ink)
-                    .frame(width: 54, height: 54)
-                    .background(surface, in: Circle())
-                    .shadow(color: .black.opacity(dark ? 0 : 0.07), radius: 13, y: 10)
-            }
-            .buttonStyle(.pressable)
-            .accessibilityLabel("Close")
-            .padding(.leading, 20)
-            .padding(.top, 6)
         }
         .background(background.ignoresSafeArea())
         .task(id: plan) { trialEligible = await store.isEligibleForTrial(plan) || store.products.isEmpty }
@@ -115,10 +39,158 @@ struct PaywallView: View {
         }
     }
 
+    private var phoneBody: some View {
+        VStack(spacing: 0) {
+            title(petSize: CGSize(width: 112, height: 126))
+                .padding(.horizontal, 20)
+            features
+                .padding(.horizontal, 24)
+                .padding(.top, 16)
+            plans
+                .padding(.horizontal, 20)
+                .padding(.top, 18)
+            buyButton
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
+            captionText
+                .padding(.top, 10)
+            if trialEligible {
+                timeline
+                    .padding(.horizontal, 36)
+                    .padding(.top, 14)
+            }
+            Spacer(minLength: 12)
+            links
+                .padding(.bottom, 12)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .overlay(alignment: .topLeading) {
+            closeButton
+                .padding(.leading, 20)
+                .padding(.top, 6)
+        }
+    }
+
+    // MARK: Open display (6c)
+
+    /// What Premium adds on the left; plans, the button and the timeline on the right.
+    private var duoBody: some View {
+        DuoPanes(rail: false, leading: 40) {
+            VStack(spacing: 0) {
+                title(petSize: CGSize(width: 120, height: 134))
+                features
+                    .padding(.horizontal, 16)
+                    .padding(.top, 18)
+                Spacer(minLength: 0)
+            }
+            .padding(.trailing, 16)
+            .padding(.top, 10)
+        } right: {
+            VStack(spacing: 0) {
+                plans
+                buyButton
+                    .padding(.top, 16)
+                captionText
+                    .padding(.top, 10)
+                if trialEligible {
+                    timeline
+                        .padding(.horizontal, 14)
+                        .padding(.top, 16)
+                }
+                Spacer(minLength: 12)
+                links
+                    .padding(.bottom, 6)
+            }
+            .padding(.top, 44)
+            .padding(.leading, 10)
+            .padding(.trailing, 12)
+        }
+        .overlay(alignment: .topLeading) {
+            closeButton
+                .padding(.leading, 20)
+                .padding(.top, 10)
+        }
+    }
+
+    private func title(petSize: CGSize) -> some View {
+        VStack(spacing: 0) {
+            StickerPet(image: petImage, edge: 5, motion: .bob, duration: 3.2)
+                .frame(width: petSize.width, height: petSize.height)
+                .frame(height: petSize.height + (duoOpen ? 0 : 6))
+                .padding(.top, duoOpen ? 0 : 4)
+            VStack(spacing: duoOpen ? 0 : 4) {
+                Text("Opaw Premium")
+                    .font(.opaw(13, .heavy))
+                    .foregroundStyle(muted)
+                Text("Give \(petName) the best care")
+                    .font(.opaw(30, .black))
+                    .foregroundStyle(ink)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.7)
+            }
+            .padding(.top, duoOpen ? 10 : 8)
+        }
+    }
+
+    private var plans: some View {
+        VStack(spacing: 8) {
+            planRow(.yearly)
+            planRow(.monthly)
+        }
+    }
+
+    private var buyButton: some View {
+        Button {
+            Task { await buy() }
+        } label: {
+            if store.isPurchasing {
+                ProgressView().tint(dark ? Color(hex: 0x111111) : .white)
+            } else {
+                Text(trialEligible ? "Start 7-day free trial" : "Continue")
+            }
+        }
+        .buttonStyle(BlackPillButtonStyle(height: 62, inverted: dark))
+        .disabled(store.product(plan) == nil || store.isPurchasing)
+    }
+
+    private var captionText: some View {
+        Text(caption)
+            .font(.opaw(14, .semibold))
+            .foregroundStyle(muted)
+    }
+
+    private var links: some View {
+        HStack(spacing: 18) {
+            Button("Restore purchases") {
+                Task {
+                    await store.restore()
+                    if store.isPremium { onClose(true) }
+                }
+            }
+            Link("Terms", destination: URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!)
+            Link("Privacy", destination: URL(string: "https://github.com/RusselHarveyMercadoIV/opaw/blob/main/docs/PRIVACY.md")!)
+        }
+        .font(.opaw(13, .bold))
+        .foregroundStyle(muted)
+    }
+
+    private var closeButton: some View {
+        Button { onClose(false) } label: {
+            Icon(.close, size: 22)
+                .foregroundStyle(ink)
+                .frame(width: 54, height: 54)
+                .background(surface, in: Circle())
+                .shadow(color: .black.opacity(dark ? 0 : 0.07), radius: 13, y: 10)
+        }
+        .buttonStyle(.pressable)
+        .accessibilityLabel("Close")
+    }
+
     // MARK: Pieces
 
     private var features: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: duoOpen ? 9 : 8) {
             feature(.pets, "Multiple pets, each with an avatar")
             feature(.bell, "Unlimited reminders")
             feature(.chart, "Full history and stats")
@@ -282,8 +354,66 @@ struct OneTimeOfferView: View {
     @Environment(PremiumStore.self) private var store
     @State private var endsAt = Date().addingTimeInterval(10 * 60)
     @State private var appeared = false
+    @Environment(\.duoOpen) private var duoOpen
 
     var body: some View {
+        if duoOpen {
+            duoBody
+        } else {
+            phoneBody
+        }
+    }
+
+    // MARK: Open display (6p)
+
+    /// A centered card over the dimmed screen, with the pet peeking over its corner.
+    private var duoBody: some View {
+        ZStack {
+            Color(red: 20 / 255, green: 20 / 255, blue: 22 / 255).opacity(appeared ? 0.38 : 0)
+                .ignoresSafeArea()
+            VStack(spacing: 0) {
+                offerBadge
+                countdown(box: CGSize(width: 60, height: 68), digits: 36, colon: 30)
+                    .padding(.top, 16)
+                Text("50% off your first year")
+                    .font(.opaw(32, .black))
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(Color(hex: 0x111111))
+                    .padding(.top, 18)
+                priceLine
+                    .padding(.top, 10)
+                Text("\(offerMonthly)/month, renews at \(regularPrice)")
+                    .font(.opaw(14, .semibold))
+                    .foregroundStyle(Color(hex: 0x999999))
+                Spacer(minLength: 16)
+                VStack(spacing: 12) {
+                    claimButton
+                    Button("No thanks") { onDone(false) }
+                        .font(.opaw(15, .bold))
+                        .foregroundStyle(Color(hex: 0x999999))
+                }
+            }
+            .padding(.horizontal, 28)
+            .padding(.vertical, 24)
+            .frame(width: 440)
+            .frame(maxHeight: 520)
+            .background(Color.white, in: RoundedRectangle(cornerRadius: 36, style: .continuous))
+            .overlay(alignment: .topLeading) {
+                StickerPet(image: petImage, edge: 5, motion: .bob, duration: 3.2)
+                    .frame(width: 120, height: 136)
+                    .offset(x: -70, y: -30)
+            }
+            .padding(.top, 38)
+            .padding(.bottom, 10)
+            .scaleEffect(appeared ? 1 : 0.94)
+            .opacity(appeared ? 1 : 0)
+        }
+        .onAppear {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.88)) { appeared = true }
+        }
+    }
+
+    private var phoneBody: some View {
         ZStack(alignment: .bottom) {
             Color(red: 20 / 255, green: 20 / 255, blue: 22 / 255).opacity(appeared ? 0.38 : 0)
                 .ignoresSafeArea()
@@ -313,31 +443,11 @@ struct OneTimeOfferView: View {
     private var sheet: some View {
         VStack(spacing: 0) {
             SheetGrabber()
-            HStack(spacing: 6) {
-                Icon(.clock, size: 14)
-                Text("One-time offer")
-                    .font(.opaw(13, .heavy))
-            }
-            .foregroundStyle(.white)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
-            .background(Color.opawAlert, in: Capsule())
-            .padding(.top, 20)
+            offerBadge
+                .padding(.top, 20)
 
-            TimelineView(.periodic(from: .now, by: 1)) { context in
-                let left = max(0, Int(endsAt.timeIntervalSince(context.date)))
-                HStack(spacing: 8) {
-                    timeBox(String(format: "%02d", left / 60))
-                    Text(":")
-                        .font(.opaw(32, .black))
-                        .foregroundStyle(Color(hex: 0xCCCCCC))
-                    timeBox(String(format: "%02d", left % 60))
-                }
-                .onChange(of: left == 0) { _, ended in
-                    if ended { onDone(false) }
-                }
-            }
-            .padding(.top, 18)
+            countdown(box: CGSize(width: 64, height: 72), digits: 38, colon: 32)
+                .padding(.top, 18)
 
             Text("Ends when the timer runs out")
                 .font(.opaw(13, .semibold))
@@ -351,15 +461,8 @@ struct OneTimeOfferView: View {
                 .padding(.top, 22)
                 .padding(.horizontal, 40)
 
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(regularPrice)
-                    .font(.opaw(20, .bold))
-                    .strikethrough()
-                    .foregroundStyle(Color(hex: 0xAAAAAA))
-                (Text(offerPrice).font(.opaw(30, .black)).foregroundColor(Color(hex: 0x111111))
-                    + Text("/year").font(.opaw(16, .black)).foregroundColor(Color(hex: 0x999999)))
-            }
-            .padding(.top, 12)
+            priceLine
+                .padding(.top, 12)
 
             Text("\(offerMonthly)/month, renews at \(regularPrice)")
                 .font(.opaw(14, .semibold))
@@ -367,20 +470,8 @@ struct OneTimeOfferView: View {
 
             Spacer(minLength: 20)
 
-            Button {
-                Task {
-                    guard let product = store.offerProduct else { return }
-                    if await store.purchase(product) {
-                        Haptics.success()
-                        onDone(true)
-                    }
-                }
-            } label: {
-                if store.isPurchasing { ProgressView().tint(.white) } else { Text("Claim offer") }
-            }
-            .buttonStyle(BlackPillButtonStyle(height: 62))
-            .disabled(store.offerProduct == nil || store.isPurchasing)
-            .padding(.horizontal, 20)
+            claimButton
+                .padding(.horizontal, 20)
 
             Button("No thanks") { onDone(false) }
                 .font(.opaw(15, .bold))
@@ -398,12 +489,67 @@ struct OneTimeOfferView: View {
         )
     }
 
-    private func timeBox(_ text: String) -> some View {
+    private var offerBadge: some View {
+        HStack(spacing: 6) {
+            Icon(.clock, size: 14)
+            Text("One-time offer")
+                .font(.opaw(13, .heavy))
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .background(Color.opawAlert, in: Capsule())
+    }
+
+    private func countdown(box: CGSize, digits: CGFloat, colon: CGFloat) -> some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            let left = max(0, Int(endsAt.timeIntervalSince(context.date)))
+            HStack(spacing: 8) {
+                timeBox(String(format: "%02d", left / 60), box: box, digits: digits)
+                Text(":")
+                    .font(.opaw(colon, .black))
+                    .foregroundStyle(Color(hex: 0xCCCCCC))
+                timeBox(String(format: "%02d", left % 60), box: box, digits: digits)
+            }
+            .onChange(of: left == 0) { _, ended in
+                if ended { onDone(false) }
+            }
+        }
+    }
+
+    private var priceLine: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text(regularPrice)
+                .font(.opaw(20, .bold))
+                .strikethrough()
+                .foregroundStyle(Color(hex: 0xAAAAAA))
+            (Text(offerPrice).font(.opaw(30, .black)).foregroundColor(Color(hex: 0x111111))
+                + Text("/year").font(.opaw(16, .black)).foregroundColor(Color(hex: 0x999999)))
+        }
+    }
+
+    private var claimButton: some View {
+        Button {
+            Task {
+                guard let product = store.offerProduct else { return }
+                if await store.purchase(product) {
+                    Haptics.success()
+                    onDone(true)
+                }
+            }
+        } label: {
+            if store.isPurchasing { ProgressView().tint(.white) } else { Text("Claim offer") }
+        }
+        .buttonStyle(BlackPillButtonStyle(height: 62))
+        .disabled(store.offerProduct == nil || store.isPurchasing)
+    }
+
+    private func timeBox(_ text: String, box: CGSize, digits: CGFloat) -> some View {
         Text(text)
-            .font(.opaw(38, .black))
+            .font(.opaw(digits, .black))
             .monospacedDigit()
             .foregroundStyle(Color(hex: 0x111111))
-            .frame(width: 64, height: 72)
+            .frame(width: box.width, height: box.height)
             .background(Color(hex: 0xF1F1F2), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 

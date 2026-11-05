@@ -26,12 +26,15 @@ struct OnboardingView: View {
     @State private var foundDog = false
     @State private var showPaywall = false
     @State private var showOffer = false
+    @Environment(\.duoOpen) private var duoOpen
 
     static let defaultTracked = [CareKind.meal, .water, .pee, .poop, .weight].map(\.rawValue) + [TrackOption.walkKey]
 
     var body: some View {
         ZStack {
             page
+                // Steps without a two-pane design keep the phone layout, centered.
+                .frame(maxWidth: duoOpen && ![.camera, .details, .reveal].contains(step) ? 480 : .infinity)
                 .id(step)
                 .transition(.asymmetric(
                     insertion: .offset(x: forward ? 56 : -56).combined(with: .opacity),
@@ -126,6 +129,7 @@ struct OnboardingView: View {
 /// Back button, six progress bars and "n of 6".
 private struct StepHeader: View {
     let index: Int
+    var inset: CGFloat = 20
     let onBack: () -> Void
 
     var body: some View {
@@ -146,7 +150,7 @@ private struct StepHeader: View {
                 .foregroundStyle(Color.opawMuted)
                 .frame(width: 44, alignment: .trailing)
         }
-        .padding(.horizontal, 20)
+        .padding(.horizontal, inset)
         .padding(.top, 10)
         .accessibilityElement(children: .contain)
         .accessibilityValue("Step \(index) of 6")
@@ -270,17 +274,111 @@ private struct CameraStep: View {
     @State private var pick: PhotosPickerItem?
     @State private var showLibrary = false
     @State private var isCapturing = false
+    @Environment(\.duoOpen) private var duoOpen
 
     var body: some View {
-        ZStack(alignment: .top) {
-            Group {
-                if camera.isAvailable {
-                    CameraPreview(session: camera.session)
-                } else {
-                    Color(hex: 0xE6E6E8)
+        Group {
+            if duoOpen {
+                duoBody
+            } else {
+                phoneBody
+            }
+        }
+        .task { await camera.start() }
+        .onDisappear { camera.stop() }
+        .photosPicker(isPresented: $showLibrary, selection: $pick, matching: .images)
+        .onChange(of: pick) { _, item in
+            guard let item else { return }
+            Task {
+                if let data = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: data) {
+                    onPhoto(image)
                 }
             }
-            .ignoresSafeArea()
+        }
+    }
+
+    private var preview: some View {
+        Group {
+            if camera.isAvailable {
+                CameraPreview(session: camera.session)
+            } else {
+                Color(hex: 0xE6E6E8)
+            }
+        }
+    }
+
+    // MARK: Open display (6l)
+
+    private var duoBody: some View {
+        DuoPanes(rail: false, bleedLeft: true) {
+            preview
+                .clipped()
+                .ignoresSafeArea(edges: .vertical)
+                .overlay {
+                    Brackets()
+                        .padding(.horizontal, 40)
+                        .padding(.top, 40)
+                        .padding(.bottom, 37)
+                }
+        } right: {
+            VStack(alignment: .leading, spacing: 0) {
+                StepHeader(index: 1, inset: 0, onBack: onBack)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Start with a photo of your pet")
+                        .font(.opaw(30, .black))
+                        .foregroundStyle(Color.opawInk)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("We use it to build the avatar and work out the species and breed.")
+                        .font(.opaw(16, .medium))
+                        .foregroundStyle(Color.opawMuted)
+                        .lineSpacing(5)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.top, 26)
+                WrapLayout(spacing: 6) {
+                    ForEach(["Whole body", "Good light", "One pet only"], id: \.self) { tip in
+                        HStack(spacing: 6) {
+                            Icon(.check, size: 12, weight: 3.4)
+                            Text(tip)
+                                .font(.opaw(13, .bold))
+                        }
+                        .foregroundStyle(Color.opawInk)
+                        .padding(.leading, 10)
+                        .padding(.trailing, 12)
+                        .padding(.vertical, 8)
+                        .background(Color.opawSurface, in: Capsule())
+                        .shadow(color: .black.opacity(0.05), radius: 8, y: 6)
+                    }
+                }
+                .padding(.top, 18)
+                Spacer(minLength: 16)
+                HStack {
+                    libraryButton
+                    Spacer()
+                    shutterButton(ring: Color.opawCream)
+                    Spacer()
+                    Button { camera.flip() } label: {
+                        Icon(.refresh, size: 22)
+                            .foregroundStyle(Color(hex: 0x111111))
+                            .frame(width: 54, height: 54)
+                            .background(Color.white, in: Circle())
+                            .floatingShadow()
+                    }
+                    .buttonStyle(.pressable)
+                    .opacity(camera.isAvailable ? 1 : 0.4)
+                    .disabled(!camera.isAvailable)
+                    .accessibilityLabel("Flip camera")
+                }
+                .padding(.horizontal, 30)
+                .padding(.bottom, 10)
+            }
+        }
+    }
+
+    private var phoneBody: some View {
+        ZStack(alignment: .top) {
+            preview
+                .ignoresSafeArea()
 
             VStack(spacing: 0) {
                 StepHeader(index: 1, onBack: onBack)
@@ -295,17 +393,6 @@ private struct CameraStep: View {
                         .padding(.bottom, 18)
                 }
                 controls
-            }
-        }
-        .task { await camera.start() }
-        .onDisappear { camera.stop() }
-        .photosPicker(isPresented: $showLibrary, selection: $pick, matching: .images)
-        .onChange(of: pick) { _, item in
-            guard let item else { return }
-            Task {
-                if let data = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: data) {
-                    onPhoto(image)
-                }
             }
         }
     }
@@ -323,8 +410,7 @@ private struct CameraStep: View {
         .shadow(color: .black.opacity(0.1), radius: 13, y: 10)
     }
 
-    private var controls: some View {
-        HStack {
+    private var libraryButton: some View {
             Button { showLibrary = true } label: {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(Color(hex: 0xE6E6E8))
@@ -340,7 +426,9 @@ private struct CameraStep: View {
             }
             .buttonStyle(.pressable)
             .accessibilityLabel("Choose from library")
-            Spacer()
+    }
+
+    private func shutterButton(ring: Color) -> some View {
             Button {
                 if camera.isAvailable {
                     guard !isCapturing else { return }
@@ -358,13 +446,20 @@ private struct CameraStep: View {
                     .fill(Color(hex: 0x111111))
                     .frame(width: 84, height: 84)
                     .padding(5)
-                    .background(Circle().fill(Color.white))
+                    .background(Circle().fill(ring))
                     .padding(4)
                     .background(Circle().fill(Color(hex: 0x111111)))
                     .scaleEffect(isCapturing ? 0.92 : 1)
             }
             .buttonStyle(.pressable)
             .accessibilityLabel("Take photo")
+    }
+
+    private var controls: some View {
+        HStack {
+            libraryButton
+            Spacer()
+            shutterButton(ring: .white)
             Spacer()
             Button { camera.flip() } label: {
                 Icon(.refresh, size: 22)
@@ -440,8 +535,77 @@ private struct DetailsStep: View {
     @State private var field: Field?
     @State private var progress = 0.0
     @FocusState private var nameFocused: Bool
+    @Environment(\.duoOpen) private var duoOpen
 
     var body: some View {
+        Group {
+            if duoOpen {
+                duoBody
+            } else {
+                phoneBody
+            }
+        }
+        .sheet(item: $field) { field in
+            FieldSheet(field: field, draft: $draft)
+        }
+        .task {
+            withAnimation(.easeOut(duration: 6)) { progress = 0.9 }
+            try? await Task.sleep(for: .milliseconds(400))
+            if draft.name.isEmpty { nameFocused = true }
+        }
+    }
+
+    // MARK: Open display (6m)
+
+    private var duoBody: some View {
+        DuoPanes(rail: false, leading: 36) {
+            VStack(alignment: .leading, spacing: 0) {
+                Group {
+                    if let image = capture.original {
+                        Image(uiImage: image).resizable().scaledToFill()
+                    } else {
+                        Color(hex: 0xE6E6E8)
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
+                Text(title)
+                    .font(.opaw(26, .black))
+                    .foregroundStyle(Color.opawInk)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .contentTransition(.opacity)
+                    .padding(.top, 16)
+                Text(isProcessing ? "Building the avatar while you finish" : "Avatar ready")
+                    .font(.opaw(14, .medium))
+                    .foregroundStyle(Color.opawMuted)
+                    .padding(.top, 4)
+                ProgressBar(value: isProcessing ? progress : 1)
+                    .padding(.top, 12)
+            }
+            .padding(.trailing, 26)
+            .padding(.top, 16)
+            .padding(.bottom, 6)
+        } right: {
+            VStack(spacing: 0) {
+                StepHeader(index: 2, inset: 0, onBack: onBack)
+                ScrollView {
+                    card
+                        .padding(.horizontal, 20)
+                        .padding(.top, 16)
+                        .padding(.bottom, 16)
+                }
+                .scrollIndicators(.hidden)
+                .scrollDismissesKeyboard(.interactively)
+                .padding(.horizontal, -20)
+                Button("Continue", action: onNext)
+                    .buttonStyle(BlackPillButtonStyle(height: 62))
+                    .disabled(!draft.isValid)
+            }
+        }
+    }
+
+    private var phoneBody: some View {
         VStack(spacing: 0) {
             StepHeader(index: 2, onBack: onBack)
             ScrollView {
@@ -466,14 +630,6 @@ private struct DetailsStep: View {
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
             BottomActions(title: "Continue", isEnabled: draft.isValid, action: onNext)
-        }
-        .sheet(item: $field) { field in
-            FieldSheet(field: field, draft: $draft)
-        }
-        .task {
-            withAnimation(.easeOut(duration: 6)) { progress = 0.9 }
-            try? await Task.sleep(for: .milliseconds(400))
-            if draft.name.isEmpty { nameFocused = true }
         }
     }
 
@@ -527,7 +683,7 @@ private struct DetailsStep: View {
                     .focused($nameFocused)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.vertical, 14)
+            .padding(.vertical, duoOpen ? 12 : 14)
             row(.species, "Species", value: draft.species.capitalized, detected: foundDog && draft.species == "dog")
             row(.breed, "Breed", value: draft.breed.isEmpty ? "Add" : draft.breed, detected: capture.guess?.breed.name == draft.breed && !draft.breed.isEmpty)
             row(.birthday, "Birthday", value: birthdayText)
@@ -535,7 +691,7 @@ private struct DetailsStep: View {
             row(.sex, "Sex", value: sexText)
         }
         .padding(.horizontal, 20)
-        .padding(.top, 4)
+        .padding(.top, duoOpen ? 2 : 4)
         .padding(.bottom, 2)
         .whiteCard()
     }
@@ -562,7 +718,7 @@ private struct DetailsStep: View {
                         .foregroundStyle(Color.opawGhost)
                 }
             }
-            .padding(.vertical, 15)
+            .padding(.vertical, duoOpen ? 13 : 15)
             .contentShape(Rectangle())
             .overlay(alignment: .top) { Rectangle().fill(Color.opawHairline).frame(height: 1) }
         }
@@ -781,8 +937,107 @@ private struct RevealStep: View {
     let onNext: () -> Void
 
     private var image: UIImage? { capture.cutout ?? capture.original }
+    @Environment(\.duoOpen) private var duoOpen
 
     var body: some View {
+        Group {
+            if duoOpen {
+                duoBody
+            } else {
+                phoneBody
+            }
+        }
+        .animation(.spring(response: 0.6, dampingFraction: 0.75), value: isProcessing)
+    }
+
+    // MARK: Open display (6n)
+
+    private var duoBody: some View {
+        DuoPanes(rail: false, leading: 0) {
+            ZStack(alignment: .topLeading) {
+                Group {
+                    if isProcessing {
+                        ProgressView()
+                            .controlSize(.large)
+                            .frame(width: 260, height: 290)
+                    } else {
+                        StickerPet(image: image, edge: 6, motion: .bob, duration: 3.2)
+                            .frame(width: 260, height: 290)
+                            .transition(.scale(scale: 0.7).combined(with: .opacity))
+                    }
+                }
+                .padding(.leading, 92)
+                .padding(.top, 110)
+                SpeechBubble(text: "is that me?!")
+                    .font(.opaw(15, .heavy))
+                    .padding(.leading, 270)
+                    .padding(.top, 80)
+                    .opacity(isProcessing ? 0 : 1)
+                readyChip
+                    .padding(.leading, 36)
+                    .padding(.top, 20)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        } right: {
+            VStack(alignment: .leading, spacing: 0) {
+                StepHeader(index: 3, inset: 0, onBack: onBack)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Say hi to \(name)")
+                        .font(.opaw(34, .black))
+                        .foregroundStyle(Color.opawInk)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                    Text("\(name)'s mood follows the care you log.")
+                        .font(.opaw(16, .medium))
+                        .foregroundStyle(Color.opawMuted)
+                }
+                .padding(.top, 26)
+                HStack(spacing: 10) {
+                    mood("Walked", .bob, 1.4)
+                    mood("Fed", .breathe, 2.6)
+                    mood("Ignored", .droop, 3)
+                }
+                .padding(.top, 20)
+                Spacer(minLength: 16)
+                actions(height: 62)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var readyChip: some View {
+        if isProcessing {
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.mini).tint(.white)
+                Text("Building avatar").font(.opaw(13, .heavy))
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(Color(hex: 0x111111), in: Capsule())
+        } else {
+            SparkleChip(text: "Avatar ready")
+        }
+    }
+
+    private func actions(height: CGFloat) -> some View {
+        HStack(spacing: 12) {
+            Button(action: onRetake) {
+                Icon(.refresh, size: 22)
+                    .foregroundStyle(Color(hex: 0x111111))
+                    .frame(width: height, height: height)
+                    .background(Color.white, in: Circle())
+                    .shadow(color: .black.opacity(0.08), radius: 13, y: 10)
+            }
+            .buttonStyle(.pressable)
+            .accessibilityLabel("Retake photo")
+            Button("Looks like \(name)", action: onNext)
+                .buttonStyle(BlackPillButtonStyle(height: height))
+                .disabled(isProcessing)
+        }
+    }
+
+    private var phoneBody: some View {
         VStack(spacing: 0) {
             StepHeader(index: 3, onBack: onBack)
             ZStack(alignment: .topLeading) {
@@ -803,20 +1058,7 @@ private struct RevealStep: View {
                     .padding(.leading, 218)
                     .padding(.top, 6)
                     .opacity(isProcessing ? 0 : 1)
-                Group {
-                    if isProcessing {
-                        HStack(spacing: 6) {
-                            ProgressView().controlSize(.mini).tint(.white)
-                            Text("Building avatar").font(.opaw(13, .heavy))
-                        }
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
-                        .background(Color(hex: 0x111111), in: Capsule())
-                    } else {
-                        SparkleChip(text: "Avatar ready")
-                    }
-                }
+                readyChip
                 .padding(.leading, 24)
                 .padding(.top, 14)
             }
@@ -847,34 +1089,20 @@ private struct RevealStep: View {
 
             Spacer(minLength: 16)
 
-            HStack(spacing: 12) {
-                Button(action: onRetake) {
-                    Icon(.refresh, size: 22)
-                        .foregroundStyle(Color(hex: 0x111111))
-                        .frame(width: 64, height: 64)
-                        .background(Color.white, in: Circle())
-                        .shadow(color: .black.opacity(0.08), radius: 13, y: 10)
-                }
-                .buttonStyle(.pressable)
-                .accessibilityLabel("Retake photo")
-                Button("Looks like \(name)", action: onNext)
-                    .buttonStyle(BlackPillButtonStyle())
-                    .disabled(isProcessing)
-            }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 8)
+            actions(height: 64)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 8)
         }
-        .animation(.spring(response: 0.6, dampingFraction: 0.75), value: isProcessing)
     }
 
     private func mood(_ label: String, _ motion: LoopMotion, _ duration: Double) -> some View {
         VStack(spacing: 6) {
             StickerPet(image: isProcessing ? nil : image, edge: 3, motion: motion, duration: duration)
-                .frame(width: 76, height: 84)
+                .frame(width: duoOpen ? 70 : 76, height: duoOpen ? 78 : 84)
                 .opacity(motion == .droop ? 0.6 : 1)
                 .saturation(motion == .droop ? 0.3 : 1)
                 .frame(maxWidth: .infinity)
-                .frame(height: 108)
+                .frame(height: duoOpen ? 100 : 108)
                 .whiteCard(radius: 24)
             Text(label)
                 .font(.opaw(13, .bold))
