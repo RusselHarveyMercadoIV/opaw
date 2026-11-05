@@ -14,6 +14,7 @@ struct CareView: View {
     @State private var detailKind: CareKind?
     @State private var showEditTracks = false
     @State private var amountTrack: CareTrack?
+    @State private var pendingLog: PendingLog?
     @State private var toast: CareToast?
     @State private var celebration: Badge?
     @State private var showScheduleDuo = false
@@ -54,6 +55,7 @@ struct CareView: View {
             }
             .opawBackground()
             .careToast($toast, bottom: 110)
+            .repeatLogConfirmation($pendingLog)
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(isPresented: $showScheduleDuo) {
                 if let dog { ScheduleHistoryDuo(dog: dog) }
@@ -203,6 +205,8 @@ struct CareView: View {
                 .overlay(alignment: .top) {
                     if index > 0 { Rectangle().fill(Color.opawHairline).frame(height: 1) }
                 }
+                .contentShape(Rectangle())
+                .contextMenu { deleteButton(event.id) }
             }
         }
         .padding(.horizontal, 20)
@@ -382,11 +386,22 @@ struct CareView: View {
                 .font(.opaw(15, .semibold))
                 .padding(.vertical, 10)
                 .overlay(alignment: .top) { Rectangle().fill(Color.opawHairline).frame(height: 1) }
+                .contentShape(Rectangle())
+                .contextMenu { deleteButton(event.id) }
             }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 6)
         .whiteCard()
+    }
+
+    /// Long-press a log to remove it.
+    private func deleteButton(_ eventID: UUID) -> some View {
+        Button(role: .destructive) {
+            CareRecorder.delete(eventID: eventID, in: modelContext)
+        } label: {
+            Label("Delete log", systemImage: "trash")
+        }
     }
 
     private func caringLine(_ event: CareEvent) -> String {
@@ -422,7 +437,19 @@ struct CareView: View {
         case .weight, .vet:
             detailKind = kind
         default:
-            record(CareEvent(kind: kind, dog: dog), dog: dog)
+            confirmIfRepeat(kind: kind, title: kind.title, dog: dog) {
+                record(CareEvent(kind: kind, dog: dog), dog: dog)
+            }
+        }
+    }
+
+    /// Logs straight away, or first asks "Log another?" when it looks like a repeat or more than planned.
+    private func confirmIfRepeat(kind: CareKind, trackID: UUID? = nil, title: String, dog: Dog, perform: @escaping () -> Void) {
+        if let message = CareRecorder.repeatWarning(kind: kind, trackID: trackID, title: title, dog: dog) {
+            Haptics.soft()
+            pendingLog = PendingLog(message: message, perform: perform)
+        } else {
+            perform()
         }
     }
 
@@ -439,10 +466,14 @@ struct CareView: View {
                 WidgetCenter.shared.reloadAllTimelines()
             }
         case .count:
-            record(customEvent(track, trackID: trackID, dog: dog), dog: dog)
+            confirmIfRepeat(kind: .custom, trackID: trackID, title: track.title, dog: dog) {
+                record(customEvent(track, trackID: trackID, dog: dog), dog: dog)
+            }
         case .amount:
-            Haptics.tap()
-            amountTrack = track
+            confirmIfRepeat(kind: .custom, trackID: trackID, title: track.title, dog: dog) {
+                Haptics.tap()
+                amountTrack = track
+            }
         }
     }
 

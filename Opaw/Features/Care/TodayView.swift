@@ -25,6 +25,7 @@ struct TodayView: View {
     @State private var day = Calendar.current.startOfDay(for: Date())
     @State private var highlight: CareKind?
     @State private var toast: CareToast?
+    @State private var pendingLog: PendingLog?
     @State private var showPoop = false
     @State private var celebration: Badge?
 
@@ -71,6 +72,7 @@ struct TodayView: View {
             }
             .background { if !embedded { Color.opawCream.ignoresSafeArea() } }
             .careToast($toast)
+            .repeatLogConfirmation($pendingLog)
 
             if showPoop {
                 PoopLogOverlay(dog: dog) { event in
@@ -231,10 +233,11 @@ struct TodayView: View {
         let date: Date
         let text: String
         let points: Int
+        var isCareLog = false
     }
 
     private var entries: [Entry] {
-        let events = dog.events(on: day).map { Entry(id: $0.id, date: $0.date, text: $0.summary, points: $0.kind.points) }
+        let events = dog.events(on: day).map { Entry(id: $0.id, date: $0.date, text: $0.summary, points: $0.kind.points, isCareLog: true) }
         let end = calendar.date(byAdding: .day, value: 1, to: day) ?? day
         let walks = (dog.walks ?? []).filter { $0.startedAt >= day && $0.startedAt < end }.map {
             Entry(id: $0.id, date: $0.startedAt, text: "\($0.title) · \(OpawFormat.distance(meters: $0.distanceMeters))", points: WalkPoints.perWalk)
@@ -269,6 +272,16 @@ struct TodayView: View {
                 .overlay(alignment: .bottom) {
                     if index < rows.count - 1 { Rectangle().fill(Color.opawHairline).frame(height: 1) }
                 }
+                .contentShape(Rectangle())
+                .contextMenu {
+                    if entry.isCareLog {
+                        Button(role: .destructive) {
+                            CareRecorder.delete(eventID: entry.id, in: modelContext)
+                        } label: {
+                            Label("Delete log", systemImage: "trash")
+                        }
+                    }
+                }
             }
         }
         .padding(.horizontal, 22)
@@ -282,6 +295,9 @@ struct TodayView: View {
         if kind == .poop {
             Haptics.tap()
             withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) { showPoop = true }
+        } else if let message = CareRecorder.repeatWarning(kind: kind, title: kind.title, dog: dog) {
+            Haptics.soft()
+            pendingLog = PendingLog(message: message) { record(CareEvent(kind: kind, dog: dog)) }
         } else {
             record(CareEvent(kind: kind, dog: dog))
         }
