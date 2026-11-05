@@ -14,6 +14,9 @@ struct ProfileView: View {
     @State private var showWidgetHelp = false
     @State private var showBackupNote = false
     @State private var showNearby = false
+    @State private var confirmReset = false
+    @Environment(\.modelContext) private var modelContext
+    @Environment(WalkRecorder.self) private var recorder
     @State private var pane: SettingsPane = .subscription
     @Environment(\.duoOpen) private var duoOpen
 
@@ -44,6 +47,36 @@ struct ProfileView: View {
         } message: {
             Text("Backup to iCloud is coming soon. For now, everything stays on this iPhone.")
         }
+        .confirmationDialog("Reset all data?", isPresented: $confirmReset, titleVisibility: .visible) {
+            Button("Erase everything", role: .destructive) {
+                Haptics.success()
+                dismiss()
+                DataReset.eraseAll(in: modelContext, recorder: recorder)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This deletes your pets, logs, walks, memories and reminders on this iPhone, then starts setup again. It can't be undone. Your subscription isn't affected.")
+        }
+    }
+
+    /// The red "Reset data" row, last in Settings.
+    private var resetRow: some View {
+        Button { confirmReset = true } label: {
+            HStack(spacing: 14) {
+                Icon(.refresh, size: duoOpen ? 16 : 17)
+                    .foregroundStyle(Color.opawAlert)
+                    .frame(width: duoOpen ? 34 : 36, height: duoOpen ? 34 : 36)
+                    .background(Color.opawAlert.opacity(0.1), in: Circle())
+                Text("Reset data")
+                    .font(.opaw(duoOpen ? 15 : 16, .bold))
+                    .foregroundStyle(Color.opawAlert)
+                Spacer(minLength: 0)
+            }
+            .padding(.vertical, duoOpen ? 11 : 13)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Erases everything on this iPhone and starts setup again")
     }
 
     // MARK: Open display (6o)
@@ -111,6 +144,8 @@ struct ProfileView: View {
                         }
                     }
                     .padding(.top, 12)
+                    paneCard { resetRow }
+                        .padding(.top, 12)
                 }
                 .padding(.leading, 20)
                 .padding(.trailing, 36)
@@ -243,6 +278,7 @@ struct ProfileView: View {
                                 openURL(URL(string: "https://github.com/RusselHarveyMercadoIV/opaw/issues")!)
                             }
                         }
+                        card { resetRow }
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 18)
