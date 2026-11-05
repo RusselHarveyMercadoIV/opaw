@@ -148,7 +148,7 @@ struct CareView: View {
     private func grid(dog: Dog, now: Date) -> some View {
         let due = dog.dueKinds(now: now)
         return LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0), count: 4), spacing: 16) {
-            ForEach(Self.gridKinds) { kind in
+            ForEach(Self.gridKinds.filter { dog.trackedKindsRaw.isEmpty || dog.trackedKindsRaw.contains($0.rawValue) }) { kind in
                 let count = dog.count(kind, on: now)
                 let alert = due.contains(kind)
                 Button {

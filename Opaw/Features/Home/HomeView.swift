@@ -420,7 +420,7 @@ private struct AddPetPage: View {
 }
 
 /// Three faint silhouettes (dog, cat, bunny) taking turns to appear, every 9 seconds.
-private struct GhostCycle: View {
+struct GhostCycle: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
