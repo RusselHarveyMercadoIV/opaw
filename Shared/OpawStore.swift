@@ -157,7 +157,7 @@ extension Dog {
             activityMinutesToday: walkMinutes + playMinutes,
             dailyActivityGoalMinutes: Double(dailyGoalMinutes),
             lastBadgeEarnedAt: lastBadgeEarnedAt,
-            mealHours: mealHours
+            mealHours: tracks(CareKind.meal.rawValue) ? mealHours : []
         )
     }
 }

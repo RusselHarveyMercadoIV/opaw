@@ -22,7 +22,7 @@ struct ProfileView: View {
     @Environment(\.duoOpen) private var duoOpen
 
     /// What the right pane shows on the open display (6o).
-    enum SettingsPane { case subscription, household, units, history }
+    enum SettingsPane { case subscription, household, tracking, units, history }
 
     private var dog: Dog? {
         dogs.first { $0.id.uuidString == activeDogID } ?? dogs.first
@@ -121,7 +121,10 @@ struct ProfileView: View {
                     paneCard {
                         paneRow(.sparkle, "Subscription", value: subscriptionValue, target: .subscription, divider: false)
                         paneRow(.users, "Household", target: .household, divider: false)
-                        paneAction(.bell, "Notifications", divider: pane != .household) {
+                        if dog != nil {
+                            paneRow(.paw, "Care tracking", target: .tracking, divider: pane != .household)
+                        }
+                        paneAction(.bell, "Notifications", divider: pane != (dog != nil ? .tracking : .household)) {
                             if let url = URL(string: UIApplication.openNotificationSettingsURLString) { openURL(url) }
                         }
                         paneRow(.ruler, "Units", target: .units, divider: true)
@@ -158,6 +161,8 @@ struct ProfileView: View {
             switch pane {
             case .subscription: SubscriptionView(inPane: true)
             case .household: HouseholdView(petName: dog?.name ?? "your pet", inPane: true)
+            case .tracking:
+                if let dog { CareTrackingView(dog: dog, inPane: true).id(dog.id) }
             case .units: UnitsView(inPane: true)
             case .history:
                 if let dog { HistoryView(dog: dog, inPane: true) }
@@ -257,7 +262,10 @@ struct ProfileView: View {
                         if let dog { petHeader(dog) }
                         if !premium.isPremium { banner }
                         card {
-                            linkRow(.users, "Household", first: true) { HouseholdView(petName: dog?.name ?? "your pet") }
+                            if let dog {
+                                linkRow(.paw, "Care tracking", first: true) { CareTrackingView(dog: dog) }
+                            }
+                            linkRow(.users, "Household", first: dog == nil) { HouseholdView(petName: dog?.name ?? "your pet") }
                             actionRow(.bell, "Notifications") {
                                 if let url = URL(string: UIApplication.openNotificationSettingsURLString) { openURL(url) }
                             }
@@ -569,14 +577,8 @@ struct EditDogView: View {
             } footer: {
                 Text("A starting point based on size, age and energy. Your vet knows best.")
             }
-            Section("Meal times") {
-                ForEach(dog.mealHours.indices, id: \.self) { index in
-                    Stepper("Meal \(index + 1): \(String(format: "%02d:00", dog.mealHours[index]))", value: $dog.mealHours[index], in: 0...23)
-                }
-                Button("Add meal time") { dog.mealHours.append(12) }
-                if dog.mealHours.count > 1 {
-                    Button("Remove last meal time", role: .destructive) { dog.mealHours.removeLast() }
-                }
+            Section {
+                NavigationLink("Care tracking and meal times") { CareTrackingView(dog: dog) }
             }
             Section {
                 Button("Delete \(dog.name)", role: .destructive) { confirmDelete = true }

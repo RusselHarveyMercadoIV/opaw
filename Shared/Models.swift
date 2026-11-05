@@ -21,8 +21,10 @@ final class Dog {
     var weightKg: Double?
     var sizeRaw: String = DogSize.medium.rawValue
     var energyRaw: String = EnergyLevel.medium.rawValue
-    /// Usual meal times as hours of the day.
+    /// Usual meal times as hours of the day, for the mood engine.
     var mealHours: [Int] = [8, 18]
+    /// Usual meal times as minutes after midnight, such as 450 for 07:30. Empty on dogs saved before minutes were kept.
+    var mealMinutesRaw: [Int] = []
     var dailyGoalMinutes: Int = 60
     @Attribute(.externalStorage) var photoData: Data?
     @Attribute(.externalStorage) var cutoutData: Data?
@@ -56,6 +58,20 @@ final class Dog {
         self.energyRaw = energy.rawValue
         self.createdAt = Date()
         self.dailyGoalMinutes = DogTraits(size: size, energy: energy, ageYears: Dog.age(from: birthDate)).recommendedDailyActivityMinutes
+    }
+
+    /// Meal times as minutes after midnight, sorted. Setting them also updates `mealHours`.
+    var mealTimes: [Int] {
+        get { mealMinutesRaw.isEmpty ? mealHours.sorted().map { $0 * 60 } : mealMinutesRaw.sorted() }
+        set {
+            mealMinutesRaw = newValue.sorted()
+            mealHours = mealMinutesRaw.map { $0 / 60 }
+        }
+    }
+
+    /// Whether a care kind (or the "walks" key) is tracked; an empty list tracks everything.
+    func tracks(_ key: String) -> Bool {
+        trackedKindsRaw.isEmpty || trackedKindsRaw.contains(key)
     }
 
     var size: DogSize {

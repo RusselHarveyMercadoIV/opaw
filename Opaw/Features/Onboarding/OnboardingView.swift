@@ -46,7 +46,7 @@ struct DogDraft {
         dog.sex = sex
         dog.isNeutered = isNeutered
         dog.trackedKindsRaw = trackedKinds
-        if !mealTimes.isEmpty { dog.mealHours = mealTimes.sorted().map { $0 / 60 } }
+        if !mealTimes.isEmpty { dog.mealTimes = mealTimes }
         return dog
     }
 

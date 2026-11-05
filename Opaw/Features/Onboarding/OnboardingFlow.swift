@@ -1139,10 +1139,6 @@ private struct TrackStep: View {
     let onBack: () -> Void
     let onNext: () -> Void
 
-    @State private var editing: Int?
-    @State private var newTime = Date()
-    @State private var showTime = false
-
     private var tracksMeals: Bool { draft.trackedKinds.contains(CareKind.meal.rawValue) }
 
     var body: some View {
@@ -1150,16 +1146,12 @@ private struct TrackStep: View {
             StepHeader(index: 4, onBack: onBack)
             ScrollView {
                 VStack(spacing: 0) {
-                    StepTitle(title: "What should we track?", subtitle: "You can change this any time in Care.")
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0), count: 4), spacing: 16) {
-                        ForEach(TrackOption.all) { option in
-                            optionButton(option)
-                        }
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 24)
+                    StepTitle(title: "What should we track?", subtitle: "You can change this any time in Settings.")
+                    TrackGrid(trackedKinds: $draft.trackedKinds)
+                        .padding(.horizontal, 20)
+                        .padding(.top, 24)
                     if tracksMeals {
-                        mealTimes
+                        MealTimesCard(mealTimes: $draft.mealTimes, weightKg: draft.weightKg, species: draft.species)
                             .padding(.horizontal, 20)
                             .padding(.top, 22)
                             .transition(.opacity.combined(with: .offset(y: 8)))
@@ -1171,142 +1163,6 @@ private struct TrackStep: View {
             BottomActions(title: "Continue", isEnabled: !draft.trackedKinds.isEmpty, action: onNext)
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: tracksMeals)
-        .sheet(isPresented: $showTime) {
-            timeSheet
-        }
-    }
-
-    private func optionButton(_ option: TrackOption) -> some View {
-        let on = option.keys.allSatisfy(draft.trackedKinds.contains)
-        return Button {
-            Haptics.select()
-            if on {
-                draft.trackedKinds.removeAll { option.keys.contains($0) }
-            } else {
-                draft.trackedKinds.append(contentsOf: option.keys.filter { !draft.trackedKinds.contains($0) })
-            }
-        } label: {
-            VStack(spacing: 6) {
-                Group {
-                    if option.icon == .activity {
-                        Icon(.activity, size: 26)
-                    } else {
-                        Icon(option.icon, size: 26, weight: 2.3)
-                    }
-                }
-                .foregroundStyle(on ? Color.white : Color(hex: 0x111111))
-                .frame(width: 68, height: 68)
-                .background(on ? Color(hex: 0x111111) : Color.white, in: Circle())
-                .shadow(color: .black.opacity(0.06), radius: 12, y: 10)
-                Text(option.title)
-                    .font(.opaw(13, .bold))
-                    .foregroundStyle(on ? Color.opawInk : Color.opawMuted)
-                    .lineLimit(1)
-            }
-        }
-        .buttonStyle(.pressable)
-        .accessibilityLabel(option.title)
-        .accessibilityAddTraits(on ? .isSelected : [])
-    }
-
-    private var mealTimes: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("Meal times")
-                    .font(.opaw(17, .black))
-                Spacer()
-                if let grams = portionGrams {
-                    Text("\(grams) g each")
-                        .font(.opaw(13, .bold))
-                        .foregroundStyle(Color.opawMuted)
-                }
-            }
-            HStack(spacing: 8) {
-                ForEach(Array(draft.mealTimes.sorted().enumerated()), id: \.offset) { _, time in
-                    Button {
-                        editing = draft.mealTimes.firstIndex(of: time)
-                        newTime = Self.date(minutes: time)
-                        showTime = true
-                    } label: {
-                        Text(String(format: "%02d:%02d", time / 60, time % 60))
-                            .font(.opaw(15, .heavy))
-                            .foregroundStyle(Color.opawInk)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 10)
-                            .background(Color.opawChip, in: Capsule())
-                    }
-                    .buttonStyle(.pressable)
-                }
-                if draft.mealTimes.count < 5 {
-                    Button {
-                        editing = nil
-                        newTime = Self.date(minutes: 12 * 60)
-                        showTime = true
-                    } label: {
-                        Icon(.plus, size: 18)
-                            .foregroundStyle(Color.opawInk)
-                            .frame(width: 42, height: 42)
-                            .background(Color.opawChip, in: Circle())
-                    }
-                    .buttonStyle(.pressable)
-                    .accessibilityLabel("Add meal time")
-                }
-            }
-        }
-        .foregroundStyle(Color.opawInk)
-        .padding(.horizontal, 20)
-        .padding(.vertical, 16)
-        .whiteCard()
-    }
-
-    private var timeSheet: some View {
-        VStack(spacing: 0) {
-            HStack {
-                if let editing, draft.mealTimes.count > 1 {
-                    Button("Remove") {
-                        draft.mealTimes.remove(at: editing)
-                        showTime = false
-                    }
-                    .font(.opaw(16, .heavy))
-                    .foregroundStyle(Color.opawAlert)
-                }
-                Spacer()
-                Button("Done") {
-                    let parts = Calendar.current.dateComponents([.hour, .minute], from: newTime)
-                    let minutes = (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
-                    if let editing {
-                        draft.mealTimes[editing] = minutes
-                    } else if !draft.mealTimes.contains(minutes) {
-                        draft.mealTimes.append(minutes)
-                    }
-                    draft.mealTimes.sort()
-                    showTime = false
-                }
-                .font(.opaw(16, .heavy))
-                .foregroundStyle(Color.opawInk)
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 24)
-            DatePicker("Meal time", selection: $newTime, displayedComponents: .hourAndMinute)
-                .datePickerStyle(.wheel)
-                .labelsHidden()
-            Spacer(minLength: 0)
-        }
-        .presentationDetents([.height(320)])
-        .presentationCornerRadius(36)
-        .presentationBackground(Color.opawCream)
-    }
-
-    /// Rough dry-food grams per meal: resting energy × 1.6, at about 3.6 kcal a gram.
-    private var portionGrams: Int? {
-        guard let kg = draft.weightKg, kg > 0, !draft.mealTimes.isEmpty, draft.species == "dog" else { return nil }
-        let kcal = 70 * pow(kg, 0.75) * 1.6
-        let grams = kcal / 3.6 / Double(draft.mealTimes.count)
-        return Int((grams / 5).rounded() * 5)
-    }
-
-    private static func date(minutes: Int) -> Date {
-        Calendar.current.date(bySettingHour: minutes / 60, minute: minutes % 60, second: 0, of: Date()) ?? Date()
     }
 }
 
