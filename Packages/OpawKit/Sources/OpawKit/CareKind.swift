@@ -13,6 +13,8 @@ public enum CareKind: String, CaseIterable, Codable, Sendable, Identifiable {
     case vet
     case weight
     case play
+    /// A track the owner made, such as "Brushing teeth". The event carries its name.
+    case custom
 
     public var id: String { rawValue }
 
@@ -29,6 +31,7 @@ public enum CareKind: String, CaseIterable, Codable, Sendable, Identifiable {
         case .vet: return "Vet visit"
         case .weight: return "Weight"
         case .play: return "Play"
+        case .custom: return "Custom"
         }
     }
 
@@ -46,6 +49,7 @@ public enum CareKind: String, CaseIterable, Codable, Sendable, Identifiable {
         case .vet: return "cross.case.fill"
         case .weight: return "scalemass.fill"
         case .play: return "tennisball.fill"
+        case .custom: return "sparkles"
         }
     }
 
@@ -62,11 +66,15 @@ public enum CareKind: String, CaseIterable, Codable, Sendable, Identifiable {
         case .vet: return "🩺"
         case .weight: return "⚖️"
         case .play: return "🎾"
+        case .custom: return "✨"
         }
     }
 
     /// The kinds shown as one-tap buttons on Home and in the widget.
     public static let quickLog: [CareKind] = [.meal, .water, .pee, .poop]
+
+    /// Every kind that can be picked on its own; custom logs belong to a custom track.
+    public static let standard: [CareKind] = allCases.filter { $0 != .custom }
 
     /// Whether this kind usually happens several times a day.
     public var isDaily: Bool {

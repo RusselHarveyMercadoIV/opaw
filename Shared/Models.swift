@@ -41,12 +41,16 @@ final class Dog {
     var sex: String = ""
     var isNeutered: Bool = false
     /// Care kinds shown on the Care screen, picked during onboarding. Empty means all of them.
+    /// Custom tracks appear as "custom:<id>".
     var trackedKindsRaw: [String] = []
+    /// The order of tracks on the Care screen (3h), as the same keys. Empty means the default order.
+    var trackOrderRaw: [String] = []
 
     @Relationship(deleteRule: .cascade, inverse: \CareEvent.dog) var careEvents: [CareEvent]? = []
     @Relationship(deleteRule: .cascade, inverse: \Walk.dog) var walks: [Walk]? = []
     @Relationship(deleteRule: .cascade, inverse: \Memory.dog) var memories: [Memory]? = []
     @Relationship(deleteRule: .cascade, inverse: \Reminder.dog) var reminders: [Reminder]? = []
+    @Relationship(deleteRule: .cascade, inverse: \CustomTrack.dog) var customTracks: [CustomTrack]? = []
 
     init(name: String, breed: String = "", birthDate: Date? = nil, weightKg: Double? = nil, size: DogSize = .medium, energy: EnergyLevel = .medium) {
         self.id = UUID()
@@ -72,6 +76,12 @@ final class Dog {
     /// Whether a care kind (or the "walks" key) is tracked; an empty list tracks everything.
     func tracks(_ key: String) -> Bool {
         trackedKindsRaw.isEmpty || trackedKindsRaw.contains(key)
+    }
+
+    /// Meal times as hours: the daily meal reminders when there are any, otherwise the times picked in setup.
+    var scheduledMealHours: [Int] {
+        let hours = (reminders ?? []).filter { $0.kind == .meal && $0.repeats == .daily && $0.isEnabled }.map(\.hour)
+        return hours.isEmpty ? mealHours : hours.sorted()
     }
 
     var size: DogSize {
@@ -120,6 +130,11 @@ final class CareEvent {
     var weightKg: Double?
     /// Who logged it, such as "You" or a walker's name.
     var loggedBy: String = ""
+    /// For a custom track's log: the track, and its name when logged.
+    var trackID: UUID?
+    var trackName: String = ""
+    /// For a custom track logged as an amount.
+    var amount: Double?
     var dog: Dog?
 
     init(kind: CareKind, date: Date = Date(), note: String = "", dog: Dog?) {
@@ -231,6 +246,8 @@ final class Reminder {
     var repeatRaw: String = ReminderRepeat.daily.rawValue
     /// The first day of a repeating reminder that isn't daily.
     var startDate: Date = Date()
+    /// Set when the reminder belongs to a custom track.
+    var trackID: UUID?
     var dog: Dog?
 
     init(title: String, kind: CareKind, hour: Int, minute: Int, repeats: ReminderRepeat = .daily, startDate: Date = Date(), note: String = "", dog: Dog?) {
@@ -272,6 +289,56 @@ final class Reminder {
             let days = calendar.dateComponents([.day], from: start, to: target).day ?? 0
             let periods = (days + step - 1) / step
             return calendar.date(byAdding: .day, value: periods * step, to: start) ?? target
+        }
+    }
+}
+
+/// A care track the owner made on the Care screen (3i), such as "Brushing teeth".
+@Model
+final class CustomTrack {
+    var id: UUID = UUID()
+    var name: String = ""
+    /// A `DesignIcon` raw value.
+    var icon: String = "sparkle"
+    /// "done", "count" or "amount".
+    var logStyleRaw: String = TrackLogStyle.done.rawValue
+    var createdAt: Date = Date()
+    var dog: Dog?
+
+    init(name: String, icon: String, logStyle: TrackLogStyle, dog: Dog?) {
+        self.id = UUID()
+        self.name = name
+        self.icon = icon
+        self.logStyleRaw = logStyle.rawValue
+        self.createdAt = Date()
+        self.dog = dog
+    }
+
+    var logStyle: TrackLogStyle {
+        get { TrackLogStyle(rawValue: logStyleRaw) ?? .done }
+        set { logStyleRaw = newValue.rawValue }
+    }
+
+    /// The key used in a dog's tracked and order lists.
+    var key: String { "custom:\(id.uuidString)" }
+}
+
+/// How a custom track is logged.
+enum TrackLogStyle: String, CaseIterable, Identifiable {
+    /// Once a day, tap again to undo.
+    case done
+    /// Each tap adds one.
+    case count
+    /// Each log asks for a number.
+    case amount
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .done: "Done or not"
+        case .count: "Count"
+        case .amount: "Amount"
         }
     }
 }

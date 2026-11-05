@@ -23,7 +23,7 @@ struct CareLogSheet: View {
             Form {
                 Section {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 72), spacing: 8)], spacing: 8) {
-                        ForEach(CareKind.allCases) { option in
+                        ForEach(CareKind.standard) { option in
                             Button {
                                 kind = option
                             } label: {
@@ -152,7 +152,7 @@ struct CareHistoryView: View {
         .toolbar {
             Menu {
                 Button("All") { filter = nil }
-                ForEach(CareKind.allCases) { kind in
+                ForEach(CareKind.standard) { kind in
                     Button {
                         filter = kind
                     } label: {
@@ -251,7 +251,7 @@ struct AddReminderSheet: View {
         NavigationStack {
             Form {
                 Picker("Type", selection: $kind) {
-                    ForEach(CareKind.allCases) { Label($0.title, systemImage: $0.symbol).tag($0) }
+                    ForEach(CareKind.standard) { Label($0.title, systemImage: $0.symbol).tag($0) }
                 }
                 TextField("Title", text: $title, prompt: Text("\(dog.name)'s \(kind.title.lowercased())"))
                 TextField("Detail", text: $note, prompt: Text("e.g. with food"))

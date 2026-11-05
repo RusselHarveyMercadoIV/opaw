@@ -235,7 +235,12 @@ struct ScheduleView: View {
     }
 
     private func log(_ reminder: Reminder) {
-        _ = CareRecorder.log(CareEvent(kind: reminder.kind, note: reminder.title, dog: dog), dog: dog, in: modelContext)
+        let event = CareEvent(kind: reminder.kind, note: reminder.kind == .custom ? "" : reminder.title, dog: dog)
+        if reminder.kind == .custom {
+            event.trackID = reminder.trackID
+            event.trackName = reminder.title
+        }
+        _ = CareRecorder.log(event, dog: dog, in: modelContext)
     }
 
     private func reschedule() {

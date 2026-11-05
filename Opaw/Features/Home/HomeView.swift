@@ -410,7 +410,7 @@ private struct PetPage: View {
 
     private func stats(now: Date) -> some View {
         let meals = dog.count(.meal, on: now)
-        let mealGoal = max(1, dog.mealHours.count)
+        let mealGoal = max(1, dog.scheduledMealHours.count)
         let meds = dog.medsStatus(now: now)
         return Button(action: openToday) {
             HStack(spacing: 0) {
@@ -619,7 +619,10 @@ struct CareEventRow: View {
 extension CareEvent {
     /// "Poop · normal", "Weight · 9.8 kg", "Breakfast · 120 g".
     var summary: String {
-        var text = kind.title
+        var text = displayTitle
+        if let amount {
+            text += " · \(amount.formatted(.number.precision(.fractionLength(0...2))))"
+        }
         if let consistency = poopConsistency {
             text += " · \(consistency.title.lowercased())"
         }

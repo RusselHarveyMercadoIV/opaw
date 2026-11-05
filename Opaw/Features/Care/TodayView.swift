@@ -167,7 +167,7 @@ struct TodayView: View {
     private func tiles(now: Date) -> some View {
         let reference = isToday ? now : (calendar.date(byAdding: .day, value: 1, to: day)?.addingTimeInterval(-1) ?? day)
         let meals = dog.count(.meal, on: day)
-        let mealGoal = max(1, dog.mealHours.count)
+        let mealGoal = max(1, dog.scheduledMealHours.count)
         let medsNeeded = dog.reminders(on: day).filter { $0.kind == .meds }.count
         let medsTaken = dog.count(.meds, on: day)
         let due = isToday ? dog.dueKinds(now: now) : []

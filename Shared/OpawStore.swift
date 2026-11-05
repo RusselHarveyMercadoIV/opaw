@@ -30,7 +30,7 @@ enum OpawSchemaV1: VersionedSchema {
     static var versionIdentifier = Schema.Version(1, 0, 0)
 
     static var models: [any PersistentModel.Type] {
-        [Dog.self, CareEvent.self, Walk.self, Memory.self, Reminder.self]
+        [Dog.self, CareEvent.self, Walk.self, Memory.self, Reminder.self, CustomTrack.self]
     }
 }
 
@@ -157,7 +157,7 @@ extension Dog {
             activityMinutesToday: walkMinutes + playMinutes,
             dailyActivityGoalMinutes: Double(dailyGoalMinutes),
             lastBadgeEarnedAt: lastBadgeEarnedAt,
-            mealHours: tracks(CareKind.meal.rawValue) ? mealHours : []
+            mealHours: tracks(CareKind.meal.rawValue) ? scheduledMealHours : []
         )
     }
 }

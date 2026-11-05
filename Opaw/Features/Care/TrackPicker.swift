@@ -1,9 +1,8 @@
 import OpawKit
 import SwiftData
 import SwiftUI
-import WidgetKit
 
-// MARK: - Shared pieces (4e and Settings)
+// MARK: - Onboarding 4e pieces
 
 /// The four-across grid of things to track. Tapping a circle turns it on or off.
 struct TrackGrid: View {
@@ -173,109 +172,5 @@ struct MealTimesCard: View {
 
     private static func date(minutes: Int) -> Date {
         Calendar.current.date(bySettingHour: minutes / 60, minute: minutes % 60, second: 0, of: Date()) ?? Date()
-    }
-}
-
-// MARK: - Settings > Care tracking
-
-/// Change what's tracked and when meals are, after setup. Changes save as you make them.
-struct CareTrackingView: View {
-    let dog: Dog
-    var inPane = false
-
-    @Environment(\.modelContext) private var modelContext
-    @Environment(\.dismiss) private var dismiss
-    @State private var kinds: [String]
-    @State private var times: [Int]
-
-    init(dog: Dog, inPane: Bool = false) {
-        self.dog = dog
-        self.inPane = inPane
-        _kinds = State(initialValue: dog.trackedKindsRaw.isEmpty ? TrackOption.all.flatMap(\.keys) : dog.trackedKindsRaw)
-        _times = State(initialValue: dog.mealTimes)
-    }
-
-    private var tracksMeals: Bool { kinds.contains(CareKind.meal.rawValue) }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            if inPane {
-                PaneHeader(title: "Care tracking")
-            } else {
-                ScreenHeader(title: "Care tracking") {
-                    Button { dismiss() } label: { RoundIcon(symbol: "chevron.left") }
-                        .buttonStyle(.pressable)
-                        .accessibilityLabel("Back")
-                } trailing: {
-                    Color.clear.frame(width: 54, height: 54)
-                }
-            }
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    Text("Pick what shows on \(dog.name)'s Care screen.")
-                        .font(.opaw(15, .medium))
-                        .foregroundStyle(Color.opawMuted)
-                        .padding(.horizontal, inPane ? 0 : 4)
-                    TrackGrid(trackedKinds: $kinds, keepsOne: true)
-                        .padding(.top, 20)
-                    if tracksMeals {
-                        MealTimesCard(mealTimes: $times, weightKg: dog.weightKg, species: dog.species)
-                            .padding(.top, 22)
-                            .transition(.opacity.combined(with: .offset(y: 8)))
-                        Text("\(dog.name) gets a reminder at each meal time. A meal counts as late an hour after its time if nothing was logged, and the Food goal is one log per meal.")
-                            .font(.opaw(13, .medium))
-                            .foregroundStyle(Color.opawMuted)
-                            .lineSpacing(3)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .padding(.horizontal, 4)
-                            .padding(.top, 12)
-                    }
-                }
-                .padding(.horizontal, inPane ? 0 : 20)
-                .padding(.top, inPane ? 12 : 18)
-                .padding(.bottom, 40)
-            }
-            .scrollIndicators(.hidden)
-        }
-        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: tracksMeals)
-        .opawBackground()
-        .toolbar(.hidden, for: .navigationBar)
-        .onChange(of: kinds) { _, _ in save() }
-        .onChange(of: times) { _, _ in save() }
-    }
-
-    private func save() {
-        dog.applyCareTracking(kinds: kinds, mealTimes: times, in: modelContext)
-    }
-}
-
-extension Dog {
-    /// Saves what's tracked and the meal times, and keeps the daily meal reminders in step with them.
-    @MainActor
-    func applyCareTracking(kinds: [String], mealTimes newTimes: [Int], in context: ModelContext) {
-        let oldTimes = Set(mealTimes)
-        trackedKindsRaw = kinds
-        if !newTimes.isEmpty { mealTimes = newTimes }
-        let wanted: Set<Int> = tracks(CareKind.meal.rawValue) ? Set(newTimes) : []
-
-        // The meal schedule's reminders are the daily meal reminders at the old meal times.
-        var existing = Set<Int>()
-        for reminder in reminders ?? [] where reminder.kind == .meal && reminder.repeats == .daily {
-            let time = reminder.hour * 60 + reminder.minute
-            if wanted.contains(time) {
-                existing.insert(time)
-            } else if oldTimes.contains(time) {
-                context.delete(reminder)
-            }
-        }
-        for time in wanted.subtracting(existing).sorted() {
-            context.insert(Reminder(title: "\(name)'s meal", kind: .meal, hour: time / 60, minute: time % 60, dog: self))
-        }
-        try? context.save()
-        WidgetCenter.shared.reloadAllTimelines()
-        Task {
-            let all = (try? context.fetch(FetchDescriptor<Reminder>())) ?? []
-            await NotificationService.reschedule(all)
-        }
     }
 }

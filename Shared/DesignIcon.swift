@@ -7,6 +7,9 @@ enum DesignIcon: String, CaseIterable {
     case heart, share, upload, bell, calendar, trophy, camera, sparkle, document, pause
     case meal, water, pee, poop, meds, bath, brush, nails, weight, vet
     case close, chevronDown, refresh, link, location, lock, chart, users, cloud, help, grid, ruler, clock, pets, settings, wave
+    case pencil, schedule
+    /// Icons a custom track can use (3i).
+    case bone, heartLine, star, moon, sun, book, ball
 
     /// How the icon is painted: an outline, or solid shapes.
     enum Style { case stroke, fill }
@@ -38,6 +41,7 @@ enum DesignIcon: String, CaseIterable {
         case .calendar, .camera, .document: return 2.4
         case .refresh, .link, .location, .chart, .users, .cloud, .help, .grid, .ruler, .pets, .settings, .wave: return 2.4
         case .sparkle: return 2.2
+        case .pencil, .bone, .heartLine, .star, .moon, .sun, .book, .ball: return 2.3
         default: return 2.6
         }
     }
@@ -107,6 +111,20 @@ enum DesignIcon: String, CaseIterable {
             return [.path("M18 11V6a2 2 0 0 0-4 0M14 10V4a2 2 0 0 0-4 0v2M10 10.5V6a2 2 0 0 0-4 0v8"), .path("M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15")]
         case .settings:
             return [.path("M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"), .circle(12, 12, 3)]
+        case .pencil:
+            return [.path("M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"), .path("m15 5 4 4")]
+        case .schedule:
+            return [.path("M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5"), .path("M16 2v4M8 2v4M3 10h5"), .circle(16, 16, 6), .path("M16 14v2.2l1.6 1")]
+        case .bone:
+            return [.path("M17 10c.7-.7 1.69 0 2.5 0a2.5 2.5 0 1 0 0-5 .5.5 0 0 1-.5-.5 2.5 2.5 0 1 0-5 0c0 .81.7 1.8 0 2.5l-7 7c-.7.7-1.69 0-2.5 0a2.5 2.5 0 0 0 0 5c.28 0 .5.22.5.5a2.5 2.5 0 1 0 5 0c0-.81-.7-1.8 0-2.5Z")]
+        case .heartLine:
+            return [.path("M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z")]
+        case .star: return [.path("M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z")]
+        case .moon: return [.path("M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z")]
+        case .sun:
+            return [.circle(12, 12, 4), .path("M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41")]
+        case .book: return [.path("M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"), .path("M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z")]
+        case .ball: return [.circle(12, 12, 9), .path("M12 3a9 9 0 0 0 0 18M3 12h18")]
         case .pets:
             return [.circle(5, 10, 2), .circle(9, 5.5, 2), .circle(15, 5.5, 2), .circle(19, 10, 2), .path("M12 11c-3 0-6 4.5-6 7 0 2 1.5 3 3 3 1.2 0 2-.6 3-.6s1.8.6 3 .6c1.5 0 3-1 3-3 0-2.5-3-7-6-7Z")]
         }
@@ -133,7 +151,13 @@ enum DesignIcon: String, CaseIterable {
         case "sparkle", "sparkles": self = .sparkle
         case "doc.text": self = .document
         case "pause.fill": self = .pause
+        case "pencil": self = .pencil
+        case "calendar.badge.clock": self = .schedule
         default:
+            if let icon = DesignIcon(rawValue: symbol) {
+                self = icon
+                return
+            }
             if let kind = CareKind.allCases.first(where: { $0.symbol == symbol }), let icon = DesignIcon(kind: kind) {
                 self = icon
             } else {
@@ -155,6 +179,7 @@ enum DesignIcon: String, CaseIterable {
         case .weight: self = .weight
         case .vet: self = .vet
         case .play: return nil
+        case .custom: self = .sparkle
         }
     }
 

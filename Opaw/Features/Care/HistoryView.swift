@@ -310,9 +310,13 @@ struct HistoryView: View {
         let calendar = Calendar.current
         let since = calendar.date(byAdding: .day, value: -14, to: Date()) ?? Date()
         let recent = (dog.careEvents ?? []).filter { $0.date >= since }
-        for kind in CareKind.allCases {
+        for kind in CareKind.standard {
             let count = recent.filter { $0.kind == kind }.count
             if count > 0 { lines.append("• \(kind.title): \(count)") }
+        }
+        let customNames = recent.filter { $0.kind == .custom }.map(\.trackName).reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
+        for name in customNames {
+            lines.append("• \(name.isEmpty ? "Custom" : name): \(recent.filter { $0.kind == .custom && $0.trackName == name }.count)")
         }
         let flagged = recent.filter { ($0.poopConsistency?.isConcerning ?? false) || ($0.poopColor?.isConcerning ?? false) }
         for event in flagged.sorted(by: { $0.date < $1.date }) {

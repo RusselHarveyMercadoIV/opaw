@@ -15,7 +15,7 @@ extension CareKind {
         case .meal: return 4
         case .meds, .vet: return 5
         case .bath: return 3
-        case .poop, .brush, .nails, .play: return 2
+        case .poop, .brush, .nails, .play, .custom: return 2
         case .water, .pee, .weight: return 1
         }
     }
@@ -34,6 +34,7 @@ extension CareKind {
         case .vet: return "Brave dog award, please."
         case .weight: return "Don't tell me the number."
         case .play: return "Again! Again!"
+        case .custom: return "Noted. Good human."
         }
     }
 }

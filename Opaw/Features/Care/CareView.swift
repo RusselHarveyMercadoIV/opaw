@@ -12,7 +12,8 @@ struct CareView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var showPoop = false
     @State private var detailKind: CareKind?
-    @State private var showCustom = false
+    @State private var showEditTracks = false
+    @State private var amountTrack: CareTrack?
     @State private var toast: CareToast?
     @State private var celebration: Badge?
     @State private var showScheduleDuo = false
@@ -23,8 +24,6 @@ struct CareView: View {
         dogs.first { $0.id.uuidString == activeDogID } ?? dogs.first
     }
 
-    /// Log types in the grid, in the design's order. "Custom" and "Edit" follow.
-    static let gridKinds: [CareKind] = [.meal, .water, .pee, .poop, .meds, .bath, .brush, .nails, .weight, .vet]
 
     var body: some View {
         NavigationStack {
@@ -65,9 +64,16 @@ struct CareView: View {
                     CareLogSheet(dog: dog, initialKind: kind) { }
                 }
             }
-            .sheet(isPresented: $showCustom) {
-                if let dog {
-                    CareLogSheet(dog: dog, initialKind: .play) { }
+            .sheet(isPresented: $showEditTracks) {
+                if let dog { EditTracksSheet(dog: dog) }
+            }
+            .sheet(item: $amountTrack) { track in
+                if let dog, let trackID = track.trackID {
+                    AmountLogSheet(track: track) { value in
+                        let event = customEvent(track, trackID: trackID, dog: dog)
+                        event.amount = value
+                        record(event, dog: dog)
+                    }
                 }
             }
             .alert(item: $celebration) { badge in
@@ -101,7 +107,7 @@ struct CareView: View {
                     NavigationLink {
                         ScheduleView(dog: dog)
                     } label: {
-                        RoundIcon(symbol: "bell.fill")
+                        RoundIcon(symbol: "calendar.badge.clock")
                     }
                     .buttonStyle(.pressable)
                     .frame(maxWidth: .infinity, alignment: .trailing)
@@ -245,39 +251,64 @@ struct CareView: View {
 
     private func grid(dog: Dog, now: Date, compact: Bool = false) -> some View {
         let due = dog.dueKinds(now: now)
+        let dueTracks = dog.dueTrackIDs(now: now)
+        let size: CGFloat = compact ? 62 : 68
         return LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0), count: 4), spacing: compact ? 14 : 16) {
-            ForEach(Self.gridKinds.filter { dog.tracks($0.rawValue) }) { kind in
-                let count = dog.count(kind, on: now)
-                let alert = due.contains(kind)
-                Button {
-                    tap(kind, dog: dog)
-                } label: {
-                    circle(symbol: kind.symbol, label: kind.shortTitle, badge: alert ? "!" : (count > 0 ? "\(count)" : nil), alert: alert, selected: compact && kind == .poop, size: compact ? 62 : 68)
+            ForEach(dog.shownTracks) { track in
+                if let trackID = track.trackID {
+                    customCircle(track, trackID: trackID, dog: dog, now: now, alert: dueTracks.contains(trackID), size: size)
+                } else {
+                    kindCircle(track.kind, dog: dog, now: now, alert: due.contains(track.kind), compact: compact, size: size)
                 }
-                .buttonStyle(.pressable)
-                .contextMenu {
-                    Button {
-                        detailKind = kind
-                    } label: {
-                        Label("Log with details", systemImage: "square.and.pencil")
-                    }
-                }
-                .accessibilityLabel("Log \(kind.title), \(count) today")
             }
             Button {
-                showCustom = true
+                showEditTracks = true
             } label: {
-                circle(symbol: "plus", label: "Custom", badge: nil, alert: false, size: compact ? 62 : 68)
+                circle(symbol: "pencil", label: "Edit", badge: nil, alert: false, size: size)
             }
             .buttonStyle(.pressable)
-            .accessibilityLabel("Custom log")
-            NavigationLink {
-                CareTrackingView(dog: dog)
+            .accessibilityLabel("Edit tracks")
+        }
+    }
+
+    private func kindCircle(_ kind: CareKind, dog: Dog, now: Date, alert: Bool, compact: Bool, size: CGFloat) -> some View {
+        let count = dog.count(kind, on: now)
+        return Button {
+            tap(kind, dog: dog)
+        } label: {
+            circle(symbol: kind.symbol, label: kind.shortTitle, badge: alert ? "!" : (count > 0 ? "\(count)" : nil), alert: alert, selected: compact && kind == .poop, size: size)
+        }
+        .buttonStyle(.pressable)
+        .contextMenu {
+            Button {
+                detailKind = kind
             } label: {
-                circle(symbol: "pencil", label: "Edit", badge: nil, alert: false, size: compact ? 62 : 68)
+                Label("Log with details", systemImage: "square.and.pencil")
             }
-            .buttonStyle(.pressable)
-            .accessibilityLabel("Edit what's tracked and meal times")
+        }
+        .accessibilityLabel("Log \(kind.title), \(count) today")
+    }
+
+    private func customCircle(_ track: CareTrack, trackID: UUID, dog: Dog, now: Date, alert: Bool, size: CGFloat) -> some View {
+        let logs = dog.events(for: trackID, on: now)
+        let badge = alert ? "!" : customBadge(track, logs: logs)
+        return Button {
+            tapCustom(track, trackID: trackID, logs: logs, dog: dog)
+        } label: {
+            circle(symbol: track.icon, label: track.title, badge: badge, alert: alert, size: size)
+        }
+        .buttonStyle(.pressable)
+        .accessibilityLabel(track.logStyle == .done ? "\(track.title), \(logs.isEmpty ? "not done" : "done") today" : "Log \(track.title), \(logs.count) today")
+    }
+
+    private func customBadge(_ track: CareTrack, logs: [CareEvent]) -> String? {
+        guard !logs.isEmpty else { return nil }
+        switch track.logStyle {
+        case .done: return "✓"
+        case .count: return "\(logs.count)"
+        case .amount:
+            let total = logs.compactMap(\.amount).reduce(0, +)
+            return total.formatted(.number.precision(.fractionLength(0...1)))
         }
     }
 
@@ -374,6 +405,7 @@ struct CareView: View {
         case .weight: what = "a weigh-in"
         case .vet: what = "a vet visit"
         case .play: what = "play time"
+        case .custom: what = event.trackName.isEmpty ? "a custom log" : event.trackName.lowercased()
         }
         return detail.isEmpty ? "\(who) logged \(what)" : "\(who) logged \(what) · \(detail)"
     }
@@ -392,6 +424,33 @@ struct CareView: View {
         default:
             record(CareEvent(kind: kind, dog: dog), dog: dog)
         }
+    }
+
+    private func tapCustom(_ track: CareTrack, trackID: UUID, logs: [CareEvent], dog: Dog) {
+        switch track.logStyle {
+        case .done:
+            if logs.isEmpty {
+                record(customEvent(track, trackID: trackID, dog: dog), dog: dog)
+            } else {
+                // Done or not: a second tap takes today's tick back.
+                Haptics.soft()
+                logs.forEach { modelContext.delete($0) }
+                try? modelContext.save()
+                WidgetCenter.shared.reloadAllTimelines()
+            }
+        case .count:
+            record(customEvent(track, trackID: trackID, dog: dog), dog: dog)
+        case .amount:
+            Haptics.tap()
+            amountTrack = track
+        }
+    }
+
+    private func customEvent(_ track: CareTrack, trackID: UUID, dog: Dog) -> CareEvent {
+        let event = CareEvent(kind: .custom, dog: dog)
+        event.trackID = trackID
+        event.trackName = track.title
+        return event
     }
 
     private func record(_ event: CareEvent, dog: Dog) {

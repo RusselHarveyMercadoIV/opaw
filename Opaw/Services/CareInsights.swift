@@ -57,11 +57,11 @@ extension Dog {
         for (index, reminder) in todays.enumerated() {
             let due = reminder.dueDate(on: day)
             var end = due.addingTimeInterval(6 * 3600)
-            if let next = todays[(index + 1)...].first(where: { $0.kind == reminder.kind }) {
+            if let next = todays[(index + 1)...].first(where: { $0.sameTrack(as: reminder) }) {
                 end = min(end, next.dueDate(on: day).addingTimeInterval(-90 * 60))
             }
             let start = due.addingTimeInterval(-90 * 60)
-            if let log = logs.first(where: { !used.contains($0.id) && $0.kind == reminder.kind && $0.date >= start && $0.date < end }) {
+            if let log = logs.first(where: { !used.contains($0.id) && reminder.matches($0) && $0.date >= start && $0.date < end }) {
                 used.insert(log.id)
                 done.insert(reminder.id)
             }
@@ -71,10 +71,24 @@ extension Dog {
 
     /// Care kinds with a reminder that isn't done and is late or due within three hours.
     func dueKinds(now: Date = Date()) -> Set<CareKind> {
+        Set(dueReminders(now: now).map(\.kind))
+    }
+
+    /// Custom tracks with a reminder that isn't done and is late or due within three hours.
+    func dueTrackIDs(now: Date = Date()) -> Set<UUID> {
+        Set(dueReminders(now: now).compactMap(\.trackID))
+    }
+
+    private func dueReminders(now: Date) -> [Reminder] {
         let done = doneReminderIDs(on: now)
-        return Set(reminders(on: now).filter {
+        return reminders(on: now).filter {
             !done.contains($0.id) && $0.dueDate(on: now).timeIntervalSince(now) < 3 * 3600
-        }.map(\.kind))
+        }
+    }
+
+    /// Today's logs for a custom track.
+    func events(for trackID: UUID, on day: Date = Date()) -> [CareEvent] {
+        events(on: day).filter { $0.kind == .custom && $0.trackID == trackID }
     }
 
     /// Days since the last log of a kind, if there is one.
@@ -148,5 +162,14 @@ extension Reminder {
     /// and no other reminder has claimed that log.
     func isDone(on day: Date, for dog: Dog) -> Bool {
         dog.doneReminderIDs(on: day).contains(id)
+    }
+
+    /// Whether a log ticks this reminder off: same kind, and for a custom track the same track.
+    func matches(_ event: CareEvent) -> Bool {
+        event.kind == kind && (kind != .custom || event.trackID == trackID)
+    }
+
+    func sameTrack(as other: Reminder) -> Bool {
+        other.kind == kind && (kind != .custom || other.trackID == trackID)
     }
 }
