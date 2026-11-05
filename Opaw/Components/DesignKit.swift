@@ -65,17 +65,18 @@ private struct OptionalLoopMotion: ViewModifier {
 struct BlackPillButtonStyle: ButtonStyle {
     var height: CGFloat = 64
     var inverted = false
+    var fontSize: CGFloat = 17
     @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.opaw(17, .heavy))
+            .font(.opaw(fontSize, .heavy))
             .foregroundStyle(inverted ? Color(hex: 0x111111) : Color.white)
             .frame(maxWidth: .infinity)
             .frame(height: height)
             .background(inverted ? Color.white : Color(hex: 0x111111), in: Capsule())
             .opacity(isEnabled ? 1 : 0.3)
-            .shadow(color: .black.opacity(0.18), radius: 14, y: 14)
+            .shadow(color: .black.opacity(inverted ? 0.07 : 0.18), radius: inverted ? 13 : 14, y: inverted ? 10 : 14)
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: configuration.isPressed)
     }

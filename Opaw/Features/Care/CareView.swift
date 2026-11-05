@@ -15,6 +15,9 @@ struct CareView: View {
     @State private var showCustom = false
     @State private var toast: CareToast?
     @State private var celebration: Badge?
+    @State private var showScheduleDuo = false
+    @Environment(\.duoOpen) private var duoOpen
+    @Environment(TabReselect.self) private var reselect: TabReselect?
 
     private var dog: Dog? {
         dogs.first { $0.id.uuidString == activeDogID } ?? dogs.first
@@ -28,10 +31,20 @@ struct CareView: View {
             ZStack {
                 if let dog {
                     TimelineView(.periodic(from: .now, by: 60)) { context in
-                        content(dog: dog, now: context.date)
+                        if duoOpen {
+                            DuoPanes {
+                                duoContent(dog: dog, now: context.date)
+                            } right: {
+                                PoopLogForm(dog: dog, style: .card) { event in record(event, dog: dog) }
+                                    .id(dog.id)
+                                    .padding(.top, 10)
+                            }
+                        } else {
+                            content(dog: dog, now: context.date)
+                        }
                     }
                 }
-                if showPoop, let dog {
+                if showPoop, let dog, !duoOpen {
                     PoopLogOverlay(dog: dog) { event in
                         if let event { record(event, dog: dog) }
                         withAnimation(.spring(response: 0.45, dampingFraction: 0.9)) { showPoop = false }
@@ -43,6 +56,10 @@ struct CareView: View {
             .opawBackground()
             .careToast($toast, bottom: 110)
             .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(isPresented: $showScheduleDuo) {
+                if let dog { ScheduleHistoryDuo(dog: dog) }
+            }
+            .onChange(of: reselect?.taps[.care]) { showScheduleDuo = false }
             .sheet(item: $detailKind) { kind in
                 if let dog {
                     CareLogSheet(dog: dog, initialKind: kind) { }
@@ -110,21 +127,104 @@ struct CareView: View {
         .scrollIndicators(.hidden)
     }
 
+    // MARK: Open display (6e)
+
+    private func duoContent(dog: Dog, now: Date) -> some View {
+        ScrollView {
+            VStack(spacing: 0) {
+                HStack {
+                    Text("Care")
+                        .font(.opaw(26, .black))
+                        .foregroundStyle(Color.opawInk)
+                    Spacer()
+                    Menu {
+                        ForEach(dogs) { item in
+                            Button(item.name) {
+                                activeDogID = item.id.uuidString
+                                WidgetCenter.shared.reloadTimelines(ofKind: OpawWidgetKind.quickLog)
+                            }
+                        }
+                    } label: {
+                        PetChip(dog: dog)
+                    }
+                }
+                .frame(minHeight: 54)
+                .padding(.top, 10)
+
+                Button { showScheduleDuo = true } label: {
+                    streakLabel(dog: dog, compact: true)
+                }
+                .buttonStyle(.pressable)
+                .accessibilityHint("Opens the schedule and history")
+                .padding(.top, 12)
+
+                grid(dog: dog, now: now, compact: true)
+                    .padding(.top, 18)
+
+                recentCard(dog: dog, now: now)
+                    .padding(.top, 16)
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 24)
+        }
+        .scrollIndicators(.hidden)
+        .padding(.horizontal, -20)
+    }
+
+    /// The day's logs without the heading, as the open display shows them (6e).
+    private func recentCard(dog: Dog, now: Date) -> some View {
+        let events = dog.events(on: now).sorted { $0.date > $1.date }
+        return VStack(spacing: 0) {
+            if events.isEmpty {
+                Text("Nothing yet. Tap a circle above to log.")
+                    .font(.opaw(15, .semibold))
+                    .foregroundStyle(Color.opawMuted)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 11)
+            }
+            ForEach(Array(events.prefix(4).enumerated()), id: \.element.id) { index, event in
+                HStack(spacing: 0) {
+                    Text(event.date.formatted(date: .omitted, time: .shortened))
+                        .foregroundStyle(Color.opawFaint)
+                        .frame(width: 52, alignment: .leading)
+                    Text(caringLine(event))
+                        .foregroundStyle(Color.opawInk)
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                }
+                .font(.opaw(15, .semibold))
+                .padding(.vertical, 11)
+                .overlay(alignment: .top) {
+                    if index > 0 { Rectangle().fill(Color.opawHairline).frame(height: 1) }
+                }
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 4)
+        .whiteCard()
+    }
+
     private func streakCard(dog: Dog) -> some View {
+        NavigationLink {
+            HistoryView(dog: dog)
+        } label: {
+            streakLabel(dog: dog, compact: false)
+        }
+        .buttonStyle(.pressable)
+    }
+
+    private func streakLabel(dog: Dog, compact: Bool) -> some View {
         let streak = dog.careStreak
         let counts = dog.lastSevenDayCounts
         // Today sits fifth, as in the design: four days before it and two still to come.
         let bars: [Int?] = Array(counts.suffix(5)).map { Optional($0) } + [nil, nil]
-        return NavigationLink {
-            HistoryView(dog: dog)
-        } label: {
-            HStack(spacing: 16) {
+        return HStack(spacing: 16) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(streak == 1 ? "1-day streak" : "\(streak)-day streak")
-                        .font(.opaw(22, .black))
+                        .font(.opaw(compact ? 20 : 22, .black))
                         .foregroundStyle(Color.opawInk)
-                    Text("Log 3 things a day to keep it going")
-                        .font(.opaw(14, .medium))
+                    Text(compact ? "Log 3 things a day" : "Log 3 things a day to keep it going")
+                        .font(.opaw(compact ? 13 : 14, .medium))
                         .foregroundStyle(Color.opawMuted)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -133,28 +233,26 @@ struct CareView: View {
                     ForEach(Array(bars.enumerated()), id: \.offset) { index, count in
                         RoundedRectangle(cornerRadius: 6, style: .continuous)
                             .fill((count ?? 0) >= 3 ? Color.opawInk : Color.opawTrack)
-                            .frame(width: 12, height: index == 4 ? 30 : 22)
+                            .frame(width: compact ? 11 : 12, height: index == 4 ? (compact ? 28 : 30) : (compact ? 20 : 22))
                     }
                 }
                 .accessibilityHidden(true)
             }
             .padding(.horizontal, 20)
-            .padding(.vertical, 16)
+            .padding(.vertical, compact ? 14 : 16)
             .whiteCard()
-        }
-        .buttonStyle(.pressable)
     }
 
-    private func grid(dog: Dog, now: Date) -> some View {
+    private func grid(dog: Dog, now: Date, compact: Bool = false) -> some View {
         let due = dog.dueKinds(now: now)
-        return LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0), count: 4), spacing: 16) {
+        return LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0), count: 4), spacing: compact ? 14 : 16) {
             ForEach(Self.gridKinds.filter { dog.trackedKindsRaw.isEmpty || dog.trackedKindsRaw.contains($0.rawValue) }) { kind in
                 let count = dog.count(kind, on: now)
                 let alert = due.contains(kind)
                 Button {
                     tap(kind, dog: dog)
                 } label: {
-                    circle(symbol: kind.symbol, label: kind.shortTitle, badge: alert ? "!" : (count > 0 ? "\(count)" : nil), alert: alert)
+                    circle(symbol: kind.symbol, label: kind.shortTitle, badge: alert ? "!" : (count > 0 ? "\(count)" : nil), alert: alert, selected: compact && kind == .poop, size: compact ? 62 : 68)
                 }
                 .buttonStyle(.pressable)
                 .contextMenu {
@@ -169,19 +267,19 @@ struct CareView: View {
             Button {
                 showCustom = true
             } label: {
-                circle(symbol: "plus", label: "Custom", badge: nil, alert: false)
+                circle(symbol: "plus", label: "Custom", badge: nil, alert: false, size: compact ? 62 : 68)
             }
             .buttonStyle(.pressable)
             .accessibilityLabel("Custom log")
         }
     }
 
-    private func circle(symbol: String, label: String, badge: String?, alert: Bool) -> some View {
+    private func circle(symbol: String, label: String, badge: String?, alert: Bool, selected: Bool = false, size: CGFloat = 68) -> some View {
         VStack(spacing: 6) {
-            SymbolIcon(symbol: symbol, size: 26)
-                .foregroundStyle(alert ? Color.opawAlert : Color.opawInk)
-                .frame(width: 68, height: 68)
-                .background(Color.opawSurface, in: Circle())
+            SymbolIcon(symbol: symbol, size: size * 0.38, cutoutColor: selected ? Color(hex: 0x111111) : .white)
+                .foregroundStyle(selected ? Color.white : (alert ? Color.opawAlert : Color.opawInk))
+                .frame(width: size, height: size)
+                .background(selected ? Color(hex: 0x111111) : Color.opawSurface, in: Circle())
                 .overlay {
                     if alert { Circle().strokeBorder(Color.opawAlert, lineWidth: 2.5) }
                 }
@@ -279,6 +377,8 @@ struct CareView: View {
         switch kind {
         case .poop:
             Haptics.tap()
+            // On the open display the poop form is already in the right pane.
+            guard !duoOpen else { return }
             withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) { showPoop = true }
         case .weight, .vet:
             detailKind = kind
@@ -301,11 +401,6 @@ struct PoopLogOverlay: View {
     let dog: Dog
     let onDone: (CareEvent?) -> Void
 
-    @State private var consistency: PoopConsistency = .normal
-    @State private var color: PoopColor = .brown
-    @State private var note = ""
-    @State private var date = Date()
-    @State private var editTime = false
     @State private var appeared = false
 
     var body: some View {
@@ -328,7 +423,7 @@ struct PoopLogOverlay: View {
                     .shadow(color: .black.opacity(0.12), radius: 12, y: 10)
                     .padding(.leading, 170)
                     .padding(.top, 20)
-                logSheet
+                PoopLogForm(dog: dog, style: .sheet) { event in onDone(event) }
                     .padding(.top, 120)
             }
             .offset(y: appeared ? 0 : 800)
@@ -352,18 +447,65 @@ struct PoopLogOverlay: View {
                 .foregroundStyle(.white)
         }
     }
+}
+
+/// The poop form: a bottom sheet on the phone (3b), a white card filling the right pane on the open display (6e).
+struct PoopLogForm: View {
+    enum Style { case sheet, card }
+
+    let dog: Dog
+    let style: Style
+    let onLog: (CareEvent) -> Void
+
+    @State private var consistency: PoopConsistency = .normal
+    @State private var color: PoopColor = .brown
+    @State private var note = ""
+    @State private var date = Date()
+    @State private var editTime = false
 
     private var timeLabel: String {
         let time = date.formatted(date: .omitted, time: .shortened)
         return abs(date.timeIntervalSinceNow) < 120 ? "Now · \(time)" : time
     }
 
-    private var logSheet: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Capsule()
-                .fill(Color(hex: 0xDDDDDD))
-                .frame(width: 40, height: 5)
-                .frame(maxWidth: .infinity)
+    var body: some View {
+        if style == .sheet {
+            fields
+                .padding(.horizontal, 24)
+                .padding(.top, 12)
+                .padding(.bottom, 24)
+                .background(
+                    Color.white
+                        .clipShape(UnevenRoundedRectangle(topLeadingRadius: 40, bottomLeadingRadius: 0, bottomTrailingRadius: 0, topTrailingRadius: 40))
+                        .ignoresSafeArea(edges: .bottom)
+                )
+        } else {
+            ScrollView {
+                fields
+                    .padding(.horizontal, 22)
+                    .padding(.vertical, 20)
+                    .frame(minHeight: 0)
+            }
+            .scrollIndicators(.hidden)
+            .scrollBounceBehavior(.basedOnSize)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                logButton
+                    .padding(.horizontal, 22)
+                    .padding(.bottom, 20)
+            }
+            .background(Color.white, in: RoundedRectangle(cornerRadius: 30, style: .continuous))
+            .shadow(color: .black.opacity(0.05), radius: 15, y: 12)
+        }
+    }
+
+    private var fields: some View {
+        VStack(alignment: .leading, spacing: style == .sheet ? 18 : 16) {
+            if style == .sheet {
+                Capsule()
+                    .fill(Color(hex: 0xDDDDDD))
+                    .frame(width: 40, height: 5)
+                    .frame(maxWidth: .infinity)
+            }
             HStack {
                 Text("Poop")
                     .font(.opaw(30, .black))
@@ -394,10 +536,18 @@ struct PoopLogOverlay: View {
             }
             VStack(alignment: .leading, spacing: 10) {
                 label("Color")
-                HStack(spacing: 0) {
-                    ForEach(PoopColor.allCases) { option in
-                        if option != PoopColor.allCases.first { Spacer(minLength: 0) }
-                        swatch(option)
+                if style == .sheet {
+                    HStack(spacing: 0) {
+                        ForEach(PoopColor.allCases) { option in
+                            if option != PoopColor.allCases.first { Spacer(minLength: 0) }
+                            swatch(option, size: 44)
+                        }
+                    }
+                } else {
+                    HStack(spacing: 22) {
+                        ForEach(PoopColor.allCases) { option in
+                            swatch(option, size: 42)
+                        }
                     }
                 }
             }
@@ -407,29 +557,33 @@ struct PoopLogOverlay: View {
                 .padding(.horizontal, 18)
                 .padding(.vertical, 14)
                 .background(Color(hex: 0xF6F6F7), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-            Button {
-                let event = CareEvent(kind: .poop, date: date, note: note.trimmingCharacters(in: .whitespacesAndNewlines), dog: dog)
-                event.poopConsistency = consistency
-                event.poopColor = color
-                onDone(event)
-            } label: {
-                Text("Log poop")
-                    .font(.opaw(17, .heavy))
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 62)
-                    .background(Color(hex: 0x111111), in: Capsule())
+            if style == .sheet {
+                logButton
             }
-            .buttonStyle(.pressable)
         }
-        .padding(.horizontal, 24)
-        .padding(.top, 12)
-        .padding(.bottom, 24)
-        .background(
-            Color.white
-                .clipShape(UnevenRoundedRectangle(topLeadingRadius: 40, bottomLeadingRadius: 0, bottomTrailingRadius: 0, topTrailingRadius: 40))
-                .ignoresSafeArea(edges: .bottom)
-        )
+    }
+
+    private var logButton: some View {
+        Button {
+            let event = CareEvent(kind: .poop, date: date, note: note.trimmingCharacters(in: .whitespacesAndNewlines), dog: dog)
+            event.poopConsistency = consistency
+            event.poopColor = color
+            onLog(event)
+            if style == .card {
+                note = ""
+                date = Date()
+                editTime = false
+            }
+        } label: {
+            Text("Log poop")
+                .font(.opaw(17, .heavy))
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 62)
+                .background(Color(hex: 0x111111), in: Capsule())
+                .shadow(color: .black.opacity(style == .card ? 0.18 : 0), radius: 14, y: 14)
+        }
+        .buttonStyle(.pressable)
     }
 
     private func label(_ text: String) -> some View {
@@ -438,7 +592,7 @@ struct PoopLogOverlay: View {
             .foregroundStyle(Color(hex: 0x999999))
     }
 
-    private func swatch(_ option: PoopColor) -> some View {
+    private func swatch(_ option: PoopColor, size: CGFloat) -> some View {
         let selected = option == color
         return Button {
             color = option
@@ -448,12 +602,12 @@ struct PoopLogOverlay: View {
                 Circle()
                     .fill(option.swatch)
                     .overlay(Circle().strokeBorder(Color.black.opacity(selected ? 0 : 0.08), lineWidth: 1))
-                    .frame(width: 44, height: 44)
+                    .frame(width: size, height: size)
                     .padding(5.5)
                     .overlay {
                         if selected { Circle().strokeBorder(Color(hex: 0x111111), lineWidth: 2.5) }
                     }
-                    .frame(width: 44, height: 44)
+                    .frame(width: size, height: size)
                 Text(option.title)
                     .font(.opaw(12, .semibold))
                     .foregroundStyle(selected ? Color(hex: 0x111111) : Color(hex: 0x999999))

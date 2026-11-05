@@ -3,6 +3,8 @@ import SwiftUI
 
 /// Settings: Subscription (5f): the trial countdown or plan, renewal and billing, and Manage subscription.
 struct SubscriptionView: View {
+    /// True in the open display's right pane (6o): a left-aligned title, fewer details, Restore beside Manage.
+    var inPane = false
     @Environment(PremiumStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     @State private var showManage = false
@@ -10,20 +12,25 @@ struct SubscriptionView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ScreenHeader(title: "Subscription") {
-                Button { dismiss() } label: { RoundIcon(symbol: "chevron.left") }
-                    .buttonStyle(.pressable)
-                    .accessibilityLabel("Back")
-            } trailing: {
-                Color.clear.frame(width: 54, height: 54)
+            if inPane {
+                PaneHeader(title: "Subscription")
+            } else {
+                ScreenHeader(title: "Subscription") {
+                    Button { dismiss() } label: { RoundIcon(symbol: "chevron.left") }
+                        .buttonStyle(.pressable)
+                        .accessibilityLabel("Back")
+                } trailing: {
+                    Color.clear.frame(width: 54, height: 54)
+                }
             }
             ScrollView {
                 VStack(spacing: 0) {
                     if let status = store.status {
                         planCard(status)
-                            .padding(.top, 18)
+                            .padding(.top, inPane ? 12 : 18)
                         details(status)
                             .padding(.top, 12)
+                        if !inPane {
                         Text(footnote(status))
                             .font(.opaw(14, .medium))
                             .foregroundStyle(Color.opawMuted)
@@ -31,17 +38,22 @@ struct SubscriptionView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, 8)
                             .padding(.top, 14)
+                        }
                     } else {
                         freeCard
-                            .padding(.top, 18)
+                            .padding(.top, inPane ? 12 : 18)
                     }
                 }
                 .padding(.horizontal, 20)
-                .padding(.bottom, 160)
+                .padding(.bottom, inPane ? 90 : 160)
             }
             .scrollIndicators(.hidden)
+            .padding(.horizontal, inPane ? -20 : 0)
         }
         .overlay(alignment: .bottom) {
+            if inPane {
+                paneButtons
+            } else {
             VStack(spacing: 14) {
                 if store.isPremium {
                     Button("Manage subscription") { showManage = true }
@@ -56,6 +68,7 @@ struct SubscriptionView: View {
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 8)
+            }
         }
         .opawBackground()
         .toolbar(.hidden, for: .navigationBar)
@@ -70,6 +83,26 @@ struct SubscriptionView: View {
         } message: {
             Text(store.errorMessage ?? "")
         }
+    }
+
+    /// Restore, then Manage subscription at twice the width (6o).
+    private var paneButtons: some View {
+        GeometryReader { proxy in
+            let restoreWidth = (proxy.size.width - 10) / 3
+            HStack(spacing: 10) {
+                Button("Restore") { Task { await store.restore() } }
+                    .buttonStyle(BlackPillButtonStyle(height: 62, inverted: true, fontSize: 16))
+                    .frame(width: restoreWidth)
+                if store.isPremium {
+                    Button("Manage subscription") { showManage = true }
+                        .buttonStyle(BlackPillButtonStyle(height: 62, fontSize: 16))
+                } else {
+                    Button("Try Opaw Premium") { showPaywall = true }
+                        .buttonStyle(BlackPillButtonStyle(height: 62, fontSize: 16))
+                }
+            }
+        }
+        .frame(height: 62)
     }
 
     // MARK: Cards
@@ -88,10 +121,11 @@ struct SubscriptionView: View {
                     .background(Color(hex: 0x111111), in: Capsule())
             }
             Text(headline(status))
-                .font(.opaw(44, .black))
+                .font(.opaw(inPane ? 40 : 44, .black))
+                .tracking(inPane ? -0.8 : 0)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
-                .padding(.top, 14)
+                .padding(.top, inPane ? 12 : 14)
             if status.isTrial, let end = status.expirationDate {
                 let total = max(1, Calendar.current.dateComponents([.day], from: status.purchaseDate, to: end).day ?? 7)
                 let used = min(total, max(0, total - daysLeft(until: end)))
@@ -102,8 +136,9 @@ struct SubscriptionView: View {
                             .frame(height: 8)
                     }
                 }
-                .padding(.top, 16)
+                .padding(.top, inPane ? 14 : 16)
             }
+            if !inPane {
             HStack {
                 Text("Started \(status.purchaseDate.formatted(.dateTime.month(.abbreviated).day()))")
                 Spacer()
@@ -114,9 +149,11 @@ struct SubscriptionView: View {
             .font(.opaw(12, .semibold))
             .foregroundStyle(Color.opawFaint)
             .padding(.top, 8)
+            }
         }
         .foregroundStyle(Color.opawInk)
-        .padding(20)
+        .padding(.horizontal, 20)
+        .padding(.vertical, inPane ? 18 : 20)
         .whiteCard()
     }
 
@@ -127,12 +164,14 @@ struct SubscriptionView: View {
                 detailRow(status.willRenew ? "Renews" : "Ends", end.formatted(.dateTime.month(.abbreviated).day().year()))
             }
             if let reminder = store.trialReminderDate {
-                detailRow("Reminder", "\(reminder.formatted(.dateTime.month(.abbreviated).day())), by notification")
+                detailRow("Reminder", reminder.formatted(.dateTime.month(.abbreviated).day()) + (inPane ? "" : ", by notification"))
             }
-            detailRow("Billed through", "App Store")
+            if !inPane {
+                detailRow("Billed through", "App Store")
+            }
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 4)
+        .padding(.vertical, inPane ? 2 : 4)
         .whiteCard()
     }
 
@@ -147,7 +186,7 @@ struct SubscriptionView: View {
                 .foregroundStyle(Color.opawInk)
                 .multilineTextAlignment(.trailing)
         }
-        .padding(.vertical, 14)
+        .padding(.vertical, inPane ? 12 : 14)
         .overlay(alignment: .top) {
             if !first { Rectangle().fill(Color.opawHairline).frame(height: 1) }
         }

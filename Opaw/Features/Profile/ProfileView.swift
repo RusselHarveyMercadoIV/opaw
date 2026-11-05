@@ -14,12 +14,199 @@ struct ProfileView: View {
     @State private var showWidgetHelp = false
     @State private var showBackupNote = false
     @State private var showNearby = false
+    @State private var pane: SettingsPane = .subscription
+    @Environment(\.duoOpen) private var duoOpen
+
+    /// What the right pane shows on the open display (6o).
+    enum SettingsPane { case subscription, household, units, history }
 
     private var dog: Dog? {
         dogs.first { $0.id.uuidString == activeDogID } ?? dogs.first
     }
 
     var body: some View {
+        Group {
+            if duoOpen {
+                NavigationStack { duoBody }
+            } else {
+                phoneBody
+            }
+        }
+        .premiumPaywall(isPresented: $showPaywall)
+        .adaptiveSheet(isPresented: $showNearby, wide: duoOpen) { PackView() }
+        .alert("Add an Opaw widget", isPresented: $showWidgetHelp) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Touch and hold your Home Screen or Lock Screen, tap Edit, then Add Widget, and pick Opaw.")
+        }
+        .alert("iCloud backup", isPresented: $showBackupNote) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Backup to iCloud is coming soon. For now, everything stays on this iPhone.")
+        }
+    }
+
+    // MARK: Open display (6o)
+
+    private var duoBody: some View {
+        DuoPanes(rail: false, leading: 30) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack(spacing: 16) {
+                        Button { dismiss() } label: { RoundIcon(symbol: "chevron.left") }
+                            .buttonStyle(.pressable)
+                            .accessibilityLabel("Back")
+                        Text("Settings")
+                            .font(.opaw(26, .black))
+                            .foregroundStyle(Color.opawInk)
+                    }
+                    .frame(minHeight: 54)
+                    .padding(.top, 10)
+                    if let dog {
+                        NavigationLink {
+                            EditDogView(dog: dog)
+                        } label: {
+                            HStack(spacing: 14) {
+                                MiniFace(data: dog.cutoutData ?? dog.photoData, size: 56, rim: 4, fill: Color.opawTrack)
+                                    .shadow(color: .black.opacity(0.06), radius: 10, y: 8)
+                                VStack(alignment: .leading, spacing: 0) {
+                                    Text(dog.name)
+                                        .font(.opaw(20, .black))
+                                        .foregroundStyle(Color.opawInk)
+                                    Text(subtitle(dog, includePlan: false))
+                                        .font(.opaw(14, .medium))
+                                        .foregroundStyle(Color.opawMuted)
+                                        .lineLimit(1)
+                                }
+                                Spacer(minLength: 0)
+                            }
+                        }
+                        .buttonStyle(.pressable)
+                        .padding(.top, 14)
+                    }
+                    paneCard {
+                        paneRow(.sparkle, "Subscription", value: subscriptionValue, target: .subscription, divider: false)
+                        paneRow(.users, "Household", target: .household, divider: false)
+                        paneAction(.bell, "Notifications", divider: pane != .household) {
+                            if let url = URL(string: UIApplication.openNotificationSettingsURLString) { openURL(url) }
+                        }
+                        paneRow(.ruler, "Units", target: .units, divider: true)
+                        paneAction(.help, "Help", divider: pane != .units) {
+                            openURL(URL(string: "https://github.com/RusselHarveyMercadoIV/opaw/issues")!)
+                        }
+                    }
+                    .padding(.top, 14)
+                    paneCard {
+                        paneAction(.heart, "Friends nearby", divider: false) { showNearby = true }
+                        paneAction(.grid, "Home Screen widgets", divider: true, locked: !premium.isPremium) {
+                            if premium.isPremium { showWidgetHelp = true } else { showPaywall = true }
+                        }
+                        paneAction(.cloud, "iCloud backup", divider: true, locked: !premium.isPremium) {
+                            if premium.isPremium { showBackupNote = true } else { showPaywall = true }
+                        }
+                        if premium.isPremium {
+                            paneRow(.chart, "Full history", target: .history, divider: true)
+                        } else {
+                            paneAction(.chart, "Full history", divider: true, locked: true) { showPaywall = true }
+                        }
+                    }
+                    .padding(.top, 12)
+                }
+                .padding(.leading, 20)
+                .padding(.trailing, 36)
+                .padding(.bottom, 24)
+            }
+            .scrollIndicators(.hidden)
+            .padding(.horizontal, -20)
+        } right: {
+            switch pane {
+            case .subscription: SubscriptionView(inPane: true)
+            case .household: HouseholdView(petName: dog?.name ?? "your pet", inPane: true)
+            case .units: UnitsView(inPane: true)
+            case .history:
+                if let dog { HistoryView(dog: dog, inPane: true) }
+            }
+        }
+        .opawBackground()
+        .toolbar(.hidden, for: .navigationBar)
+    }
+
+    private var subscriptionValue: String {
+        guard let status = premium.status else { return "Free" }
+        if status.isTrial, let end = status.expirationDate {
+            let calendar = Calendar.current
+            let days = max(0, calendar.dateComponents([.day], from: calendar.startOfDay(for: Date()), to: calendar.startOfDay(for: end)).day ?? 0)
+            return "Trial · \(days) \(days == 1 ? "day" : "days")"
+        }
+        return status.plan.title
+    }
+
+    private func paneCard<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        VStack(spacing: 0) { content() }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 6)
+            .whiteCard()
+    }
+
+    /// A row that shows its page in the right pane; the open one is highlighted (6o).
+    private func paneRow(_ icon: DesignIcon, _ title: String, value: String? = nil, target: SettingsPane, divider: Bool) -> some View {
+        let selected = pane == target
+        return Button {
+            Haptics.select()
+            withAnimation(.snappy) { pane = target }
+        } label: {
+            paneRowLabel(icon, title, selected: selected, divider: divider && !selected) {
+                if let value {
+                    Text(value)
+                        .font(.opaw(13, .bold))
+                        .foregroundStyle(Color(hex: 0x666666))
+                } else {
+                    Icon(.chevronRight, size: 16, weight: 2.6).foregroundStyle(Color.opawGhost)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private func paneAction(_ icon: DesignIcon, _ title: String, divider: Bool, locked: Bool = false, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            paneRowLabel(icon, title, selected: false, divider: divider) {
+                if locked {
+                    PremiumTag()
+                } else {
+                    Icon(.chevronRight, size: 16, weight: 2.6).foregroundStyle(Color.opawGhost)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func paneRowLabel<Trailing: View>(_ icon: DesignIcon, _ title: String, selected: Bool, divider: Bool, @ViewBuilder trailing: () -> Trailing) -> some View {
+        HStack(spacing: 14) {
+            Icon(icon, size: 16, cutoutColor: selected ? Color(hex: 0x111111) : Color.opawChip)
+                .foregroundStyle(selected ? Color.white : Color.opawInk)
+                .frame(width: 34, height: 34)
+                .background(selected ? Color(hex: 0x111111) : Color.opawChip, in: Circle())
+            Text(title)
+                .font(.opaw(15, .bold))
+                .foregroundStyle(Color.opawInk)
+            Spacer(minLength: 8)
+            trailing()
+        }
+        .padding(.vertical, 11)
+        .padding(.horizontal, 12)
+        .background(selected ? Color.opawChip : Color.clear, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .contentShape(Rectangle())
+        .overlay(alignment: .top) {
+            if divider { Rectangle().fill(Color.opawHairline).frame(height: 1).padding(.horizontal, 12) }
+        }
+        .padding(.horizontal, -12)
+    }
+
+    // MARK: Phone (5e)
+
+    private var phoneBody: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 ScreenHeader(title: "Settings") {
@@ -66,18 +253,6 @@ struct ProfileView: View {
             .opawBackground()
             .toolbar(.hidden, for: .navigationBar)
         }
-        .premiumPaywall(isPresented: $showPaywall)
-        .sheet(isPresented: $showNearby) { PackView() }
-        .alert("Add an Opaw widget", isPresented: $showWidgetHelp) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text("Touch and hold your Home Screen or Lock Screen, tap Edit, then Add Widget, and pick Opaw.")
-        }
-        .alert("iCloud backup", isPresented: $showBackupNote) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text("Backup to iCloud is coming soon. For now, everything stays on this iPhone.")
-        }
     }
 
     private var planName: String {
@@ -98,7 +273,7 @@ struct ProfileView: View {
                     Text(dog.name)
                         .font(.opaw(22, .black))
                         .foregroundStyle(Color.opawInk)
-                    Text(subtitle(dog))
+                    Text(subtitle(dog, includePlan: true))
                         .font(.opaw(14, .medium))
                         .foregroundStyle(Color.opawMuted)
                         .lineLimit(1)
@@ -110,17 +285,19 @@ struct ProfileView: View {
         .padding(.bottom, 6)
     }
 
-    private func subtitle(_ dog: Dog) -> String {
+    private func subtitle(_ dog: Dog, includePlan: Bool) -> String {
         var parts: [String] = []
         if !dog.breed.isEmpty { parts.append(dog.breed) }
         if dog.birthDate != nil {
             let years = Int(dog.ageYears)
             parts.append(years < 1 ? "\(max(1, Int(dog.ageYears * 12))) mo" : (years == 1 ? "1 yr" : "\(years) yrs"))
         }
-        if let status = premium.status {
-            parts.append(status.isTrial ? "Premium trial" : "Premium")
-        } else {
-            parts.append("Free plan")
+        if includePlan {
+            if let status = premium.status {
+                parts.append(status.isTrial ? "Premium trial" : "Premium")
+            } else {
+                parts.append("Free plan")
+            }
         }
         return parts.joined(separator: " · ")
     }
@@ -212,17 +389,22 @@ struct ProfileView: View {
 
 /// Profile > Units: kilometres and kilograms, or miles and pounds.
 struct UnitsView: View {
+    var inPane = false
     @AppStorage(OpawFormat.imperialKey, store: OpawDefaults.shared) private var imperial = false
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         VStack(spacing: 0) {
-            ScreenHeader(title: "Units") {
-                Button { dismiss() } label: { RoundIcon(symbol: "chevron.left") }
-                    .buttonStyle(.pressable)
-                    .accessibilityLabel("Back")
-            } trailing: {
-                Color.clear.frame(width: 54, height: 54)
+            if inPane {
+                PaneHeader(title: "Units")
+            } else {
+                ScreenHeader(title: "Units") {
+                    Button { dismiss() } label: { RoundIcon(symbol: "chevron.left") }
+                        .buttonStyle(.pressable)
+                        .accessibilityLabel("Back")
+                } trailing: {
+                    Color.clear.frame(width: 54, height: 54)
+                }
             }
             VStack(spacing: 0) {
                 option("Metric", detail: "Kilometres and kilograms", selected: !imperial, first: true) { imperial = false }
@@ -231,8 +413,8 @@ struct UnitsView: View {
             .padding(.horizontal, 20)
             .padding(.vertical, 4)
             .whiteCard()
-            .padding(.horizontal, 20)
-            .padding(.top, 18)
+            .padding(.horizontal, inPane ? 0 : 20)
+            .padding(.top, inPane ? 12 : 18)
             Spacer()
         }
         .opawBackground()

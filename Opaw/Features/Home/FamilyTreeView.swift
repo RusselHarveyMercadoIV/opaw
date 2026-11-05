@@ -16,12 +16,140 @@ struct FamilyTreeView: View {
     @State private var showPetLimit = false
     @State private var showPaywall = false
     @Environment(PremiumStore.self) private var premium
+    @Environment(\.duoOpen) private var duoOpen
+    @Environment(\.windowWidth) private var windowWidth
 
     private var mom: Relative? { dog.relatives.first { $0.role == .mom } }
     private var dad: Relative? { dog.relatives.first { $0.role == .dad } }
     private var siblings: [Relative] { dog.relatives.filter { $0.role == .brother || $0.role == .sister } }
 
     var body: some View {
+        Group {
+            if duoOpen {
+                duoBody
+            } else {
+                phoneBody
+            }
+        }
+        .opawBackground()
+        .toolbar(.hidden, for: .navigationBar)
+        .hidesFloatingTabBar()
+        .sheet(item: $addRole) { role in
+            RelativeSheet(relative: Relative(name: "", role: role)) { save($0) }
+        }
+        .sheet(item: $editing) { relative in
+            RelativeSheet(relative: relative, onDelete: { remove(relative) }) { save($0) }
+        }
+        .adaptiveSheet(isPresented: $showProfile, wide: duoOpen) { ProfileView() }
+        .sheet(isPresented: $showAddDog) { AddDogSheet() }
+        .sheet(isPresented: $showPetLimit) { PetLimitSheet(dog: dog) { showPaywall = true } }
+        .premiumPaywall(isPresented: $showPaywall)
+    }
+
+    // MARK: Open display (6k)
+
+    /// The tree spread across both panes, laid out on the design's 890-point screen.
+    private var duoBody: some View {
+        GeometryReader { proxy in
+            let frame = proxy.frame(in: .global)
+            let sx = (windowWidth > 0 ? windowWidth : frame.width) / 890
+            let ox = -frame.minX
+            let x = { (value: CGFloat) in value * sx + ox }
+            // The design's content starts 40 points down, under the status bar.
+            let y = { (value: CGFloat) in value - 40 }
+            ZStack(alignment: .topLeading) {
+                Path { path in
+                    path.move(to: CGPoint(x: x(398), y: y(190))); path.addLine(to: CGPoint(x: x(572), y: y(190)))
+                    path.move(to: CGPoint(x: x(485), y: y(190))); path.addLine(to: CGPoint(x: x(485), y: y(280)))
+                    path.move(to: CGPoint(x: x(290), y: y(280))); path.addLine(to: CGPoint(x: x(680), y: y(280)))
+                    path.move(to: CGPoint(x: x(290), y: y(280))); path.addLine(to: CGPoint(x: x(290), y: y(330)))
+                    path.move(to: CGPoint(x: x(485), y: y(280))); path.addLine(to: CGPoint(x: x(485), y: y(320)))
+                    path.move(to: CGPoint(x: x(680), y: y(280))); path.addLine(to: CGPoint(x: x(680), y: y(330)))
+                }
+                .stroke(Color(hex: 0xD4D4D8), style: StrokeStyle(lineWidth: 3, lineCap: .round))
+
+                node(mom, role: .mom, size: 76, nameSize: 17, subtitleSize: 13, width: 150)
+                    .offset(x: x(358) - 75, y: y(120))
+                node(dad, role: .dad, size: 76, nameSize: 17, subtitleSize: 13, width: 150)
+                    .offset(x: x(544) - 75, y: y(120))
+                node(siblings.first, role: .brother, size: 76, nameSize: 17, subtitleSize: 13, width: 150)
+                    .offset(x: x(276) - 75, y: y(330))
+                center(size: 96, nameSize: 20, subtitleSize: 13, width: 150)
+                    .offset(x: x(477) - 75, y: y(318))
+                node(siblings.dropFirst().first, role: .sister, size: 76, nameSize: 17, subtitleSize: 13, width: 150)
+                    .offset(x: x(686) - 75, y: y(330))
+
+                HStack {
+                    Text("\(dog.name)'s family")
+                        .font(.opaw(26, .black))
+                        .foregroundStyle(Color.opawInk)
+                        .lineLimit(1)
+                    Spacer(minLength: 12)
+                    ShareLink(item: inviteMessage) {
+                        HStack(spacing: 8) {
+                            Icon(.plus, size: 18, weight: 2.8)
+                            Text(inviteTitle)
+                                .font(.opaw(15, .heavy))
+                                .lineLimit(1)
+                        }
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 20)
+                        .frame(height: 54)
+                        .background(Color(hex: 0x111111), in: Capsule())
+                    }
+                    .buttonStyle(.pressable)
+                }
+                .frame(minHeight: 54)
+                .padding(.leading, x(96))
+                .padding(.trailing, 22)
+                .padding(.top, 10)
+            }
+            .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
+            .overlay(alignment: .bottomLeading) {
+                homeChip
+                    .padding(.leading, x(96))
+                    .padding(.bottom, 10)
+            }
+        }
+    }
+
+    /// "At home: Miso and Mochi": switches to another pet, or adds one.
+    private var homeChip: some View {
+        Menu {
+            ForEach(dogs) { item in
+                Button(item.name) {
+                    onSelect(item)
+                    Haptics.select()
+                    dismiss()
+                }
+            }
+            Button {
+                if premium.isPremium { showAddDog = true } else { showPetLimit = true }
+            } label: {
+                Label("Add a pet", systemImage: "plus")
+            }
+        } label: {
+            HStack(spacing: 10) {
+                HStack(spacing: -12) {
+                    ForEach(Array(dogs.prefix(2).enumerated()), id: \.offset) { index, item in
+                        MiniFace(data: item.cutoutData ?? item.photoData, size: 34, rim: 3, fill: Color.opawTrack)
+                    }
+                }
+                Text("At home: \(ListFormatter.localizedString(byJoining: dogs.map(\.name)))")
+                    .font(.opaw(14, .heavy))
+                    .foregroundStyle(Color.opawInk)
+                    .lineLimit(1)
+            }
+            .padding(.leading, 8)
+            .padding(.trailing, 16)
+            .padding(.vertical, 8)
+            .background(Color.opawSurface, in: Capsule())
+            .floatingShadow()
+        }
+        .accessibilityLabel("Pets at home")
+    }
+
+    private var phoneBody: some View {
         VStack(spacing: 0) {
             ScreenHeader(title: "\(dog.name)'s family") {
                 Button { dismiss() } label: { RoundIcon(symbol: "chevron.left") }
@@ -57,19 +185,6 @@ struct FamilyTreeView: View {
             .padding(.horizontal, 20)
             .padding(.bottom, 4)
         }
-        .opawBackground()
-        .toolbar(.hidden, for: .navigationBar)
-        .hidesFloatingTabBar()
-        .sheet(item: $addRole) { role in
-            RelativeSheet(relative: Relative(name: "", role: role)) { save($0) }
-        }
-        .sheet(item: $editing) { relative in
-            RelativeSheet(relative: relative, onDelete: { remove(relative) }) { save($0) }
-        }
-        .sheet(isPresented: $showProfile) { ProfileView() }
-        .sheet(isPresented: $showAddDog) { AddDogSheet() }
-        .sheet(isPresented: $showPetLimit) { PetLimitSheet(dog: dog) { showPaywall = true } }
-        .premiumPaywall(isPresented: $showPaywall)
     }
 
     // MARK: Tree
@@ -95,7 +210,7 @@ struct FamilyTreeView: View {
                     .position(x: 67 * sx, y: 259)
                 node(siblings.dropFirst().first, role: .sister, size: 76)
                     .position(x: 323 * sx, y: 259)
-                center
+                center()
                     .position(x: 195 * sx, y: 249)
             }
         }
@@ -108,15 +223,15 @@ struct FamilyTreeView: View {
     }
 
     /// A relative's photo, name and role; an empty slot invites adding one.
-    private func node(_ relative: Relative?, role: Relative.Role, size: CGFloat) -> some View {
+    private func node(_ relative: Relative?, role: Relative.Role, size: CGFloat, nameSize: CGFloat = 15, subtitleSize: CGFloat = 12, width: CGFloat = 110) -> some View {
         Button {
             if let relative { editing = relative } else { addRole = role }
         } label: {
             VStack(spacing: 6) {
                 Group {
                     if let relative {
-                        MiniFace(data: relative.photoData, size: size, rim: 4, fill: Color.opawChip, initial: String(relative.name.prefix(1)))
-                            .shadow(color: .black.opacity(0.1), radius: 12, y: 10)
+                        MiniFace(data: relative.photoData, size: size, rim: duoOpen ? 3 : 4, fill: Color.opawChip, initial: String(relative.name.prefix(1)))
+                            .shadow(color: .black.opacity(duoOpen ? 0.08 : 0.1), radius: duoOpen ? 9 : 12, y: duoOpen ? 8 : 10)
                     } else {
                         Icon(.plus, size: 22)
                             .foregroundStyle(Color.opawMuted)
@@ -126,16 +241,16 @@ struct FamilyTreeView: View {
                 }
                 VStack(spacing: 2) {
                     Text(relative?.name ?? "Add \(role.title.lowercased())")
-                        .font(.opaw(15, .black))
+                        .font(.opaw(nameSize, .black))
                         .foregroundStyle(relative == nil ? Color.opawMuted : Color.opawInk)
                     Text(subtitle(relative, role: role))
-                        .font(.opaw(12, .semibold))
+                        .font(.opaw(subtitleSize, .semibold))
                         .foregroundStyle(Color.opawMuted)
                 }
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
             }
-            .frame(width: 110)
+            .frame(width: width)
         }
         .buttonStyle(.pressable)
     }
@@ -145,23 +260,23 @@ struct FamilyTreeView: View {
         return relative.place.isEmpty ? relative.role.title : "\(relative.role.title) · \(relative.place)"
     }
 
-    private var center: some View {
+    private func center(size: CGFloat = 104, nameSize: CGFloat = 18, subtitleSize: CGFloat = 12, width: CGFloat = 110) -> some View {
         Button { showProfile = true } label: {
             VStack(spacing: 6) {
-                MiniFace(data: dog.cutoutData ?? dog.photoData, size: 104, rim: 4, fill: Color.opawSurface)
-                    .overlay(Circle().strokeBorder(Color(hex: 0x111111), lineWidth: 4))
-                    .shadow(color: .black.opacity(0.1), radius: 12, y: 10)
+                MiniFace(data: dog.cutoutData ?? dog.photoData, size: size, rim: 4, fill: Color.opawSurface)
+                    .overlay(Circle().strokeBorder(Color(hex: 0x111111), lineWidth: duoOpen ? 3 : 4).padding(duoOpen ? -3 : 0))
+                    .shadow(color: .black.opacity(duoOpen ? 0.12 : 0.1), radius: 12, y: duoOpen ? 12 : 10)
                 VStack(spacing: 2) {
                     Text(dog.name)
-                        .font(.opaw(18, .black))
+                        .font(.opaw(nameSize, .black))
                         .foregroundStyle(Color.opawInk)
                     Text(ageLine)
-                        .font(.opaw(12, .semibold))
+                        .font(.opaw(subtitleSize, .semibold))
                         .foregroundStyle(Color.opawMuted)
                 }
                 .lineLimit(1)
             }
-            .frame(width: 110)
+            .frame(width: width)
         }
         .buttonStyle(.pressable)
         .accessibilityLabel("\(dog.name). Edit profile")

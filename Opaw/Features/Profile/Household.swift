@@ -189,16 +189,21 @@ private struct InviteSheet: View {
 /// Household, from Profile.
 struct HouseholdView: View {
     let petName: String
+    var inPane = false
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         VStack(spacing: 0) {
-            ScreenHeader(title: "Household") {
-                Button { dismiss() } label: { RoundIcon(symbol: "chevron.left") }
-                    .buttonStyle(.pressable)
-                    .accessibilityLabel("Back")
-            } trailing: {
-                Color.clear.frame(width: 54, height: 54)
+            if inPane {
+                PaneHeader(title: "Household")
+            } else {
+                ScreenHeader(title: "Household") {
+                    Button { dismiss() } label: { RoundIcon(symbol: "chevron.left") }
+                        .buttonStyle(.pressable)
+                        .accessibilityLabel("Back")
+                } trailing: {
+                    Color.clear.frame(width: 54, height: 54)
+                }
             }
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
@@ -210,10 +215,11 @@ struct HouseholdView: View {
                     HouseholdCards(petName: petName)
                 }
                 .padding(.horizontal, 20)
-                .padding(.top, 18)
+                .padding(.top, inPane ? 12 : 18)
                 .padding(.bottom, 60)
             }
             .scrollIndicators(.hidden)
+            .padding(.horizontal, inPane ? -20 : 0)
         }
         .opawBackground()
         .toolbar(.hidden, for: .navigationBar)

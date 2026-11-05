@@ -6,6 +6,8 @@ import WidgetKit
 /// Schedule (3c): today's reminders as a timeline (done, due in red with a Log button, or later), then what's coming up.
 struct ScheduleView: View {
     let dog: Dog
+    /// True in the open display's left pane (6f): a left-aligned title and no back button.
+    var inPane = false
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
@@ -17,7 +19,7 @@ struct ScheduleView: View {
                 VStack(spacing: 0) {
                     todayCard(now: context.date)
                         .padding(.horizontal, 20)
-                        .padding(.top, 16)
+                        .padding(.top, inPane ? 12 : 16)
                     let upcoming = dog.upcomingReminders(after: context.date)
                     if !upcoming.isEmpty {
                         comingUpCard(upcoming)
@@ -25,10 +27,18 @@ struct ScheduleView: View {
                             .padding(.top, 14)
                     }
                 }
-                .padding(.bottom, 60)
+                .padding(.bottom, inPane ? 24 : 60)
             }
             .scrollIndicators(.hidden)
+            .padding(.horizontal, inPane ? -20 : 0)
             .safeAreaInset(edge: .top, spacing: 0) {
+                if inPane {
+                    PaneHeader(title: "Schedule") {
+                        Button { showAdd = true } label: { RoundIcon(symbol: "plus") }
+                            .buttonStyle(.pressable)
+                            .accessibilityLabel("Add reminder")
+                    }
+                } else {
                 ScreenHeader(title: "Schedule") {
                     Button { dismiss() } label: { RoundIcon(symbol: "chevron.left") }
                         .buttonStyle(.pressable)
@@ -39,13 +49,16 @@ struct ScheduleView: View {
                         .accessibilityLabel("Add reminder")
                 }
                 .background(Color.opawCream)
+                }
             }
         }
         .overlay(alignment: .bottom) {
+            if !inPane {
             LinearGradient(colors: [Color.opawCream.opacity(0), Color.opawCream], startPoint: .top, endPoint: .bottom)
                 .frame(height: 40)
                 .ignoresSafeArea(edges: .bottom)
                 .allowsHitTesting(false)
+            }
         }
         .opawBackground()
         .toolbar(.hidden, for: .navigationBar)

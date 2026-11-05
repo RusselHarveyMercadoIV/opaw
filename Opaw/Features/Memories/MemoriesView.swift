@@ -9,6 +9,9 @@ struct MemoriesView: View {
     @AppStorage(OpawDefaults.activeDogKey, store: OpawDefaults.shared) private var activeDogID = ""
     @State private var showAdd = false
     @State private var filter: Filter = .all
+    @State private var path = NavigationPath()
+    @Environment(\.duoOpen) private var duoOpen
+    @Environment(TabReselect.self) private var reselect: TabReselect?
 
     enum Filter: String, CaseIterable {
         case all = "All"
@@ -21,7 +24,32 @@ struct MemoriesView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
+            Group {
+                if duoOpen, let dog {
+                    MemoriesDuo(dog: dog, filter: $filter, showAdd: $showAdd)
+                } else {
+                    feed
+                }
+            }
+            .opawBackground()
+            .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(for: MemoryRoute.self) { route in
+                switch route {
+                case .walk(let walk): WalkDetailView(walk: walk)
+                case .photo(let memory): MemoryDetailView(memory: memory)
+                }
+            }
+            .sheet(isPresented: $showAdd) {
+                if let dog {
+                    AddMemorySheet(dog: dog)
+                }
+            }
+        }
+        .onChange(of: reselect?.taps[.memories]) { path = NavigationPath() }
+    }
+
+    private var feed: some View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack {
@@ -74,14 +102,6 @@ struct MemoriesView: View {
                 .padding(.bottom, 120)
             }
             .scrollIndicators(.hidden)
-            .opawBackground()
-            .toolbar(.hidden, for: .navigationBar)
-            .sheet(isPresented: $showAdd) {
-                if let dog {
-                    AddMemorySheet(dog: dog)
-                }
-            }
-        }
     }
 
     private func emptyText(_ dog: Dog) -> String {
@@ -164,6 +184,241 @@ struct MemoriesView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
         }
         .buttonStyle(.pressable)
+    }
+}
+
+enum MemoryRoute: Hashable {
+    case walk(Walk)
+    case photo(Memory)
+}
+
+// MARK: - Open display (6h)
+
+/// A two-column grid on the left and the chosen memory, large, on the right.
+private struct MemoriesDuo: View {
+    let dog: Dog
+    @Binding var filter: MemoriesView.Filter
+    @Binding var showAdd: Bool
+    @State private var selectedID: String?
+
+    private enum Entry: Identifiable {
+        case walk(Walk, photo: Memory?)
+        case photo(Memory)
+        case milestone(Date, String)
+
+        var id: String {
+            switch self {
+            case .walk(let walk, _): return "walk-\(walk.id)"
+            case .photo(let memory): return "photo-\(memory.id)"
+            case .milestone(let date, let text): return "milestone-\(date.timeIntervalSince1970)-\(text.hashValue)"
+            }
+        }
+    }
+
+    private var entries: [Entry] {
+        MemoryFeed.items(for: dog, filter: filter).flatMap { item -> [Entry] in
+            switch item.content {
+            case .walk(let walk, let photo): return [.walk(walk, photo: photo)]
+            case .photo(let memory): return [.photo(memory)]
+            case .pair(let first, let second): return [.photo(first)] + (second.map { [.photo($0)] } ?? [])
+            case .milestone(let text): return [.milestone(item.date, text)]
+            }
+        }
+    }
+
+    var body: some View {
+        let list = entries
+        let selected = list.first { $0.id == selectedID } ?? list.first
+        DuoPanes {
+            VStack(alignment: .leading, spacing: 0) {
+                PaneHeader(title: "Memories") {
+                    Button { showAdd = true } label: {
+                        Icon(.camera, size: 22)
+                            .foregroundStyle(.white)
+                            .frame(width: 54, height: 54)
+                            .background(Color(hex: 0x111111), in: Circle())
+                    }
+                    .buttonStyle(.pressable)
+                    .accessibilityLabel("Add memory")
+                }
+                HStack(spacing: 6) {
+                    ForEach(MemoriesView.Filter.allCases, id: \.self) { option in
+                        FilterPill(title: option.rawValue, isSelected: option == filter) {
+                            withAnimation(.snappy) { filter = option }
+                            Haptics.select()
+                        }
+                    }
+                }
+                .padding(.top, 8)
+                if list.isEmpty {
+                    Text("Walks, photos and milestones with \(dog.name) will show up here.")
+                        .font(.opaw(15, .semibold))
+                        .foregroundStyle(Color.opawMuted)
+                        .padding(.top, 28)
+                    Spacer()
+                } else {
+                    grid(list, selected: selected)
+                        .padding(.top, 14)
+                }
+            }
+        } right: {
+            if let selected {
+                detail(selected, milestone: latestMilestone(before: date(of: selected)))
+            }
+        }
+    }
+
+    private func grid(_ list: [Entry], selected: Entry?) -> some View {
+        GeometryReader { proxy in
+            let height = max(120, (proxy.size.height - 16) / 3)
+            ScrollView {
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
+                    ForEach(list) { entry in
+                        Button {
+                            Haptics.select()
+                            withAnimation(.snappy) { selectedID = entry.id }
+                        } label: {
+                            tile(entry)
+                                .frame(height: height)
+                                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                                .padding(3)
+                                .overlay {
+                                    if entry.id == selected?.id {
+                                        RoundedRectangle(cornerRadius: 25, style: .continuous)
+                                            .strokeBorder(Color.opawInk, lineWidth: 2.5)
+                                            .padding(-2.5)
+                                    }
+                                }
+                                .padding(-3)
+                        }
+                        .buttonStyle(.pressable)
+                    }
+                }
+                .padding(.vertical, 6)
+            }
+            .scrollIndicators(.hidden)
+            .padding(.vertical, -6)
+        }
+    }
+
+    @ViewBuilder
+    private func tile(_ entry: Entry) -> some View {
+        switch entry {
+        case .walk(let walk, let photo):
+            ZStack {
+                Color.opawTrack
+                if let data = photo?.photoData, let image = UIImage(data: data) {
+                    Image(uiImage: image).resizable().scaledToFill()
+                } else {
+                    RouteMap(points: walk.route, pins: walk.pins)
+                }
+            }
+        case .photo(let memory):
+            MemoryPhoto(memory: memory)
+        case .milestone(_, let text):
+            VStack(alignment: .leading, spacing: 8) {
+                MiniFace(data: dog.cutoutData ?? dog.photoData, size: 40, rim: 0, fill: .white)
+                Spacer(minLength: 0)
+                Text(text)
+                    .font(.opaw(14, .heavy))
+                    .foregroundStyle(.white)
+                    .lineLimit(4)
+                    .multilineTextAlignment(.leading)
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(Color(hex: 0x111111))
+        }
+    }
+
+    private func isMilestone(_ entry: Entry) -> Bool {
+        if case .milestone = entry { return true }
+        return false
+    }
+
+    private func date(of entry: Entry) -> Date {
+        switch entry {
+        case .walk(let walk, _): return walk.startedAt
+        case .photo(let memory): return memory.date
+        case .milestone(let date, _): return date
+        }
+    }
+
+    private func latestMilestone(before date: Date) -> (date: Date, text: String)? {
+        let all = MemoryFeed.milestones(for: dog).sorted { $0.date > $1.date }
+        return all.first { $0.date <= date.addingTimeInterval(86_400) } ?? all.last
+    }
+
+    @ViewBuilder
+    private func detail(_ entry: Entry, milestone: (date: Date, text: String)?) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            switch entry {
+            case .walk(let walk, _):
+                NavigationLink(value: MemoryRoute.walk(walk)) {
+                    tile(entry).frame(maxWidth: .infinity, maxHeight: .infinity).clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
+                }
+                .buttonStyle(.pressable)
+                caption(
+                    title: walk.title,
+                    subtitle: "\(MemoryFeed.dayText(walk.startedAt)) · \(OpawFormat.distance(meters: walk.distanceMeters)) · \(Int((walk.elapsedSeconds / 60).rounded())) min",
+                    share: "\(walk.title): \(OpawFormat.distance(meters: walk.distanceMeters)) with \(dog.name). Logged with Opaw."
+                )
+            case .photo(let memory):
+                NavigationLink(value: MemoryRoute.photo(memory)) {
+                    tile(entry).frame(maxWidth: .infinity, maxHeight: .infinity).clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
+                }
+                .buttonStyle(.pressable)
+                caption(
+                    title: memory.caption.isEmpty ? "A moment with \(dog.name)" : memory.caption,
+                    subtitle: MemoryFeed.dayText(memory.date),
+                    share: memory.caption.isEmpty ? "A moment with \(dog.name), from Opaw." : memory.caption
+                )
+            case .milestone(let date, let text):
+                StickerPet(image: (dog.cutoutData ?? dog.photoData).flatMap(UIImage.init(data:)), edge: 6)
+                    .padding(40)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color.opawTrack, in: RoundedRectangle(cornerRadius: 30, style: .continuous))
+                caption(title: "Milestone", subtitle: "\(MemoryFeed.dayText(date)) · \(dog.name)", share: text)
+            }
+            if let milestone, !isMilestone(entry) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(milestone.date.formatted(.dateTime.day().month(.abbreviated))) · Milestone")
+                        .font(.opaw(13, .bold))
+                        .foregroundStyle(Color.opawMuted)
+                    Text(milestone.text)
+                        .font(.opaw(15, .bold))
+                        .foregroundStyle(Color.opawInk)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .whiteCard()
+                .padding(.top, 12)
+            }
+        }
+        .padding(.top, 10)
+    }
+
+    private func caption(title: String, subtitle: String, share: String) -> some View {
+        HStack(alignment: .bottom) {
+            VStack(alignment: .leading, spacing: 0) {
+                Text(title)
+                    .font(.opaw(26, .black))
+                    .foregroundStyle(Color.opawInk)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                Text(subtitle)
+                    .font(.opaw(15, .medium))
+                    .foregroundStyle(Color.opawMuted)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 8)
+            ShareLink(item: share) { RoundIcon(symbol: "point.3.filled.connected.trianglepath.dotted") }
+                .buttonStyle(.pressable)
+                .accessibilityLabel("Share")
+        }
+        .padding(.top, 14)
     }
 }
 

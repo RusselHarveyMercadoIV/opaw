@@ -12,8 +12,11 @@ struct HomeView: View {
     @State private var page = ""
     @State private var sheet: HomeSheet?
     @State private var showPaywall = false
+    @State private var showSettings = false
     @Environment(PremiumStore.self) private var premium
     @State private var path = NavigationPath()
+    @Environment(\.duoOpen) private var duoOpen
+    @Environment(TabReselect.self) private var reselect: TabReselect?
 
     private static let addPage = "add"
 
@@ -23,19 +26,16 @@ struct HomeView: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            ZStack(alignment: .top) {
-                TabView(selection: $page) {
-                    ForEach(dogs) { dog in
-                        PetPage(dog: dog, dots: dots) { path.append(HomeRoute.today(dog.id)) }
-                            .tag(dog.id.uuidString)
+            Group {
+                if duoOpen {
+                    duoHome
+                } else {
+                    ZStack(alignment: .top) {
+                        pager(compact: false)
+                            .ignoresSafeArea(edges: .bottom)
+                        topBar
                     }
-                    AddPetPage(dots: dots, locked: !premium.isPremium && !dogs.isEmpty) { sheet = premium.isPremium || dogs.isEmpty ? .addDog : .petLimit }
-                        .tag(Self.addPage)
                 }
-                .tabViewStyle(.page(indexDisplayMode: .never))
-                .ignoresSafeArea(edges: .bottom)
-
-                topBar
             }
             .opawBackground()
             .toolbar(.hidden, for: .navigationBar)
@@ -53,6 +53,7 @@ struct HomeView: View {
                     if let dog = dogs.first(where: { $0.id == id }) { AvatarStudioView(dog: dog) }
                 }
             }
+            .onChange(of: reselect?.taps[.home]) { path = NavigationPath() }
             .onAppear {
                 if page.isEmpty { page = dogs.first { $0.id.uuidString == activeDogID }?.id.uuidString ?? dogs.first?.id.uuidString ?? "" }
             }
@@ -64,30 +65,69 @@ struct HomeView: View {
             }
             .sheet(item: $sheet) { sheet in
                 switch sheet {
-                case .settings: ProfileView()
                 case .addDog: AddDogSheet()
                 case .petLimit: PetLimitSheet(dog: currentDog ?? dogs.first) { showPaywall = true }
                 }
             }
+            .adaptiveSheet(isPresented: $showSettings, wide: duoOpen) { ProfileView() }
             .premiumPaywall(isPresented: $showPaywall)
         }
+    }
+
+    private func pager(compact: Bool) -> some View {
+        TabView(selection: $page) {
+            ForEach(dogs) { dog in
+                PetPage(dog: dog, dots: dots, compact: compact) { path.append(HomeRoute.today(dog.id)) }
+                    .tag(dog.id.uuidString)
+            }
+            AddPetPage(dots: dots, locked: !premium.isPremium && !dogs.isEmpty, compact: compact) { sheet = premium.isPremium || dogs.isEmpty ? .addDog : .petLimit }
+                .tag(Self.addPage)
+        }
+        .tabViewStyle(.page(indexDisplayMode: .never))
+    }
+
+    // MARK: Open display (6a)
+
+    /// The pet on the left, today's tiles and log on the right.
+    private var duoHome: some View {
+        DuoPanes {
+            ZStack(alignment: .topLeading) {
+                pager(compact: true)
+                familyButton
+                    .padding(.top, 10)
+            }
+        } right: {
+            if let dog = currentDog {
+                TodayView(dog: dog, embedded: true) {
+                    ShareAvatarButton(dog: dog, size: 54)
+                    Button { showSettings = true } label: { TopCircle(size: 54) { Icon(.settings, size: 22) } }
+                        .buttonStyle(.pressable)
+                        .accessibilityLabel("Settings")
+                }
+                .id(dog.id)
+            }
+        }
+    }
+
+    private var familyButton: some View {
+        Button {
+            if let dog = currentDog { path.append(HomeRoute.family(dog.id)) }
+        } label: {
+            familyChip(compact: duoOpen)
+        }
+        .buttonStyle(.pressable)
+        .accessibilityLabel("Family")
     }
 
     // MARK: Top bar
 
     private var topBar: some View {
         HStack(spacing: 10) {
-            Button {
-                if let dog = currentDog { path.append(HomeRoute.family(dog.id)) }
-            } label: {
-                familyChip
-            }
-            .buttonStyle(.pressable)
-            .accessibilityLabel("Family")
+            familyButton
             Spacer()
             if page != Self.addPage, let dog = currentDog {
                 ShareAvatarButton(dog: dog)
-                Button { sheet = .settings } label: { TopCircle { Icon(.settings, size: 23) } }
+                Button { showSettings = true } label: { TopCircle { Icon(.settings, size: 23) } }
                     .buttonStyle(.pressable)
                     .accessibilityLabel("Settings")
             }
@@ -96,7 +136,8 @@ struct HomeView: View {
         .padding(.top, 10)
     }
 
-    private var familyChip: some View {
+    /// The design's family chip: 58 high with a chevron on the phone, 54 high without one on the open display.
+    private func familyChip(compact: Bool) -> some View {
         let faces: [Data?] = {
             var result = dogs.prefix(2).map { $0.cutoutData ?? $0.photoData }
             if result.count < 2, let relative = currentDog?.relatives.first { result.append(relative.photoData) }
@@ -106,18 +147,20 @@ struct HomeView: View {
         return HStack(spacing: 10) {
             HStack(spacing: -16) {
                 ForEach(Array(faces.enumerated()), id: \.offset) { index, data in
-                    MiniFace(data: data, size: 42, fill: index == 0 ? Color.opawChip : Color.opawTrack)
+                    MiniFace(data: data, size: compact ? 38 : 42, fill: index == 0 ? Color.opawChip : Color.opawTrack)
                 }
             }
             Text("Family")
                 .font(.opaw(15, .heavy))
                 .foregroundStyle(Color.opawInk)
-            Icon(.chevronRight, size: 16)
-                .foregroundStyle(Color.opawInk)
+            if !compact {
+                Icon(.chevronRight, size: 16)
+                    .foregroundStyle(Color.opawInk)
+            }
         }
-        .padding(.leading, 8)
+        .padding(.leading, compact ? 7 : 8)
         .padding(.trailing, 18)
-        .frame(height: 58)
+        .frame(height: compact ? 54 : 58)
         .background(Color.opawSurface, in: Capsule())
         .floatingShadow()
     }
@@ -154,7 +197,7 @@ struct HomeView: View {
 }
 
 enum HomeSheet: String, Identifiable {
-    case settings, addDog, petLimit
+    case addDog, petLimit
     var id: String { rawValue }
 }
 
@@ -164,22 +207,24 @@ enum HomeRoute: Hashable {
     case studio(UUID)
 }
 
-/// A 58pt white circle used in the Home top bar.
+/// A 58pt white circle used in the Home top bar (54 on the open display).
 private struct TopCircle<Content: View>: View {
+    var size: CGFloat = 58
     @ViewBuilder var content: Content
 
     var body: some View {
         content
             .foregroundStyle(Color.opawInk)
-            .frame(width: 58, height: 58)
+            .frame(width: size, height: size)
             .background(Color.opawSurface, in: Circle())
             .floatingShadow()
     }
 }
 
 /// Shares the pet's sticker image.
-private struct ShareAvatarButton: View {
+struct ShareAvatarButton: View {
     let dog: Dog
+    var size: CGFloat = 58
 
     var body: some View {
         Group {
@@ -195,8 +240,8 @@ private struct ShareAvatarButton: View {
     }
 
     private var label: some View {
-        TopCircle {
-            Icon(.share, size: 22)
+        TopCircle(size: size) {
+            Icon(.share, size: size < 58 ? 21 : 22)
         }
     }
 }
@@ -234,12 +279,55 @@ struct MiniFace: View {
 private struct PetPage: View {
     let dog: Dog
     let dots: AnyView
+    var compact = false
     let openToday: () -> Void
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 60)) { context in
             let report = dog.careReport(now: context.date)
             let mood = MoodEngine.mood(for: BadgeService.careSnapshot(for: dog, now: context.date), now: context.date)
+            if compact {
+                compactPage(report: report, mood: mood)
+            } else {
+                fullPage(report: report, mood: mood, now: context.date)
+            }
+        }
+    }
+
+    /// The open display's left pane (6a): avatar, name, dots and chips, without the quote and stats.
+    private func compactPage(report: CareReport, mood: AvatarMood) -> some View {
+        ScrollView {
+            VStack(spacing: 0) {
+                NavigationLink(value: HomeRoute.studio(dog.id)) {
+                    AvatarView(dog: dog, mood: mood)
+                        .sticker(edge: 6, blur: 12, y: 14)
+                        .loopMotion(report.tier.motion)
+                        .opacity(report.tier == .needsYou ? 0.6 : 1)
+                        .frame(width: 220, height: 250)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(dog.name), \(report.tier.title). Open avatar studio.")
+                Text(dog.name)
+                    .font(.opaw(46, .black))
+                    .tracking(-0.46)
+                    .foregroundStyle(Color.opawInk)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+                    .padding(.top, 14)
+                dots
+                    .padding(.top, 10)
+                chipRow
+                    .padding(.top, 12)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.top, 78)
+            .padding(.bottom, 24)
+        }
+        .scrollIndicators(.hidden)
+    }
+
+    private func fullPage(report: CareReport, mood: AvatarMood, now: Date) -> some View {
+        Group {
             ScrollView {
                 VStack(spacing: 0) {
                     stage(report: report, mood: mood)
@@ -261,7 +349,7 @@ private struct PetPage: View {
                     }
                     .padding(.horizontal, 36)
                     .padding(.top, 14)
-                    stats(now: context.date)
+                    stats(now: now)
                         .padding(.horizontal, 20)
                         .padding(.top, 18)
                 }
@@ -364,6 +452,7 @@ extension CareTier {
 private struct AddPetPage: View {
     let dots: AnyView
     var locked = false
+    var compact = false
     let onAdd: () -> Void
 
     var body: some View {
@@ -399,7 +488,7 @@ private struct AddPetPage: View {
 
                 VStack(spacing: 10) {
                     Text("Add a new pet")
-                        .font(.opaw(40, .black))
+                        .font(.opaw(compact ? 34 : 40, .black))
                         .foregroundStyle(Color.opawInk)
                     dots
                     Text("Snap a photo of another dog, cat or bunny and they'll come to life too.")
@@ -409,11 +498,11 @@ private struct AddPetPage: View {
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(.horizontal, 40)
+                .padding(.horizontal, compact ? 20 : 40)
                 .padding(.top, 14)
             }
-            .padding(.top, 72)
-            .padding(.bottom, 120)
+            .padding(.top, compact ? 40 : 72)
+            .padding(.bottom, compact ? 24 : 120)
         }
         .scrollIndicators(.hidden)
     }

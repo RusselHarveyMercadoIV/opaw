@@ -5,6 +5,20 @@ import SwiftUI
 /// Today (2b): the week strip, six tiles to log with one tap, the day's log with points, and the reaction toast.
 struct TodayView: View {
     let dog: Dog
+    /// On the open display Home shows Today in its right pane (6a), with these buttons beside the title.
+    private let embeddedActions: AnyView?
+
+    init(dog: Dog) {
+        self.dog = dog
+        embeddedActions = nil
+    }
+
+    init<Actions: View>(dog: Dog, embedded: Bool, @ViewBuilder actions: () -> Actions) {
+        self.dog = dog
+        embeddedActions = embedded ? AnyView(actions()) : nil
+    }
+
+    private var embedded: Bool { embeddedActions != nil }
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
@@ -23,26 +37,39 @@ struct TodayView: View {
     private var isToday: Bool { calendar.isDateInToday(day) }
 
     var body: some View {
+        if embedded {
+            content
+        } else {
+            content
+                .toolbar(.hidden, for: .navigationBar)
+                .hidesFloatingTabBar()
+        }
+    }
+
+    private var content: some View {
         ZStack {
             TimelineView(.periodic(from: .now, by: 60)) { context in
                 ScrollView {
                     VStack(spacing: 0) {
                         weekStrip(now: context.date)
                             .padding(.horizontal, 20)
-                            .padding(.top, 18)
+                            .padding(.top, embedded ? 14 : 18)
                         tiles(now: context.date)
                             .padding(.horizontal, 20)
-                            .padding(.top, 16)
+                            .padding(.top, embedded ? 14 : 16)
                         logCard
                             .padding(.horizontal, 20)
-                            .padding(.top, 16)
+                            .padding(.top, embedded ? 14 : 16)
                     }
-                    .padding(.bottom, 120)
+                    .padding(.bottom, embedded ? 24 : 120)
                 }
                 .scrollIndicators(.hidden)
-                .safeAreaInset(edge: .top, spacing: 0) { header }
+                .padding(.horizontal, embedded ? -20 : 0)
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    if embedded { embeddedHeader } else { header }
+                }
             }
-            .opawBackground()
+            .background { if !embedded { Color.opawCream.ignoresSafeArea() } }
             .careToast($toast)
 
             if showPoop {
@@ -54,8 +81,6 @@ struct TodayView: View {
                 .zIndex(2)
             }
         }
-        .toolbar(.hidden, for: .navigationBar)
-        .hidesFloatingTabBar()
         .alert(item: $celebration) { badge in
             Alert(title: Text("New badge: \(badge.title)"), message: Text(badge.detail), dismissButton: .default(Text("Woof!")))
         }
@@ -84,6 +109,26 @@ struct TodayView: View {
         .background(Color.opawCream)
     }
 
+    /// "Today" on the left, then History, share and Settings (6a).
+    private var embeddedHeader: some View {
+        HStack(spacing: 10) {
+            Text(isToday ? "Today" : day.formatted(.dateTime.weekday(.wide)))
+                .font(.opaw(26, .black))
+                .foregroundStyle(Color.opawInk)
+            Spacer()
+            NavigationLink {
+                HistoryView(dog: dog)
+            } label: {
+                RoundIcon(symbol: "calendar")
+            }
+            .buttonStyle(.pressable)
+            .accessibilityLabel("History")
+            embeddedActions
+        }
+        .padding(.top, 10)
+        .background(Color.opawCream)
+    }
+
     // MARK: Week
 
     private func weekStrip(now: Date) -> some View {
@@ -107,7 +152,7 @@ struct TodayView: View {
                     }
                     .foregroundStyle(selected ? Color.white : (future ? Color.opawGhost : Color.opawMuted))
                     .frame(maxWidth: .infinity)
-                    .frame(height: 64)
+                    .frame(height: embedded ? 56 : 64)
                     .background(selected ? Color(hex: 0x111111) : Color.clear, in: Capsule())
                 }
                 .buttonStyle(.pressable)

@@ -12,6 +12,8 @@ struct WalkTabView: View {
     @AppStorage(OpawDefaults.activeDogKey, store: OpawDefaults.shared) private var activeDogID = ""
     @AppStorage("walkActivity") private var activity = WalkActivity.walk.rawValue
     @State private var finished: IdentifiedWalk?
+    @Environment(\.duoOpen) private var duoOpen
+    @Environment(TabReselect.self) private var reselect: TabReselect?
 
     private var dog: Dog? {
         dogs.first { $0.id.uuidString == activeDogID } ?? dogs.first
@@ -20,7 +22,11 @@ struct WalkTabView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if recorder.state == .idle {
+                if duoOpen, let item = finished, let dog {
+                    // The open display shows the summary in place, beside the rail (6b).
+                    WalkSummaryView(result: item.walk, dog: dog, activity: WalkActivity(rawValue: activity) ?? .walk)
+                        .transition(.opacity)
+                } else if recorder.state == .idle {
                     ActivityView(dog: dog, dogs: dogs, activity: $activity)
                 } else {
                     LiveWalkView(dog: dog, activity: WalkActivity(rawValue: activity) ?? .walk) { result in
@@ -30,9 +36,12 @@ struct WalkTabView: View {
                 }
             }
             .animation(.easeInOut(duration: 0.3), value: recorder.state == .idle)
+            .animation(.easeInOut(duration: 0.3), value: finished?.id)
             .toolbar(.hidden, for: .navigationBar)
         }
-        .fullScreenCover(item: $finished) { item in
+        .onChange(of: reselect?.taps[.activity]) { if duoOpen { finished = nil } }
+        .onChange(of: selectedTab) { if duoOpen && selectedTab != .activity { finished = nil } }
+        .fullScreenCover(item: Binding(get: { duoOpen ? nil : finished }, set: { finished = $0 })) { item in
             if let dog {
                 WalkSummaryView(result: item.walk, dog: dog, activity: WalkActivity(rawValue: activity) ?? .walk)
             }
@@ -69,6 +78,8 @@ private struct ActivityView: View {
     @Environment(WalkRecorder.self) private var recorder
     @AppStorage(OpawDefaults.activeDogKey, store: OpawDefaults.shared) private var activeDogID = ""
     @State private var showChallenges = false
+    @Environment(\.duoOpen) private var duoOpen
+    @Environment(TabReselect.self) private var reselect: TabReselect?
 
     private var walks: [Walk] {
         (dog?.walks ?? []).sorted { $0.startedAt > $1.startedAt }
@@ -110,7 +121,13 @@ private struct ActivityView: View {
                 .padding(.bottom, 78)
         }
         .opawBackground()
-        .sheet(isPresented: $showChallenges) { ChallengesView() }
+        // On the open display Challenges opens beside the rail (6i); on the phone it's a sheet.
+        .sheet(isPresented: duoOpen ? .constant(false) : $showChallenges) { ChallengesView() }
+        .navigationDestination(isPresented: duoOpen ? $showChallenges : .constant(false)) {
+            ChallengesView()
+                .toolbar(.hidden, for: .navigationBar)
+        }
+        .onChange(of: reselect?.taps[.activity]) { showChallenges = false }
         .onAppear { recorder.warmUp() }
         .onDisappear { recorder.coolDown() }
     }
@@ -365,10 +382,26 @@ private struct LiveWalkView: View {
     @Environment(WalkRecorder.self) private var recorder
     @State private var camera: MapCameraPosition = .userLocation(followsHeading: false, fallback: .automatic)
     @State private var confirmStop = false
+    @Environment(\.duoOpen) private var duoOpen
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            Map(position: $camera) {
+        Group {
+            if duoOpen {
+                duoBody
+            } else {
+                phoneBody
+            }
+        }
+        .confirmationDialog("Finish this walk?", isPresented: $confirmStop, titleVisibility: .visible) {
+            Button("Finish and save") {
+                if let result = recorder.finish() { onFinish(result) }
+            }
+            Button("Discard walk", role: .destructive) { recorder.cancel() }
+        }
+    }
+
+    private var map: some View {
+        Map(position: $camera) {
                 MapPolyline(coordinates: recorder.points.map(\.coordinate))
                     .stroke(Color(hex: 0x111111), style: StrokeStyle(lineWidth: 7, lineCap: .round, lineJoin: .round))
                 if let first = recorder.points.first {
@@ -384,8 +417,13 @@ private struct LiveWalkView: View {
                 }
             }
             .mapStyle(.standard(pointsOfInterest: .excludingAll))
-            .ignoresSafeArea()
-            .safeAreaPadding(.bottom, 300)
+    }
+
+    private var phoneBody: some View {
+        ZStack(alignment: .bottom) {
+            map
+                .ignoresSafeArea()
+                .safeAreaPadding(.bottom, 300)
 
             sheet
         }
@@ -407,12 +445,133 @@ private struct LiveWalkView: View {
             .padding(.leading, 20)
             .padding(.top, 10)
         }
-        .confirmationDialog("Finish this walk?", isPresented: $confirmStop, titleVisibility: .visible) {
-            Button("Finish and save") {
-                if let result = recorder.finish() { onFinish(result) }
+    }
+
+    // MARK: Open display (6g)
+
+    private var duoBody: some View {
+        DuoPanes(bleedLeft: true) {
+            map
+                .ignoresSafeArea(edges: .vertical)
+        } right: {
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack(spacing: 8) {
+                        if recorder.state == .paused {
+                            Circle().fill(Color.opawMuted).frame(width: 10, height: 10)
+                        } else {
+                            PulseDot(size: 10)
+                        }
+                        Text("\(recorder.state == .paused ? "Paused" : "Recording") · \(Walk.title(for: recorder.startedAt ?? Date(), activity: activity))")
+                            .font(.opaw(15, .heavy))
+                            .foregroundStyle(Color.opawInk)
+                            .lineLimit(1)
+                        Spacer(minLength: 8)
+                        ShareLink(item: liveShareText) { RoundIcon(symbol: "point.3.filled.connected.trianglepath.dotted") }
+                            .buttonStyle(.pressable)
+                            .accessibilityLabel("Share walk")
+                    }
+                    .frame(minHeight: 54)
+                    Text((recorder.stats.distanceMeters / 1000).formatted(.number.precision(.fractionLength(2))))
+                        .font(.opaw(96, .black))
+                        .tracking(-2.9)
+                        .monospacedDigit()
+                        .foregroundStyle(Color.opawInk)
+                        .contentTransition(.numericText())
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.5)
+                        .frame(height: 96)
+                        .padding(.top, 10)
+                    Text("kilometres")
+                        .font(.opaw(16, .bold))
+                        .foregroundStyle(Color.opawMuted)
+                    HStack(spacing: 0) {
+                        liveStat(OpawFormat.duration(recorder.elapsed(at: context.date)), label: "Time", divider: false)
+                        liveStat(OpawFormat.pace(minutesPerKm: recorder.stats.paceMinutesPerKm), label: "Pace /\(OpawFormat.distanceUnit)", divider: true)
+                        liveStat("\(Walk.sniffStops(in: recorder.points))", label: "Sniff stops", divider: true)
+                    }
+                    .padding(.vertical, 14)
+                    .whiteCard()
+                    .padding(.top, 18)
+                    HStack(spacing: 10) {
+                        pinButton(.pee)
+                        pinButton(.poop)
+                    }
+                    .padding(.top, 14)
+                    Spacer(minLength: 16)
+                    HStack(spacing: 12) {
+                        Button {
+                            if recorder.state == .paused { recorder.resume() } else { recorder.pause() }
+                            Haptics.tap()
+                        } label: {
+                            SymbolIcon(symbol: recorder.state == .paused ? "play.fill" : "pause.fill", size: 22)
+                                .foregroundStyle(Color.opawInk)
+                                .frame(width: 62, height: 62)
+                                .background(Color.opawSurface, in: Circle())
+                                .floatingShadow()
+                        }
+                        .buttonStyle(.pressable)
+                        .accessibilityLabel(recorder.state == .paused ? "Resume" : "Pause")
+                        Button { confirmStop = true } label: {
+                            Text("Finish walk")
+                        }
+                        .buttonStyle(BlackPillButtonStyle(height: 62))
+                    }
+                }
+                .padding(.top, 10)
             }
-            Button("Discard walk", role: .destructive) { recorder.cancel() }
         }
+        .opawBackground()
+    }
+
+    private func liveStat(_ value: String, label: String, divider: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(value)
+                .font(.opaw(24, .black))
+                .foregroundStyle(Color.opawInk)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+            Text(label)
+                .font(.opaw(13, .semibold))
+                .foregroundStyle(Color.opawMuted)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 18)
+        .overlay(alignment: .leading) {
+            if divider { Rectangle().fill(Color.opawHairline).frame(width: 1) }
+        }
+    }
+
+    /// Marks a pee or poop where the pet is now (6g).
+    private func pinButton(_ kind: CareKind) -> some View {
+        let count = recorder.pins.filter { $0.kind == kind.rawValue }.count
+        return Button {
+            recorder.dropPin(kind)
+            Haptics.tap()
+        } label: {
+            HStack(spacing: 10) {
+                Icon(kind == .poop ? .poop : .pee, size: 20)
+                Text(kind.title)
+                    .font(.opaw(16, .heavy))
+                Spacer(minLength: 4)
+                Text("\(count)")
+                    .font(.opaw(16, .heavy))
+                    .foregroundStyle(Color.opawMuted)
+                    .contentTransition(.numericText())
+            }
+            .foregroundStyle(Color.opawInk)
+            .padding(.horizontal, 18)
+            .frame(height: 58)
+            .background(Color.opawSurface, in: Capsule())
+            .floatingShadow()
+        }
+        .buttonStyle(.pressable)
+        .accessibilityLabel("Mark a \(kind.title.lowercased()) here, \(count) so far")
+    }
+
+    private var liveShareText: String {
+        "\(dog?.name ?? "My dog") is out on a walk: \(OpawFormat.distance(meters: recorder.stats.distanceMeters)) so far. Logged with Opaw."
     }
 
     /// The pet trotting along the route. Tap it to mark a pee or poop here.
@@ -553,14 +712,21 @@ private struct WalkSummaryView: View {
             stats: WalkCalculator.stats(for: result.points),
             isRecord: isRecord,
             dog: dog,
-            extraKm: saved == nil ? WalkCalculator.stats(for: result.points).distanceMeters / 1000 : 0,
+            extraKm: saved == nil && Self.savedStarts[result.startedAt] == nil ? WalkCalculator.stats(for: result.points).distanceMeters / 1000 : 0,
             onBack: { dismiss() }
         )
         .onAppear(perform: save)
     }
 
+    /// Walks already saved, by start time, so the summary never saves twice if it's shown again after a fold.
+    @MainActor private static var savedStarts: [Date: Bool] = [:]
+
     private func save() {
         guard saved == nil else { return }
+        if let record = Self.savedStarts[result.startedAt] {
+            isRecord = record
+            return
+        }
         let stats = WalkCalculator.stats(for: result.points)
         let monthStart = Calendar.current.dateInterval(of: .month, for: Date())?.start ?? Date()
         let best = (dog.walks ?? []).filter { $0.startedAt >= monthStart }.map(\.distanceMeters).max() ?? 0
@@ -578,6 +744,7 @@ private struct WalkSummaryView: View {
         BadgeService.refresh(dog)
         try? modelContext.save()
         saved = walk
+        Self.savedStarts[result.startedAt] = isRecord
         Haptics.success()
     }
 }
@@ -625,8 +792,119 @@ private struct WalkStoryView: View {
 
     private var peeCount: Int { pins.filter { $0.kind == CareKind.pee.rawValue }.count }
     private var poopCount: Int { pins.filter { $0.kind == CareKind.poop.rawValue }.count }
+    @Environment(\.duoOpen) private var duoOpen
 
     var body: some View {
+        if duoOpen {
+            duoBody
+        } else {
+            phoneBody
+        }
+    }
+
+    // MARK: Open display (6b)
+
+    private var duoBody: some View {
+        DuoPanes(bleedLeft: true) {
+            RouteMap(points: points, pins: pins)
+                .ignoresSafeArea(edges: .vertical)
+        } right: {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack {
+                        if isRecord { recordChip }
+                        Spacer()
+                        ShareLink(item: shareText) { RoundIcon(symbol: "point.3.filled.connected.trianglepath.dotted") }
+                            .buttonStyle(.pressable)
+                            .accessibilityLabel("Share walk")
+                    }
+                    .frame(minHeight: 54)
+                    HStack(alignment: .bottom, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text(title)
+                                .font(.opaw(32, .black))
+                                .foregroundStyle(Color.opawInk)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
+                            Text(subtitle)
+                                .font(.opaw(15, .medium))
+                                .foregroundStyle(Color.opawMuted)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        if let data = dog?.cutoutData ?? dog?.photoData, let image = UIImage(data: data) {
+                            Image(uiImage: image)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 100, height: 110)
+                                .sticker(edge: 5, blur: 9, y: 14)
+                                .loopMotion(.bob, duration: 1.2)
+                        }
+                    }
+                    .padding(.top, 6)
+                    statsGrid
+                        .padding(.top, 14)
+                    if let dog {
+                        weekCard(dog: dog)
+                            .padding(.top, 14)
+                    }
+                }
+                .padding(.top, 10)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 24)
+            }
+            .scrollIndicators(.hidden)
+            .padding(.horizontal, -20)
+        }
+        .opawBackground()
+    }
+
+    private var recordChip: some View {
+        HStack(spacing: 6) {
+            Icon(.sparkle, size: 13)
+            Text("Longest walk this month")
+                .font(.opaw(13, .heavy))
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .background(Color(hex: 0x111111), in: Capsule())
+    }
+
+    private func weekCard(dog: Dog) -> some View {
+        let (total, goal) = weekProgress(dog: dog)
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("This week")
+                    .font(.opaw(17, .black))
+                Spacer()
+                Text("\(OpawFormat.longDistance(km: total).formatted(.number.precision(.fractionLength(1)))) / \(OpawFormat.longDistance(km: goal).formatted(.number.precision(.fractionLength(0...1)))) \(OpawFormat.distanceUnit)")
+                    .font(.opaw(14, .bold))
+            }
+            .foregroundStyle(Color.opawInk)
+            GeometryReader { proxy in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.opawTrack)
+                    Capsule().fill(Color.opawInk)
+                        .frame(width: proxy.size.width * min(1, total / goal))
+                }
+            }
+            .frame(height: 10)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 16)
+        .whiteCard()
+    }
+
+    private func weekProgress(dog: Dog) -> (total: Double, goal: Double) {
+        var calendar = Calendar.current
+        calendar.firstWeekday = 2
+        let interval = calendar.dateInterval(of: .weekOfYear, for: Date()) ?? DateInterval(start: Date(), duration: 1)
+        let total = dog.walkedKm(from: interval.start, to: interval.end) + extraKm
+        let goal = max(0.5, dog.traits.recommendedWeeklyKm)
+        return (total, goal)
+    }
+
+    private var phoneBody: some View {
         ScrollView {
             VStack(spacing: 0) {
                 RouteMap(points: points, pins: pins)
@@ -731,7 +1009,7 @@ private struct WalkStoryView: View {
                     Text(value)
                 }
             }
-            .font(.opaw(26, .black))
+            .font(.opaw(duoOpen ? 28 : 26, .black))
             .foregroundStyle(Color.opawInk)
             .lineLimit(1)
             .minimumScaleFactor(0.6)
@@ -741,15 +1019,11 @@ private struct WalkStoryView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 20)
-        .padding(.vertical, 12)
+        .padding(.vertical, duoOpen ? 14 : 12)
     }
 
     private func progress(dog: Dog) -> some View {
-        var calendar = Calendar.current
-        calendar.firstWeekday = 2
-        let interval = calendar.dateInterval(of: .weekOfYear, for: Date()) ?? DateInterval(start: Date(), duration: 1)
-        let total = dog.walkedKm(from: interval.start, to: interval.end) + extraKm
-        let goal = max(0.5, dog.traits.recommendedWeeklyKm)
+        let (total, goal) = weekProgress(dog: dog)
         return HStack(spacing: 10) {
             GeometryReader { proxy in
                 ZStack(alignment: .leading) {

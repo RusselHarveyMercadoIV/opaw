@@ -5,6 +5,8 @@ import SwiftUI
 /// History: a plain-language summary, weight over time, the poop record, and a vet summary to share.
 struct HistoryView: View {
     let dog: Dog
+    /// True in the open display's right pane (6f): a left-aligned title, no back button and no poop strip.
+    var inPane = false
 
     enum Range: String, CaseIterable, Identifiable {
         case week = "Week"
@@ -42,22 +44,32 @@ struct HistoryView: View {
                     Spacer()
                 }
                 .padding(.horizontal, 20)
-                .padding(.top, 14)
+                .padding(.top, inPane ? 8 : 14)
 
                 summaryCard
                     .padding(.horizontal, 20)
-                    .padding(.top, 14)
+                    .padding(.top, inPane ? 12 : 14)
                 weightCard
                     .padding(.horizontal, 20)
                     .padding(.top, 12)
-                poopCard
-                    .padding(.horizontal, 20)
-                    .padding(.top, 12)
+                if !inPane {
+                    poopCard
+                        .padding(.horizontal, 20)
+                        .padding(.top, 12)
+                }
             }
-            .padding(.bottom, 120)
+            .padding(.bottom, inPane ? 90 : 120)
         }
         .scrollIndicators(.hidden)
+        .padding(.horizontal, inPane ? -20 : 0)
         .safeAreaInset(edge: .top, spacing: 0) {
+            if inPane {
+                PaneHeader(title: "History") {
+                    ShareLink(item: vetSummary) { RoundIcon(symbol: "square.and.arrow.up") }
+                        .buttonStyle(.pressable)
+                        .accessibilityLabel("Share summary")
+                }
+            } else {
             ScreenHeader(title: "History") {
                 Button { dismiss() } label: { RoundIcon(symbol: "chevron.left") }
                     .buttonStyle(.pressable)
@@ -68,6 +80,7 @@ struct HistoryView: View {
                     .accessibilityLabel("Share summary")
             }
             .background(Color.opawCream)
+            }
         }
         .opawBackground()
         .overlay(alignment: .bottom) {
@@ -81,9 +94,10 @@ struct HistoryView: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: 62)
                 .background(Color(hex: 0x111111), in: Capsule())
+                .shadow(color: .black.opacity(inPane ? 0.18 : 0), radius: 14, y: 14)
             }
             .buttonStyle(.pressable)
-            .padding(.horizontal, 20)
+            .padding(.horizontal, inPane ? 0 : 20)
             .padding(.bottom, 4)
         }
         .toolbar(.hidden, for: .navigationBar)
@@ -98,19 +112,21 @@ struct HistoryView: View {
                 .foregroundStyle(.white)
                 .padding(.top, 2)
             VStack(alignment: .leading, spacing: 4) {
-                Text("This week, summarised on your phone")
-                    .font(.opaw(13, .bold))
-                    .foregroundStyle(Color(hex: 0xAAAAAA))
+                if !inPane {
+                    Text("This week, summarised on your phone")
+                        .font(.opaw(13, .bold))
+                        .foregroundStyle(Color(hex: 0xAAAAAA))
+                }
                 Text(weeklySummary)
-                    .font(.opaw(16, .bold))
-                    .lineSpacing(5)
+                    .font(.opaw(inPane ? 15 : 16, .bold))
+                    .lineSpacing(inPane ? 4 : 5)
                     .foregroundStyle(.white)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 18)
+        .padding(.vertical, inPane ? 16 : 18)
         .background(Color(hex: 0x111111), in: RoundedRectangle(cornerRadius: 30, style: .continuous))
     }
 
@@ -219,8 +235,8 @@ struct HistoryView: View {
             }
         }
         .padding(.horizontal, 20)
-        .padding(.top, 18)
-        .padding(.bottom, 14)
+        .padding(.top, inPane ? 16 : 18)
+        .padding(.bottom, inPane ? 12 : 14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .whiteCard()
     }

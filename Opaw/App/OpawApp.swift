@@ -37,15 +37,37 @@ struct RootView: View {
             }
         }
         .animation(.easeInOut(duration: 0.6), value: dogs.isEmpty)
+        .duoEnvironment()
     }
 }
 
 struct MainTabView: View {
     @State private var selection: AppTab = .home
     @State private var tabBar = TabBarVisibility()
+    @State private var reselect = TabReselect()
     @Environment(WalkRecorder.self) private var recorder
+    @Environment(\.duoOpen) private var duoOpen
 
     var body: some View {
+        if duoOpen {
+            tabs
+                .safeAreaPadding(.leading, Duo.railInset)
+                .overlay(alignment: .leading) {
+                    TabRail(selection: $selection, reselect: reselect)
+                }
+        } else {
+            tabs
+                .overlay(alignment: .bottom) {
+                    if recorder.state == .idle && tabBar.hiddenCount == 0 {
+                        FloatingTabBar(selection: $selection)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+                }
+                .animation(.spring(response: 0.4, dampingFraction: 0.85), value: recorder.state == .idle && tabBar.hiddenCount == 0)
+        }
+    }
+
+    private var tabs: some View {
         TabView(selection: $selection) {
             HomeView(selectedTab: $selection)
                 .tag(AppTab.home)
@@ -61,13 +83,7 @@ struct MainTabView: View {
                 .toolbar(.hidden, for: .tabBar)
         }
         .environment(tabBar)
-        .overlay(alignment: .bottom) {
-            if recorder.state == .idle && tabBar.hiddenCount == 0 {
-                FloatingTabBar(selection: $selection)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-        }
-        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: recorder.state == .idle && tabBar.hiddenCount == 0)
+        .environment(reselect)
     }
 }
 
@@ -149,7 +165,15 @@ struct FloatingTabBar: View {
 extension View {
     /// Leaves room under scrolling content for the floating tab bar.
     func tabBarInset() -> some View {
-        safeAreaInset(edge: .bottom) { Color.clear.frame(height: 76) }
+        modifier(TabBarInset())
+    }
+}
+
+private struct TabBarInset: ViewModifier {
+    @Environment(\.duoOpen) private var duoOpen
+
+    func body(content: Content) -> some View {
+        content.safeAreaInset(edge: .bottom) { Color.clear.frame(height: duoOpen ? 0 : 76) }
     }
 }
 

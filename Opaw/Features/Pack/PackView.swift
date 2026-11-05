@@ -106,6 +106,9 @@ private struct PackHomeView: View {
     @State private var reporting: PackDog?
     @State private var confirmDelete = false
     @State private var deleteError: String?
+    @Environment(\.duoOpen) private var duoOpen
+    @Environment(\.isPresented) private var isPresented
+    @Environment(\.dismiss) private var dismiss
 
     private var walkingNow: Set<UUID> {
         Set(posts.filter { $0.kind == "walk" && Date().timeIntervalSince($0.createdAt) < 2 * 3600 }.map(\.dogID))
@@ -120,7 +123,51 @@ private struct PackHomeView: View {
     }
 
     var body: some View {
-        ZStack(alignment: .bottom) {
+        Group {
+            if duoOpen {
+                duoBody
+            } else {
+                phoneBody
+            }
+        }
+        .toolbar(.hidden, for: .navigationBar)
+        .task {
+            location.warmUp()
+            await load()
+        }
+        .sheet(item: $profile) { dog in
+            PackDogProfile(dog: dog, url: pack.publicURL(for: dog.avatarPath)) {
+                reporting = dog
+            } onBlock: {
+                Task {
+                    try? await pack.block(userID: dog.ownerID)
+                    selected = nil
+                    await load()
+                }
+            }
+        }
+        .sheet(item: $reporting) { dog in
+            ReportSheet(subject: dog.name) { reason in
+                try await pack.report(dogID: dog.id, reason: reason)
+            }
+        }
+        .confirmationDialog("Delete your Pack account?", isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Delete account", role: .destructive) {
+                Task {
+                    do { try await pack.deleteAccount() } catch { deleteError = error.localizedDescription }
+                }
+            }
+        } message: {
+            Text("This removes your shared dogs, posts, likes and photos from the Pack. Your logs, walks and memories stay on this iPhone.")
+        }
+        .alert("Couldn't delete your account", isPresented: Binding(get: { deleteError != nil }, set: { if !$0 { deleteError = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(deleteError ?? "")
+        }
+    }
+
+    private var map: some View {
             Map(initialPosition: .userLocation(fallback: .automatic)) {
                 if let here = location.lastLocation?.coordinate {
                     Annotation("", coordinate: here) {
@@ -158,7 +205,12 @@ private struct PackHomeView: View {
                 }
             }
             .mapStyle(.standard(pointsOfInterest: .excludingAll))
-            .ignoresSafeArea()
+    }
+
+    private var phoneBody: some View {
+        ZStack(alignment: .bottom) {
+            map
+                .ignoresSafeArea()
 
             if let dog = selected ?? shown.first {
                 card(dog)
@@ -186,40 +238,152 @@ private struct PackHomeView: View {
             .padding(.horizontal, 20)
             .padding(.top, 10)
         }
-        .toolbar(.hidden, for: .navigationBar)
-        .task {
-            location.warmUp()
-            await load()
-        }
-        .sheet(item: $profile) { dog in
-            PackDogProfile(dog: dog, url: pack.publicURL(for: dog.avatarPath)) {
-                reporting = dog
-            } onBlock: {
-                Task {
-                    try? await pack.block(userID: dog.ownerID)
-                    selected = nil
-                    await load()
+    }
+
+    // MARK: Open display (6j)
+
+    private var duoBody: some View {
+        DuoPanes(rail: false, bleedLeft: true) {
+            map
+                .ignoresSafeArea(edges: .vertical)
+                .overlay(alignment: .topLeading) {
+                    filterMenu
+                        .padding(.leading, 30)
+                        .padding(.top, 10)
+                }
+        } right: {
+            VStack(alignment: .leading, spacing: 0) {
+                if let dog = selected ?? shown.first {
+                    profilePane(dog)
+                } else {
+                    Text(status ?? "Looking for pets nearby…")
+                        .font(.opaw(15, .semibold))
+                        .foregroundStyle(Color.opawMuted)
+                        .padding(.top, 20)
+                    Spacer()
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .overlay(alignment: .topTrailing) {
+                if isPresented {
+                    Button { dismiss() } label: {
+                        Icon(.close, size: 20)
+                            .foregroundStyle(Color.opawInk)
+                            .frame(width: 54, height: 54)
+                            .background(Color.opawSurface, in: Circle())
+                            .floatingShadow()
+                    }
+                        .buttonStyle(.pressable)
+                        .accessibilityLabel("Close")
+                        .padding(.top, 10)
                 }
             }
         }
-        .sheet(item: $reporting) { dog in
-            ReportSheet(subject: dog.name) { reason in
-                try await pack.report(dogID: dog.id, reason: reason)
+        .opawBackground()
+    }
+
+    /// "Within 1 km · 3 out walking": switches the filter, and holds the Pack settings.
+    private var filterMenu: some View {
+        Menu {
+            Picker("Show", selection: $filter) {
+                Text("Within 1 km").tag(Filter.nearby)
+                Text("Out walking").tag(Filter.walking)
             }
+            Button {
+                Task { await shareMyDogs() }
+            } label: {
+                Label("Show my dog on the map", systemImage: "mappin.and.ellipse")
+            }
+            Link(destination: URL(string: "https://github.com/RusselHarveyMercadoIV/opaw/blob/main/docs/PRIVACY.md")!) {
+                Label("Privacy policy", systemImage: "hand.raised")
+            }
+            Button(role: .destructive) {
+                confirmDelete = true
+            } label: {
+                Label("Leave the pack and delete my account", systemImage: "person.crop.circle.badge.xmark")
+            }
+        } label: {
+            let walking = dogs.filter { walkingNow.contains($0.id) }.count
+            Text("\(filter == .nearby ? "Within 1 km" : "Out walking") · \(walking) out walking")
+                .font(.opaw(14, .heavy))
+                .foregroundStyle(Color(hex: 0x111111))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(Color.white, in: Capsule())
+                .shadow(color: .black.opacity(0.08), radius: 13, y: 10)
         }
-        .confirmationDialog("Delete your Pack account?", isPresented: $confirmDelete, titleVisibility: .visible) {
-            Button("Delete account", role: .destructive) {
-                Task {
-                    do { try await pack.deleteAccount() } catch { deleteError = error.localizedDescription }
+        .accessibilityLabel("Filter and Pack settings")
+    }
+
+    private func profilePane(_ dog: PackDog) -> some View {
+        let today = Calendar.current.startOfDay(for: Date())
+        let theirWalks = posts.filter { $0.kind == "walk" && $0.dogID == dog.id }
+        let todayKm = theirWalks.filter { $0.createdAt >= today }.compactMap(\.distanceM).reduce(0, +)
+        let weekAgo = Date().addingTimeInterval(-7 * 86_400)
+        let weekWalks = theirWalks.filter { $0.createdAt >= weekAgo }.count
+        let isFriend = following.contains(dog.id)
+        var details = [dog.breed, dog.distanceM.map { OpawFormat.distance(meters: $0) + " away" }].compactMap { $0 }.filter { !$0.isEmpty }
+        if walkingNow.contains(dog.id) { details.append("walking now") }
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 16) {
+                PackAvatar(url: pack.publicURL(for: dog.avatarPath), size: 96)
+                    .overlay(Circle().strokeBorder(Color.white, lineWidth: 4))
+                    .shadow(color: .black.opacity(0.08), radius: 12, y: 10)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(dog.name)
+                        .font(.opaw(32, .black))
+                        .foregroundStyle(Color.opawInk)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                    Text(details.joined(separator: " · "))
+                        .font(.opaw(15, .medium))
+                        .foregroundStyle(Color.opawMuted)
+                        .lineLimit(2)
                 }
+                Spacer(minLength: 60)
             }
-        } message: {
-            Text("This removes your shared dogs, posts, likes and photos from the Pack. Your logs, walks and memories stay on this iPhone.")
+            .padding(.top, 16)
+            HStack(spacing: 0) {
+                profileStat(OpawFormat.distance(meters: todayKm), label: "Today", divider: false)
+                profileStat("\(weekWalks)×", label: "Walks this week", divider: true)
+                profileStat(isFriend ? "Friends" : "New", label: "With you", divider: true)
+            }
+            .padding(.vertical, 16)
+            .whiteCard()
+            .padding(.top, 20)
+            Spacer(minLength: 16)
+            HStack(spacing: 10) {
+                Button { profile = dog } label: { Text("View profile") }
+                    .buttonStyle(BlackPillButtonStyle(height: 62, inverted: true, fontSize: 16))
+                Button {
+                    Task { await wave(dog) }
+                } label: {
+                    HStack(spacing: 8) {
+                        if !isFriend { Icon(.wave, size: 20) }
+                        Text(isFriend ? "Friends ✓" : "Wave hello")
+                    }
+                }
+                .buttonStyle(BlackPillButtonStyle(height: 62, fontSize: 16))
+            }
         }
-        .alert("Couldn't delete your account", isPresented: Binding(get: { deleteError != nil }, set: { if !$0 { deleteError = nil } })) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(deleteError ?? "")
+    }
+
+    private func profileStat(_ value: String, label: String, divider: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(value)
+                .font(.opaw(20, .black))
+                .foregroundStyle(Color.opawInk)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+            Text(label)
+                .font(.opaw(13, .medium))
+                .foregroundStyle(Color.opawMuted)
+                .lineLimit(2)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 18)
+        .overlay(alignment: .leading) {
+            if divider { Rectangle().fill(Color.opawHairline).frame(width: 1) }
         }
     }
 
