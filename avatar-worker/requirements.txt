@@ -1,0 +1,5 @@
+# Core worker dependencies (no GPU needed).
+numpy>=1.26
+pillow>=10.3
+supabase>=2.4
+python-dotenv>=1.0
