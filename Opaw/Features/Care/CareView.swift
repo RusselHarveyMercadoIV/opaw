@@ -194,7 +194,9 @@ struct CareView: View {
                 HStack(spacing: 0) {
                     Text(event.date.formatted(date: .omitted, time: .shortened))
                         .foregroundStyle(Color.opawFaint)
-                        .frame(width: 52, alignment: .leading)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .frame(width: ClockColumn.width(52), alignment: .leading)
                     Text(caringLine(event))
                         .foregroundStyle(Color.opawInk)
                         .lineLimit(1)
@@ -377,7 +379,9 @@ struct CareView: View {
                 HStack(spacing: 0) {
                     Text(event.date.formatted(date: .omitted, time: .shortened))
                         .foregroundStyle(Color.opawFaint)
-                        .frame(width: 52, alignment: .leading)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .frame(width: ClockColumn.width(52), alignment: .leading)
                     Text(caringLine(event))
                         .foregroundStyle(Color.opawInk)
                         .lineLimit(1)

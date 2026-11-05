@@ -115,7 +115,7 @@ struct ScheduleView: View {
                 .foregroundStyle(needsAttention ? Color.opawAlert : Color.opawFaint)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
-                .frame(width: 54, alignment: .leading)
+                .frame(width: ClockColumn.width(54), alignment: .leading)
             ZStack {
                 if isDone {
                     Circle().fill(Color(hex: 0x111111))

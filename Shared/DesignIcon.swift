@@ -7,7 +7,7 @@ enum DesignIcon: String, CaseIterable {
     case heart, share, upload, bell, calendar, trophy, camera, sparkle, document, pause
     case meal, water, pee, poop, meds, bath, brush, nails, weight, vet
     case close, chevronDown, refresh, link, location, lock, chart, users, cloud, help, grid, ruler, clock, pets, settings, wave
-    case pencil, schedule
+    case pencil, schedule, undo
     /// Icons a custom track can use (3i).
     case bone, heartLine, star, moon, sun, book, ball
 
@@ -113,6 +113,7 @@ enum DesignIcon: String, CaseIterable {
             return [.path("M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"), .circle(12, 12, 3)]
         case .pencil:
             return [.path("M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"), .path("m15 5 4 4")]
+        case .undo: return [.path("M9 14 4 9l5-5"), .path("M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11")]
         case .schedule:
             return [.path("M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5"), .path("M16 2v4M8 2v4M3 10h5"), .circle(16, 16, 6), .path("M16 14v2.2l1.6 1")]
         case .bone:

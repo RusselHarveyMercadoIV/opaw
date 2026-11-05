@@ -39,6 +39,16 @@ extension CareKind {
     }
 }
 
+/// The time column in log lists. The design shows 24-hour times like "13:05"; on a phone set to
+/// 12-hour time, "10:30 PM" needs more room, so the column widens to keep every time on one line.
+enum ClockColumn {
+    static let uses12Hour = DateFormatter.dateFormat(fromTemplate: "j", options: 0, locale: .current)?.contains("a") ?? false
+
+    static func width(_ base: CGFloat) -> CGFloat {
+        uses12Hour ? base + 22 : base
+    }
+}
+
 /// Points for a walk: six for any walk, as in the design.
 enum WalkPoints {
     static let perWalk = 6
@@ -173,14 +183,15 @@ struct CareToastView: View {
                 .font(.opaw(19, .black))
                 .foregroundStyle(.white)
             if let onUndo {
-                Button("Undo", action: onUndo)
-                    .font(.opaw(14, .heavy))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(Color.white.opacity(0.16), in: Capsule())
-                    .buttonStyle(.pressable)
-                    .accessibilityLabel("Undo \(toast.kind.title) log")
+                Button(action: onUndo) {
+                    Icon(.undo, size: 18)
+                        .foregroundStyle(.white)
+                        .frame(width: 40, height: 40)
+                        .background(Color.white.opacity(0.16), in: Circle())
+                }
+                .buttonStyle(.pressable)
+                .accessibilityLabel("Undo")
+                .accessibilityHint("Removes this \(toast.kind.title.lowercased()) log")
             }
         }
         .padding(.leading, 8)

@@ -259,7 +259,9 @@ struct TodayView: View {
                 HStack(spacing: 0) {
                     Text(entry.date.formatted(date: .omitted, time: .shortened))
                         .foregroundStyle(Color.opawFaint)
-                        .frame(width: 56, alignment: .leading)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .frame(width: ClockColumn.width(56), alignment: .leading)
                     Text(entry.text)
                         .foregroundStyle(Color.opawInk)
                         .lineLimit(1)
