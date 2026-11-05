@@ -1146,7 +1146,7 @@ private struct TrackStep: View {
             StepHeader(index: 4, onBack: onBack)
             ScrollView {
                 VStack(spacing: 0) {
-                    StepTitle(title: "What should we track?", subtitle: "You can change this any time in Settings.")
+                    StepTitle(title: "What should we track?", subtitle: "You can change this any time in Care.")
                     TrackGrid(trackedKinds: $draft.trackedKinds)
                         .padding(.horizontal, 20)
                         .padding(.top, 24)

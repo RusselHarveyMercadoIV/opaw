@@ -23,7 +23,7 @@ struct CareView: View {
         dogs.first { $0.id.uuidString == activeDogID } ?? dogs.first
     }
 
-    /// Log types in the grid, in the design's order. "Custom" follows.
+    /// Log types in the grid, in the design's order. "Custom" and "Edit" follow.
     static let gridKinds: [CareKind] = [.meal, .water, .pee, .poop, .meds, .bath, .brush, .nails, .weight, .vet]
 
     var body: some View {
@@ -271,6 +271,13 @@ struct CareView: View {
             }
             .buttonStyle(.pressable)
             .accessibilityLabel("Custom log")
+            NavigationLink {
+                CareTrackingView(dog: dog)
+            } label: {
+                circle(symbol: "pencil", label: "Edit", badge: nil, alert: false, size: compact ? 62 : 68)
+            }
+            .buttonStyle(.pressable)
+            .accessibilityLabel("Edit what's tracked and meal times")
         }
     }
 
