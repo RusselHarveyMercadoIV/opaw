@@ -23,7 +23,7 @@ struct SpeechBubble: View {
 }
 
 /// The pet's cut-out photo with the white sticker edge, or a soft placeholder before there is one.
-struct PetSticker: View {
+struct StickerPet: View {
     let image: UIImage?
     var edge: CGFloat = 5
     var motion: LoopMotion? = .bob

@@ -792,7 +792,7 @@ private struct RevealStep: View {
                             .controlSize(.large)
                             .frame(width: 230, height: 250)
                     } else {
-                        PetSticker(image: image, edge: 5, motion: .bob, duration: 3.2)
+                        StickerPet(image: image, edge: 5, motion: .bob, duration: 3.2)
                             .frame(width: 230, height: 250)
                             .transition(.scale(scale: 0.7).combined(with: .opacity))
                     }
@@ -869,7 +869,7 @@ private struct RevealStep: View {
 
     private func mood(_ label: String, _ motion: LoopMotion, _ duration: Double) -> some View {
         VStack(spacing: 6) {
-            PetSticker(image: isProcessing ? nil : image, edge: 3, motion: motion, duration: duration)
+            StickerPet(image: isProcessing ? nil : image, edge: 3, motion: motion, duration: duration)
                 .frame(width: 76, height: 84)
                 .opacity(motion == .droop ? 0.6 : 1)
                 .saturation(motion == .droop ? 0.3 : 1)
@@ -1136,7 +1136,7 @@ private struct PermissionsStep: View {
             Spacer(minLength: 0)
 
             ZStack(alignment: .topLeading) {
-                PetSticker(image: image, edge: 5, motion: .breathe, duration: 2.6)
+                StickerPet(image: image, edge: 5, motion: .breathe, duration: 2.6)
                     .frame(width: 150, height: 170)
                     .padding(.leading, 26)
                     .padding(.top, 30)

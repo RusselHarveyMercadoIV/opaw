@@ -22,7 +22,7 @@ struct PaywallView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            PetSticker(image: petImage, edge: 5, motion: .bob, duration: 3.2)
+            StickerPet(image: petImage, edge: 5, motion: .bob, duration: 3.2)
                 .frame(width: 112, height: 126)
                 .frame(height: 132)
                 .padding(.top, 4)
@@ -289,7 +289,7 @@ struct OneTimeOfferView: View {
                 .ignoresSafeArea()
             VStack(spacing: 0) {
                 ZStack(alignment: .topLeading) {
-                    PetSticker(image: petImage, edge: 5, motion: .bob, duration: 3.2)
+                    StickerPet(image: petImage, edge: 5, motion: .bob, duration: 3.2)
                         .frame(width: 130, height: 148)
                         .padding(.leading, 34)
                         .padding(.top, 10)
