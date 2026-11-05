@@ -151,7 +151,7 @@ struct ProfileView: View {
             .whiteCard()
     }
 
-    private func rowLabel(_ icon: DesignIcon, _ title: String, first: Bool, @ViewBuilder trailing: () -> some View) -> some View {
+    private func rowLabel<Trailing: View>(_ icon: DesignIcon, _ title: String, first: Bool, @ViewBuilder trailing: () -> Trailing) -> some View {
         HStack(spacing: 14) {
             RowIcon(icon: icon)
             Text(title)
