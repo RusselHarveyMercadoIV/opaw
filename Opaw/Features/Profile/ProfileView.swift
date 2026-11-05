@@ -17,6 +17,7 @@ struct ProfileView: View {
     @State private var confirmReset = false
     @Environment(\.modelContext) private var modelContext
     @Environment(WalkRecorder.self) private var recorder
+    @Environment(DataReset.self) private var reset
     @State private var pane: SettingsPane = .subscription
     @Environment(\.duoOpen) private var duoOpen
 
@@ -51,7 +52,7 @@ struct ProfileView: View {
             Button("Erase everything", role: .destructive) {
                 Haptics.success()
                 dismiss()
-                DataReset.eraseAll(in: modelContext, recorder: recorder)
+                reset.start(in: modelContext, recorder: recorder)
             }
             Button("Cancel", role: .cancel) {}
         } message: {

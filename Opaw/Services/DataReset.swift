@@ -1,3 +1,4 @@
+import Observation
 import SwiftData
 import UserNotifications
 import WidgetKit
@@ -7,7 +8,23 @@ import WidgetKit
 /// Purchases stay with the App Store, and a Pack account stays on its server; the
 /// one-time offer is not shown a second time.
 @MainActor
-enum DataReset {
+@Observable
+final class DataReset {
+    /// True from the moment the user confirms until the data is gone. The app shows onboarding
+    /// straight away, so no screen is still reading a pet when it's deleted.
+    private(set) var inProgress = false
+
+    func start(in context: ModelContext, recorder: WalkRecorder) {
+        guard !inProgress else { return }
+        inProgress = true
+        Task {
+            // Let Settings close and the tabs leave the screen before anything is deleted.
+            try? await Task.sleep(for: .seconds(1))
+            Self.eraseAll(in: context, recorder: recorder)
+            inProgress = false
+        }
+    }
+
     static func eraseAll(in context: ModelContext, recorder: WalkRecorder) {
         if recorder.state != .idle { recorder.cancel() }
 

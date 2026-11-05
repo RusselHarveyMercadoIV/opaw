@@ -6,6 +6,7 @@ struct OpawApp: App {
     @State private var walkRecorder = WalkRecorder()
     @State private var pack = PackService()
     @State private var premium = PremiumStore()
+    @State private var reset = DataReset()
 
     init() {
         OpawAppearance.apply()
@@ -17,6 +18,7 @@ struct OpawApp: App {
                 .environment(walkRecorder)
                 .environment(pack)
                 .environment(premium)
+                .environment(reset)
                 .tint(.opawOrange)
         }
         .modelContainer(OpawStore.container)
@@ -25,10 +27,13 @@ struct OpawApp: App {
 
 struct RootView: View {
     @Query(sort: \Dog.createdAt) private var dogs: [Dog]
+    @Environment(DataReset.self) private var reset
+
+    private var showsOnboarding: Bool { dogs.isEmpty || reset.inProgress }
 
     var body: some View {
         ZStack {
-            if dogs.isEmpty {
+            if showsOnboarding {
                 OnboardingView()
                     .transition(.opacity)
             } else {
@@ -36,7 +41,7 @@ struct RootView: View {
                     .transition(.opacity.combined(with: .scale(scale: 1.04)))
             }
         }
-        .animation(.easeInOut(duration: 0.6), value: dogs.isEmpty)
+        .animation(.easeInOut(duration: 0.6), value: showsOnboarding)
         .duoEnvironment()
     }
 }
