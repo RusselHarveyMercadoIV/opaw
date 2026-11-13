@@ -95,7 +95,7 @@ fun MainTabs() {
             when (selection) {
                 AppTab.HOME -> TabSlot("Home")
                 AppTab.CARE -> CareScreen()
-                AppTab.ACTIVITY -> TabSlot("Walk")
+                AppTab.ACTIVITY -> app.opaw.ui.walks.WalkTab()
                 AppTab.MEMORIES -> TabSlot("Memories")
             }
             AnimatedContent(
@@ -141,6 +141,7 @@ private fun RouteScreen(route: Route) {
         is Route.Today -> TodayScreen(route.dogId)
         is Route.History -> HistoryScreen(route.dogId)
         is Route.Schedule -> ScheduleScreen(route.dogId)
+        is Route.WalkDetail -> app.opaw.ui.walks.WalkDetailScreen(route.walkId)
         else -> TabSlot(route.toString())
     }
 }

@@ -50,6 +50,7 @@ class OpawRepository(private val db: OpawDatabase) {
     suspend fun allReminders(): List<Reminder> = db.reminders().all()
     suspend fun saveTrack(track: CustomTrack) = db.customTracks().upsert(track)
     suspend fun deleteTrack(track: CustomTrack) = db.customTracks().delete(track)
+    suspend fun walk(id: String): Walk? = db.walks().get(id)
     suspend fun saveWalk(walk: Walk) = db.walks().upsert(walk)
     suspend fun deleteWalk(walk: Walk) = db.walks().delete(walk)
     suspend fun saveMemory(memory: Memory) = db.memories().upsert(memory)
