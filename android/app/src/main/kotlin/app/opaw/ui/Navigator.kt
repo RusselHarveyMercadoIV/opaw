@@ -13,6 +13,7 @@ sealed interface Route {
     data class Profile(val dogId: String) : Route
     data class Household(val dogId: String) : Route
     data class FamilyTree(val dogId: String) : Route
+    data class Studio(val dogId: String) : Route
     data object Challenges : Route
     data object Units : Route
     data object Pack : Route

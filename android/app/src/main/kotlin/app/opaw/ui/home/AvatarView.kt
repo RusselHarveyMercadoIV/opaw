@@ -43,7 +43,7 @@ import kotlin.math.sin
  * once they're ready (AvatarView.swift).
  */
 @Composable
-fun LivingPhoto(image: Bitmap?, mood: AvatarMood, modifier: Modifier = Modifier, sticker: androidx.compose.ui.unit.Dp = 0.dp, faded: Boolean = false) {
+fun LivingPhoto(image: Bitmap?, mood: AvatarMood, modifier: Modifier = Modifier, sticker: androidx.compose.ui.unit.Dp = 0.dp, faded: Boolean = false, onTap: (() -> Unit)? = null) {
     val haptics = rememberHaptics()
     val scope = rememberCoroutineScope()
     val hop = remember { Animatable(0f) }
@@ -70,6 +70,7 @@ fun LivingPhoto(image: Bitmap?, mood: AvatarMood, modifier: Modifier = Modifier,
     }
     Box(
         modifier.clickable(remember { MutableInteractionSource() }, indication = null) {
+            if (onTap != null) return@clickable onTap()
             haptics.tap()
             scope.launch {
                 hop.animateTo(28f, tween(180))

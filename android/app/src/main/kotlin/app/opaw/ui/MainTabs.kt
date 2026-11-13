@@ -56,6 +56,7 @@ import app.opaw.data.CareEvent
 import app.opaw.data.dueDate
 import app.opaw.services.CareRecorder
 import app.opaw.ui.care.CareScreen
+import app.opaw.ui.home.AvatarStudioScreen
 import app.opaw.ui.home.FamilyTreeScreen
 import app.opaw.ui.pack.PackScreen
 import app.opaw.ui.premium.PaywallRoute
@@ -157,6 +158,7 @@ private fun RouteScreen(route: Route) {
         is Route.WalkDetail -> WalkDetailScreen(route.walkId)
         is Route.Profile -> ProfileScreen(route.dogId)
         is Route.FamilyTree -> FamilyTreeScreen(route.dogId)
+        is Route.Studio -> AvatarStudioScreen(route.dogId)
         is Route.MemoryDetail -> MemoryDetailScreen(route.memoryId)
         is Route.Household -> HouseholdScreen(route.dogId)
         Route.Units -> UnitsScreen()

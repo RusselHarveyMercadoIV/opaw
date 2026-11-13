@@ -242,13 +242,15 @@ private fun PackHome() {
     }
     LaunchedEffect(Unit) { load() }
 
-    fun shareMyDogs() = scope.launch {
-        val here = WalkRecorder.lastLocation ?: run { status = "We need your location first."; return@launch }
-        try {
-            myDogs.forEach { pack.shareDog(it, here.latitude, here.longitude) }
-            haptics.success()
-        } catch (error: Exception) {
-            app.toasts.show(Notice(Notice.Kind.FAILED, "Couldn't put your pet on the map", "Check your connection", actionTitle = "Retry") { shareMyDogs() })
+    fun shareMyDogs(): Unit {
+        scope.launch {
+            val here = WalkRecorder.lastLocation ?: run { status = "We need your location first."; return@launch }
+            try {
+                myDogs.forEach { pack.shareDog(it, here.latitude, here.longitude) }
+                haptics.success()
+            } catch (error: Exception) {
+                app.toasts.show(Notice(Notice.Kind.FAILED, "Couldn't put your pet on the map", "Check your connection", actionTitle = "Retry") { shareMyDogs() })
+            }
         }
     }
 

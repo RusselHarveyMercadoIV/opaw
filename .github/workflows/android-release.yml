@@ -1,0 +1,62 @@
+name: Android release
+
+# Builds the signed app bundle (.aab) to upload to Google Play. Run it from the Actions tab.
+# Needs these repository secrets: OPAW_KEYSTORE_BASE64 (the upload keystore, base64-encoded),
+# OPAW_KEYSTORE_PASSWORD, OPAW_KEY_ALIAS, OPAW_KEY_PASSWORD, and optionally SUPABASE_HOST and
+# SUPABASE_ANON_KEY for the Pack.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_code:
+        description: "Version code (must go up with every upload)"
+        required: true
+      version_name:
+        description: "Version name shown in Play, such as 1.0.0"
+        required: true
+
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.14"
+
+      - name: Install Android platform 36
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" > /dev/null
+
+      - name: Restore the upload key
+        run: echo "${{ secrets.OPAW_KEYSTORE_BASE64 }}" | base64 --decode > "$RUNNER_TEMP/upload.jks"
+
+      - name: Core unit tests
+        run: gradle :core:test
+
+      - name: Build release bundle
+        env:
+          OPAW_KEYSTORE_FILE: ${{ runner.temp }}/upload.jks
+          OPAW_KEYSTORE_PASSWORD: ${{ secrets.OPAW_KEYSTORE_PASSWORD }}
+          OPAW_KEY_ALIAS: ${{ secrets.OPAW_KEY_ALIAS }}
+          OPAW_KEY_PASSWORD: ${{ secrets.OPAW_KEY_PASSWORD }}
+          SUPABASE_HOST: ${{ secrets.SUPABASE_HOST }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          OPAW_VERSION_CODE: ${{ inputs.version_code }}
+          OPAW_VERSION_NAME: ${{ inputs.version_name }}
+        run: gradle :app:bundleRelease
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: opaw-release-aab
+          path: android/app/build/outputs/bundle/release/*.aab
+          retention-days: 30

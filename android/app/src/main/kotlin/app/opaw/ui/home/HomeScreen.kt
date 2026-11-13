@@ -126,7 +126,7 @@ fun HomeScreen() {
         HorizontalPager(pager, Modifier.fillMaxSize()) { page ->
             val data = all.getOrNull(page)
             if (data != null) {
-                PetPage(data, dots) { navigator.push(Route.Today(data.dog.id)) }
+                PetPage(data, dots, openStudio = { navigator.push(Route.Studio(data.dog.id)) }) { navigator.push(Route.Today(data.dog.id)) }
             } else {
                 AddPetPage(dots, locked = !Premium.isPremium && all.isNotEmpty(), onAdd = { addSource = it }) { navigator.push(Route.Paywall) }
             }
@@ -193,7 +193,7 @@ private fun FamilyChip(dogs: List<Dog>, current: DogData, onClick: () -> Unit) {
 // MARK: - Pet page
 
 @Composable
-private fun PetPage(data: DogData, dots: @Composable () -> Unit, openToday: () -> Unit) {
+private fun PetPage(data: DogData, dots: @Composable () -> Unit, openStudio: () -> Unit, openToday: () -> Unit) {
     val colors = Opaw.colors
     val now = rememberNow()
     val dog = data.dog
@@ -208,6 +208,7 @@ private fun PetPage(data: DogData, dots: @Composable () -> Unit, openToday: () -
                 Modifier.fillMaxSize().padding(horizontal = 78.dp).loopMotion(report.tier.motion),
                 sticker = 7.dp,
                 faded = report.tier == CareTier.NEEDS_YOU,
+                onTap = openStudio,
             )
             OutlinedText(report.tier.sound, Modifier.align(Alignment.TopEnd).padding(end = 52.dp, top = 90.dp).loopMotion(LoopMotion.TAG_POP))
         }

@@ -15,8 +15,8 @@ android {
         applicationId = "app.opaw"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = System.getenv("OPAW_VERSION_CODE")?.toIntOrNull() ?: 1
+        versionName = System.getenv("OPAW_VERSION_NAME") ?: "0.1.0"
 
         // The Pack's Supabase project, from gradle.properties, local.properties or the environment.
         // Left empty, the Pack shows its "almost ready" screen, as on iOS.
@@ -26,8 +26,23 @@ android {
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"${secret("SUPABASE_ANON_KEY")}\"")
     }
 
+    // The Play upload key, from the environment (GitHub secrets) or local.properties. Without it,
+    // release builds are left unsigned and Play Console won't accept them.
+    val keystore = System.getenv("OPAW_KEYSTORE_FILE") ?: localProperty("OPAW_KEYSTORE_FILE")
+    signingConfigs {
+        if (keystore != null) {
+            create("upload") {
+                storeFile = file(keystore)
+                storePassword = System.getenv("OPAW_KEYSTORE_PASSWORD") ?: localProperty("OPAW_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("OPAW_KEY_ALIAS") ?: localProperty("OPAW_KEY_ALIAS")
+                keyPassword = System.getenv("OPAW_KEY_PASSWORD") ?: localProperty("OPAW_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
+            if (keystore != null) signingConfig = signingConfigs.getByName("upload")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
