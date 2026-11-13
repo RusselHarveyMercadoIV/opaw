@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import app.opaw.core.OpawFormat
 import kotlinx.coroutines.flow.Flow
@@ -45,7 +46,16 @@ class OpawSettings(context: Context) {
         val hapticsOn = booleanPreferencesKey("hapticsOn")
         val household = stringPreferencesKey("householdMembers")
         val premiumOfferShown = booleanPreferencesKey("premiumOfferShown")
+        val scheduledReminders = stringSetPreferencesKey("scheduledReminders")
+        fun newestBadge(dogId: String) = stringPreferencesKey("newestBadge.$dogId")
     }
+
+    suspend fun scheduledReminderIds(): Set<String> = store.data.first()[Keys.scheduledReminders].orEmpty()
+    suspend fun setScheduledReminderIds(ids: List<String>) = store.edit { it[Keys.scheduledReminders] = ids.toSet() }
+
+    /** The badge earned most recently by a dog. */
+    fun newestBadge(dogId: String): Flow<String?> = store.data.map { it[Keys.newestBadge(dogId)] }
+    suspend fun setNewestBadge(dogId: String, badge: String) = store.edit { it[Keys.newestBadge(dogId)] = badge }
 
     /** People invited to help look after the pets. */
     val household: Flow<List<HouseholdMember>> = store.data.map { prefs ->

@@ -18,6 +18,9 @@ interface DogDao {
     @Query("SELECT * FROM dogs WHERE id = :id")
     suspend fun get(id: String): Dog?
 
+    @Query("SELECT * FROM dogs ORDER BY createdAt")
+    suspend fun all(): List<Dog>
+
     @Upsert suspend fun upsert(dog: Dog)
     @Delete suspend fun delete(dog: Dog)
 
@@ -35,6 +38,9 @@ interface CareEventDao {
 
     @Query("SELECT * FROM care_events WHERE dogId = :dogId")
     suspend fun allForDog(dogId: String): List<CareEvent>
+
+    @Query("SELECT * FROM care_events WHERE id = :id")
+    suspend fun get(id: String): CareEvent?
 
     @Upsert suspend fun upsert(event: CareEvent)
     @Delete suspend fun delete(event: CareEvent)
@@ -60,6 +66,9 @@ interface MemoryDao {
     @Query("SELECT * FROM memories WHERE dogId = :dogId ORDER BY date DESC")
     fun observeForDog(dogId: String): Flow<List<Memory>>
 
+    @Query("SELECT * FROM memories WHERE dogId = :dogId")
+    suspend fun allForDog(dogId: String): List<Memory>
+
     @Query("SELECT COUNT(*) FROM memories WHERE dogId = :dogId")
     suspend fun countForDog(dogId: String): Int
 
@@ -75,6 +84,9 @@ interface ReminderDao {
     @Query("SELECT * FROM reminders")
     suspend fun all(): List<Reminder>
 
+    @Query("SELECT * FROM reminders WHERE dogId = :dogId")
+    suspend fun allForDog(dogId: String): List<Reminder>
+
     @Upsert suspend fun upsert(reminder: Reminder)
     @Delete suspend fun delete(reminder: Reminder)
 }
@@ -83,6 +95,9 @@ interface ReminderDao {
 interface CustomTrackDao {
     @Query("SELECT * FROM custom_tracks WHERE dogId = :dogId ORDER BY createdAt")
     fun observeForDog(dogId: String): Flow<List<CustomTrack>>
+
+    @Query("SELECT * FROM custom_tracks WHERE dogId = :dogId")
+    suspend fun allForDog(dogId: String): List<CustomTrack>
 
     @Upsert suspend fun upsert(track: CustomTrack)
     @Delete suspend fun delete(track: CustomTrack)

@@ -16,6 +16,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -55,6 +56,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.opaw.services.Sounds
 import app.opaw.ui.theme.Opaw
 import app.opaw.ui.theme.opaw
 import kotlin.math.min
@@ -69,25 +71,42 @@ object Feedback {
 }
 
 /**
- * One haptic per action, as on iOS (7c). Sounds are added with the Care screens.
+ * One haptic per action (7c), each with its matching sound. Every haptic confirms something you did
+ * or warns about something that needs you. Mirrors `Haptics` in Theme.swift.
  */
 class Haptics(private val view: View) {
-    private fun fire(constant: Int) {
-        if (Feedback.hapticsOn) view.performHapticFeedback(constant)
+    private fun fire(cue: Sounds.Cue, vararg constants: Int) {
+        if (Feedback.hapticsOn) view.performHapticFeedback(constants.first())
+        Sounds.play(cue)
     }
 
     /** Log saved, walk saved. */
-    fun success() = fire(HapticFeedbackConstants.CONFIRM)
+    fun success() = fire(Sounds.Cue.Success, HapticFeedbackConstants.CONFIRM)
     /** Tap a Care button, flip a switch, pause a walk. */
-    fun tap() = fire(HapticFeedbackConstants.VIRTUAL_KEY)
+    fun tap() = fire(Sounds.Cue.Light, HapticFeedbackConstants.VIRTUAL_KEY)
     /** Change day, swipe between pets. */
-    fun select() = fire(HapticFeedbackConstants.CLOCK_TICK)
+    fun select() = fire(Sounds.Cue.Selection, HapticFeedbackConstants.CLOCK_TICK)
     /** Undo, pull to refresh letting go. */
-    fun soft() = fire(HapticFeedbackConstants.KEYBOARD_TAP)
+    fun soft() = fire(Sounds.Cue.Soft, HapticFeedbackConstants.KEYBOARD_TAP)
     /** Hold a log until the popup opens, start or resume a walk. */
-    fun medium() = fire(HapticFeedbackConstants.LONG_PRESS)
+    fun medium() = fire(Sounds.Cue.Medium, HapticFeedbackConstants.LONG_PRESS)
+    /** Confirm delete. */
+    fun rigid() = fire(Sounds.Cue.Rigid, HapticFeedbackConstants.CONTEXT_CLICK)
+    /** One tick while holding to finish a walk; [progress] 0…1 raises the pitch. */
+    fun tick(progress: Double = 0.0) = fire(Sounds.Cue.Tick(progress), HapticFeedbackConstants.CLOCK_TICK)
+    /** Meds due, or already logged. */
+    fun warning() = fire(Sounds.Cue.Warning, HapticFeedbackConstants.REJECT)
     /** Save failed. */
-    fun error() = fire(HapticFeedbackConstants.REJECT)
+    fun error() = fire(Sounds.Cue.Error, HapticFeedbackConstants.REJECT)
+
+    /** Badge or streak unlocked: a heavy thump, then success. */
+    fun milestone() {
+        if (Feedback.hapticsOn) {
+            view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+            view.postDelayed({ if (Feedback.hapticsOn) view.performHapticFeedback(HapticFeedbackConstants.CONFIRM) }, 160)
+        }
+        Sounds.play(Sounds.Cue.Milestone)
+    }
 }
 
 @Composable
@@ -97,13 +116,19 @@ fun rememberHaptics(): Haptics {
 }
 
 /** Press (7d): scale to 0.94 in 120 ms, ease-out. The counterpart of `.buttonStyle(.pressable)`. */
-fun Modifier.pressable(enabled: Boolean = true, role: Role = Role.Button, onClick: () -> Unit): Modifier = composed {
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+fun Modifier.pressable(
+    enabled: Boolean = true,
+    role: Role = Role.Button,
+    onLongClick: (() -> Unit)? = null,
+    onClick: () -> Unit,
+): Modifier = composed {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(if (pressed) 0.94f else 1f, tween(120), label = "press")
     this
         .graphicsLayer { scaleX = scale; scaleY = scale }
-        .clickable(interaction, indication = null, enabled = enabled, role = role, onClick = onClick)
+        .combinedClickable(interaction, indication = null, enabled = enabled, role = role, onLongClick = onLongClick, onClick = onClick)
 }
 
 /** The soft shadow under floating round buttons. */

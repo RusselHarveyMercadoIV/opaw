@@ -76,6 +76,7 @@ data class DogDraft(
             }
         }
         app.settings.setActiveDog(dog.id)
+        app.opaw.services.NotificationService.reschedule(context)
         return dog
     }
 
