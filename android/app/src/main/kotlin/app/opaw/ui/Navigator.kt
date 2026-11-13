@@ -17,6 +17,7 @@ sealed interface Route {
     data object Units : Route
     data object Pack : Route
     data object Subscription : Route
+    data object Paywall : Route
 }
 
 /** A push/pop stack, the counterpart of the NavigationStack in each iOS tab. */

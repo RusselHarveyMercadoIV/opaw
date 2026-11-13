@@ -33,6 +33,7 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
         </activity>
         <!-- Records a walk with the screen off, like the iOS Live Activity. -->
         <service
@@ -50,6 +51,34 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+
+        <!-- Launcher shortcuts and Google Assistant: "Log poop in Opaw". -->
+        <activity
+            android:name=".widget.LogShortcutActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="opaw" android:host="log" />
+            </intent-filter>
+        </activity>
+
+        <receiver android:name=".widget.QuickLogWidgetReceiver" android:exported="false" android:label="Quick log">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/quick_log_widget" />
+        </receiver>
+        <receiver android:name=".widget.CareScoreWidgetReceiver" android:exported="false" android:label="Care score">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/care_score_widget" />
+        </receiver>
 
         <receiver android:name=".services.ReminderReceiver" android:exported="false" />
         <receiver android:name=".services.RescheduleReceiver" android:exported="false">

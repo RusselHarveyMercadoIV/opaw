@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Opaw</string>
+    <string name="widget_quick_log">Log meals, water and potty breaks with one tap.</string>
+    <string name="widget_care_score">How your pet is doing today, out of 100.</string>
+    <string name="log_poop">Log poop</string>
+    <string name="log_pee">Log pee</string>
+    <string name="log_meal">Log meal</string>
 </resources>

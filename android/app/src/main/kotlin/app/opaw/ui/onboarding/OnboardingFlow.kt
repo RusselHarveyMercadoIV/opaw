@@ -97,7 +97,10 @@ import app.opaw.core.CareKind
 import app.opaw.core.DogSize
 import app.opaw.core.OpawFormat
 import app.opaw.data.Dog
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.opaw.services.CutoutService
+import app.opaw.ui.premium.OneTimeOffer
+import app.opaw.ui.premium.PaywallScreen
 import app.opaw.ui.care.MealTimesCard
 import app.opaw.ui.care.TrackGrid
 import app.opaw.ui.components.BlackPillButton
@@ -149,6 +152,9 @@ fun OnboardingFlow(app: OpawApplication) {
     var isProcessing by remember { mutableStateOf(false) }
     var foundDog by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
+    var showPaywall by remember { mutableStateOf(false) }
+    var showOffer by remember { mutableStateOf(false) }
+    val offerShown by app.settings.premiumOfferShown.collectAsStateWithLifecycle(true)
 
     fun go(next: Step) {
         forward = next > step
@@ -217,8 +223,35 @@ fun OnboardingFlow(app: OpawApplication) {
             Step.REVEAL -> RevealStep(padded, draft.displayName, capture, isProcessing, onBack = { go(Step.DETAILS) }, onRetake = { go(Step.CAMERA) }) { go(Step.TRACK) }
             Step.TRACK -> TrackStep(padded, draft, { draft = it }, onBack = { go(Step.REVEAL) }) { go(Step.HOUSEHOLD) }
             Step.HOUSEHOLD -> HouseholdStep(padded, draft.displayName, app, onBack = { go(Step.TRACK) }) { go(Step.PERMISSIONS) }
-            Step.PERMISSIONS -> PermissionsStep(padded, draft.displayName, capture.cutout ?: capture.original, onBack = { go(Step.HOUSEHOLD) }, onNext = ::finish)
+            Step.PERMISSIONS -> PermissionsStep(padded, draft.displayName, capture.cutout ?: capture.original, onBack = { go(Step.HOUSEHOLD) }) {
+                if (app.premium.isPremium) finish() else showPaywall = true
+            }
         }
+    }
+
+    // Then the paywall (5a), the one-time offer (5c) once, and home.
+    if (showPaywall) {
+        BackHandler { showPaywall = false; afterPaywall(app, offerShown, { showOffer = true }, ::finish) }
+        PaywallScreen(draft.displayName, capture.cutout ?: capture.original) { purchased ->
+            showPaywall = false
+            if (purchased) scope.launch { app.settings.setPremiumOfferShown(true) }
+            afterPaywall(app, offerShown || purchased, { showOffer = true }, ::finish)
+        }
+    }
+    if (showOffer) {
+        OneTimeOffer(capture.cutout ?: capture.original) {
+            showOffer = false
+            finish()
+        }
+    }
+}
+
+private fun afterPaywall(app: OpawApplication, offerShown: Boolean, showOffer: () -> Unit, finish: () -> Unit) {
+    if (app.premium.isPremium || offerShown) {
+        finish()
+    } else {
+        app.scope.launch { app.settings.setPremiumOfferShown(true) }
+        showOffer()
     }
 }
 

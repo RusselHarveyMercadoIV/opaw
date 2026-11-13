@@ -88,6 +88,26 @@ object NotificationService {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
+    /** A one-off notification, such as the reminder before a free trial ends. */
+    fun scheduleOnce(context: Context, id: String, at: java.time.Instant, title: String, body: String) {
+        val intent = Intent(context, ReminderReceiver::class.java).putExtra("onceTitle", title).putExtra("onceBody", body).putExtra("onceId", id)
+        val pending = PendingIntent.getBroadcast(context, id.hashCode(), intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        context.getSystemService(AlarmManager::class.java).setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at.toEpochMilli(), pending)
+    }
+
+    internal fun fireOnce(context: Context, id: String, title: String, body: String) {
+        if (!canNotify(context)) return
+        val open = PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
+        val notification = NotificationCompat.Builder(context, CHANNEL)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setContentIntent(open)
+            .setAutoCancel(true)
+            .build()
+        runCatching { NotificationManagerCompat.from(context).notify(id.hashCode(), notification) }
+    }
+
     internal fun fire(context: Context, reminderId: String) {
         val app = context.applicationContext as OpawApplication
         CoroutineScope(Dispatchers.IO).launch {
@@ -122,6 +142,10 @@ object NotificationService {
 
 class ReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        intent.getStringExtra("onceId")?.let { once ->
+            NotificationService.fireOnce(context, once, intent.getStringExtra("onceTitle").orEmpty(), intent.getStringExtra("onceBody").orEmpty())
+            return
+        }
         val id = intent.getStringExtra("reminderId") ?: return
         NotificationService.fire(context, id)
     }

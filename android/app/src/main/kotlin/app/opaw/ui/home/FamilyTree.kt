@@ -71,6 +71,7 @@ import app.opaw.ui.components.ScreenHeader
 import app.opaw.ui.components.pressable
 import app.opaw.ui.components.rememberHaptics
 import app.opaw.ui.components.rememberPhoto
+import app.opaw.ui.premium.PetLimitSheet
 import app.opaw.ui.profile.AddDogSheet
 import app.opaw.ui.rememberApp
 import app.opaw.ui.rememberDogData
@@ -94,6 +95,7 @@ fun FamilyTreeScreen(dogId: String) {
     var addRole by remember { mutableStateOf<Relative.Role?>(null) }
     var editing by remember { mutableStateOf<Relative?>(null) }
     var addSource by remember { mutableStateOf(false) }
+    var petLimit by remember { mutableStateOf(false) }
     val mom = dog.relatives.firstOrNull { it.role == Relative.Role.MOM }
     val dad = dog.relatives.firstOrNull { it.role == Relative.Role.DAD }
     val siblings = dog.relatives.filter { it.role == Relative.Role.BROTHER || it.role == Relative.Role.SISTER }
@@ -188,7 +190,7 @@ fun FamilyTreeScreen(dogId: String) {
                             ) { MiniFace(rememberPhoto(item.cutoutPath ?: item.photoPath, 200), size = 58.dp, rim = 0.dp, fill = colors.chip) }
                         }
                         Box(
-                            Modifier.padding(3.dp).size(58.dp).pressable { if (Premium.isPremium) addSource = true else navigator.push(Route.Subscription) }
+                            Modifier.padding(3.dp).size(58.dp).pressable { if (Premium.isPremium) addSource = true else petLimit = true }
                                 .dashedCapsule(Color(0xFFC4C4C6), dash = 5f, gap = 4f),
                             contentAlignment = Alignment.Center,
                         ) { Icon(DesignIcon.PLUS, size = 20.dp, tint = colors.muted) }
@@ -202,6 +204,7 @@ fun FamilyTreeScreen(dogId: String) {
     addRole?.let { role -> RelativeSheet(Relative(name = "", role = role), onDismiss = { addRole = null }, onSave = ::save) }
     editing?.let { relative -> RelativeSheet(relative, onDelete = { remove(relative) }, onDismiss = { editing = null }, onSave = ::save) }
     if (addSource) AddDogSheet(PhotoSource.CAMERA) { addSource = false }
+    if (petLimit) PetLimitSheet(dog.cutoutPath ?: dog.photoPath, onDismiss = { petLimit = false }) { navigator.push(Route.Paywall) }
 }
 
 /** Adds or edits one relative: photo, name, role and where they live. */

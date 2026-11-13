@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 android {
@@ -67,6 +68,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.coroutines.play.services)
+    implementation(libs.kotlinx.serialization.json)
 
     implementation(libs.androidx.exifinterface)
     implementation(libs.camerax.camera2)
@@ -76,6 +78,9 @@ dependencies {
     implementation(libs.mlkit.image.labeling)
     implementation(libs.play.services.location)
     implementation(libs.maplibre)
+    implementation(libs.billing.ktx)
+    implementation(libs.glance.appwidget)
+    implementation(libs.glance.material3)
 }
 
 fun localProperty(name: String): String? {

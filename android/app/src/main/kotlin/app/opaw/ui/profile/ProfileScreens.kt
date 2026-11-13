@@ -110,7 +110,7 @@ fun ProfileScreen(dogId: String) {
     var showBackupNote by remember { mutableStateOf(false) }
     var confirmReset by remember { mutableStateOf(false) }
     val isPremium = Premium.isPremium
-    fun paywall() = navigator.push(Route.Subscription)
+    fun paywall() = navigator.push(Route.Paywall)
     fun open(url: String) = context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
 
     if (editing && data != null) {

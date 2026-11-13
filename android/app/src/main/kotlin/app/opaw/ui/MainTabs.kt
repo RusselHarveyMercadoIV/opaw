@@ -58,6 +58,8 @@ import app.opaw.services.CareRecorder
 import app.opaw.ui.care.CareScreen
 import app.opaw.ui.home.FamilyTreeScreen
 import app.opaw.ui.pack.PackScreen
+import app.opaw.ui.premium.PaywallRoute
+import app.opaw.ui.premium.SubscriptionScreen
 import app.opaw.ui.home.HomeScreen
 import app.opaw.ui.memories.MemoriesScreen
 import app.opaw.ui.memories.MemoryDetailScreen
@@ -160,6 +162,8 @@ private fun RouteScreen(route: Route) {
         Route.Units -> UnitsScreen()
         Route.Challenges -> ChallengesScreen()
         Route.Pack -> PackScreen()
+        Route.Subscription -> SubscriptionScreen()
+        Route.Paywall -> PaywallRoute()
         else -> TabSlot(route.toString())
     }
 }

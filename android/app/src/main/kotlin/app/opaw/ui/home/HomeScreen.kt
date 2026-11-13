@@ -128,7 +128,7 @@ fun HomeScreen() {
             if (data != null) {
                 PetPage(data, dots) { navigator.push(Route.Today(data.dog.id)) }
             } else {
-                AddPetPage(dots, locked = !Premium.isPremium && all.isNotEmpty(), onAdd = { addSource = it }) { navigator.push(Route.Subscription) }
+                AddPetPage(dots, locked = !Premium.isPremium && all.isNotEmpty(), onAdd = { addSource = it }) { navigator.push(Route.Paywall) }
             }
         }
         // Top bar.
