@@ -8,6 +8,10 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <application
         android:name=".OpawApplication"
@@ -30,6 +34,12 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- Records a walk with the screen off, like the iOS Live Activity. -->
+        <service
+            android:name=".services.WalkService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
+
         <receiver android:name=".services.ReminderReceiver" android:exported="false" />
         <receiver android:name=".services.RescheduleReceiver" android:exported="false">
             <intent-filter>

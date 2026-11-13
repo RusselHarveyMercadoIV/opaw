@@ -32,7 +32,7 @@ data class DogData(
     private fun startOfDay(day: Instant): Instant = day.atZone(zone).toLocalDate().atStartOfDay(zone).toInstant()
     private fun nextDay(start: Instant): Instant = start.atZone(zone).plusDays(1).toInstant()
 
-    fun events(on day: Instant): List<CareEvent> {
+    fun events(day: Instant): List<CareEvent> {
         val start = startOfDay(day)
         val end = nextDay(start)
         return careEvents.filter { it.date >= start && it.date < end }
