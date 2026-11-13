@@ -7,6 +7,7 @@ import app.opaw.data.OpawRepository
 import app.opaw.data.OpawSettings
 import app.opaw.services.ClockSettings
 import app.opaw.services.NotificationService
+import app.opaw.services.PackService
 import app.opaw.services.Sounds
 import app.opaw.services.ToastCenter
 import app.opaw.ui.components.Feedback
@@ -21,6 +22,7 @@ class OpawApplication : Application() {
     val repository: OpawRepository by lazy { OpawRepository(database) }
     val settings: OpawSettings by lazy { OpawSettings(this) }
     val toasts: ToastCenter by lazy { ToastCenter(this) }
+    val pack: PackService by lazy { PackService(this) }
 
     /** Work that should outlive a screen, such as saving after a toast's Undo. */
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)

@@ -56,7 +56,11 @@ import app.opaw.data.CareEvent
 import app.opaw.data.dueDate
 import app.opaw.services.CareRecorder
 import app.opaw.ui.care.CareScreen
+import app.opaw.ui.home.FamilyTreeScreen
+import app.opaw.ui.pack.PackScreen
 import app.opaw.ui.home.HomeScreen
+import app.opaw.ui.memories.MemoriesScreen
+import app.opaw.ui.memories.MemoryDetailScreen
 import app.opaw.ui.profile.ChallengesScreen
 import app.opaw.ui.profile.HouseholdScreen
 import app.opaw.ui.profile.ProfileScreen
@@ -103,7 +107,7 @@ fun MainTabs() {
                 AppTab.HOME -> HomeScreen()
                 AppTab.CARE -> CareScreen()
                 AppTab.ACTIVITY -> WalkTab()
-                AppTab.MEMORIES -> TabSlot("Memories")
+                AppTab.MEMORIES -> MemoriesScreen()
             }
             AnimatedContent(
                 targetState = navigator.stack.lastOrNull(),
@@ -150,9 +154,12 @@ private fun RouteScreen(route: Route) {
         is Route.Schedule -> ScheduleScreen(route.dogId)
         is Route.WalkDetail -> WalkDetailScreen(route.walkId)
         is Route.Profile -> ProfileScreen(route.dogId)
+        is Route.FamilyTree -> FamilyTreeScreen(route.dogId)
+        is Route.MemoryDetail -> MemoryDetailScreen(route.memoryId)
         is Route.Household -> HouseholdScreen(route.dogId)
         Route.Units -> UnitsScreen()
         Route.Challenges -> ChallengesScreen()
+        Route.Pack -> PackScreen()
         else -> TabSlot(route.toString())
     }
 }

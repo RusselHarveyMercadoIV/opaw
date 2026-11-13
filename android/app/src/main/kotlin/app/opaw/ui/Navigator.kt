@@ -9,6 +9,7 @@ sealed interface Route {
     data class History(val dogId: String) : Route
     data class Schedule(val dogId: String) : Route
     data class WalkDetail(val walkId: String) : Route
+    data class MemoryDetail(val memoryId: String) : Route
     data class Profile(val dogId: String) : Route
     data class Household(val dogId: String) : Route
     data class FamilyTree(val dogId: String) : Route

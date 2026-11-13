@@ -53,6 +53,7 @@ class OpawRepository(private val db: OpawDatabase) {
     suspend fun walk(id: String): Walk? = db.walks().get(id)
     suspend fun saveWalk(walk: Walk) = db.walks().upsert(walk)
     suspend fun deleteWalk(walk: Walk) = db.walks().delete(walk)
+    suspend fun memory(id: String): Memory? = db.memories().get(id)
     suspend fun saveMemory(memory: Memory) = db.memories().upsert(memory)
     suspend fun deleteMemory(memory: Memory) = db.memories().delete(memory)
     suspend fun allDogs(): List<Dog> = db.dogs().all()

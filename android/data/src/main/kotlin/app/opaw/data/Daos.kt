@@ -69,6 +69,9 @@ interface MemoryDao {
     @Query("SELECT * FROM memories WHERE dogId = :dogId")
     suspend fun allForDog(dogId: String): List<Memory>
 
+    @Query("SELECT * FROM memories WHERE id = :id")
+    suspend fun get(id: String): Memory?
+
     @Query("SELECT COUNT(*) FROM memories WHERE dogId = :dogId")
     suspend fun countForDog(dogId: String): Int
 
