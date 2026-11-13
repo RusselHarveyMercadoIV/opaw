@@ -69,6 +69,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -617,13 +618,16 @@ private fun RevealStep(
         StepHeader(3, onBack = onBack)
         Box(Modifier.fillMaxWidth().padding(top = 10.dp).height(300.dp)) {
             Box(Modifier.align(Alignment.TopCenter).padding(top = 40.dp).size(230.dp, 250.dp), contentAlignment = Alignment.Center) {
-                if (isProcessing) {
-                    CircularProgressIndicator(color = colors.ink)
-                } else {
-                    AnimatedVisibility(true, enter = scaleIn(initialScale = 0.7f) + fadeIn()) {
-                        StickerPet(image, Modifier.fillMaxSize(), edge = 5.dp, motion = LoopMotion.BOB, duration = 3.2)
-                    }
-                }
+                // The avatar pops in when the cutout is ready.
+                val shown by animateFloatAsState(if (isProcessing) 0f else 1f, spring(dampingRatio = 0.75f, stiffness = 200f), label = "reveal")
+                if (isProcessing) CircularProgressIndicator(color = colors.ink)
+                StickerPet(
+                    if (isProcessing) null else image,
+                    Modifier.fillMaxSize().graphicsLayer { val s = 0.7f + 0.3f * shown; scaleX = s; scaleY = s; alpha = shown },
+                    edge = 5.dp,
+                    motion = LoopMotion.BOB,
+                    duration = 3.2,
+                )
             }
             SpeechBubble("is that me?!", Modifier.padding(start = 218.dp, top = 6.dp).alpha(if (isProcessing) 0f else 1f))
             Box(Modifier.padding(start = 24.dp, top = 14.dp)) {
