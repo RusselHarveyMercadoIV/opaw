@@ -116,12 +116,12 @@ class ToastCenter(context: Context) {
             connectivity.registerNetworkCallback(request, object : ConnectivityManager.NetworkCallback() {
                 override fun onAvailable(network: Network) {
                     synchronized(online) { online += network }
-                    post { setOffline(false) }
+                    post { updateOffline(false) }
                 }
 
                 override fun onLost(network: Network) {
                     val none = synchronized(online) { online -= network; online.isEmpty() }
-                    if (none) post { setOffline(true) }
+                    if (none) post { updateOffline(true) }
                 }
             })
             if (connectivity.activeNetwork == null) isOffline = true
@@ -158,7 +158,7 @@ class ToastCenter(context: Context) {
         show(Notice(Notice.Kind.DUE, title, "$name · $time", actionTitle = "Log", action = log))
     }
 
-    private fun setOffline(offline: Boolean) {
+    private fun updateOffline(offline: Boolean) {
         if (offline == isOffline) return
         isOffline = offline
         if (offline) {
