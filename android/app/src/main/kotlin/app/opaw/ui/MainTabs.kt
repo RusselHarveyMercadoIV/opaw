@@ -56,6 +56,11 @@ import app.opaw.data.CareEvent
 import app.opaw.data.dueDate
 import app.opaw.services.CareRecorder
 import app.opaw.ui.care.CareScreen
+import app.opaw.ui.home.HomeScreen
+import app.opaw.ui.profile.ChallengesScreen
+import app.opaw.ui.profile.HouseholdScreen
+import app.opaw.ui.profile.ProfileScreen
+import app.opaw.ui.profile.UnitsScreen
 import app.opaw.ui.care.HistoryScreen
 import app.opaw.ui.care.ScheduleScreen
 import app.opaw.ui.care.TodayScreen
@@ -95,7 +100,7 @@ fun MainTabs() {
     CompositionLocalProvider(LocalNavigator provides navigator, LocalSelectTab provides { selection = it }) {
         Box(Modifier.fillMaxSize().background(Opaw.colors.cream)) {
             when (selection) {
-                AppTab.HOME -> TabSlot("Home")
+                AppTab.HOME -> HomeScreen()
                 AppTab.CARE -> CareScreen()
                 AppTab.ACTIVITY -> WalkTab()
                 AppTab.MEMORIES -> TabSlot("Memories")
@@ -144,6 +149,10 @@ private fun RouteScreen(route: Route) {
         is Route.History -> HistoryScreen(route.dogId)
         is Route.Schedule -> ScheduleScreen(route.dogId)
         is Route.WalkDetail -> WalkDetailScreen(route.walkId)
+        is Route.Profile -> ProfileScreen(route.dogId)
+        is Route.Household -> HouseholdScreen(route.dogId)
+        Route.Units -> UnitsScreen()
+        Route.Challenges -> ChallengesScreen()
         else -> TabSlot(route.toString())
     }
 }
