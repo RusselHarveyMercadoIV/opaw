@@ -1,5 +1,8 @@
 package app.opaw.ui.care
 
+import app.opaw.data.CareEvent
+import app.opaw.services.WidgetRefresher
+import app.opaw.services.clockColumnWidth
 import android.content.Intent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Canvas
@@ -150,7 +153,7 @@ fun TodayScreen(dogId: String) {
                 refreshing = true
                 scope.launch {
                     CareRecorder.refreshBadges(app, dogId)
-                    app.opaw.services.WidgetRefresher.refresh(app)
+                    WidgetRefresher.refresh(app)
                     delay(600)
                     refreshing = false
                 }
@@ -317,7 +320,7 @@ fun ScheduleScreen(dogId: String) {
 
     fun log(reminder: Reminder) {
         val custom = reminder.kind == CareKind.CUSTOM
-        val event = app.opaw.data.CareEvent(
+        val event = CareEvent(
             dogId = dogId,
             kindRaw = reminder.kindRaw,
             note = if (custom) "" else reminder.title,
@@ -404,7 +407,7 @@ private fun ScheduleRow(data: DogData, reminder: Reminder, isDone: Boolean, now:
     val needsAttention = !isDone && minutesUntil < 180
     Row(modifier.fillMaxWidth().padding(vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(clock(due), style = opaw(14.sp, FontWeight.Bold), color = if (needsAttention) colors.alert else colors.faint, maxLines = 1,
-            modifier = Modifier.width(app.opaw.services.clockColumnWidth(54).dp))
+            modifier = Modifier.width(clockColumnWidth(54).dp))
         Box(Modifier.width(22.dp), contentAlignment = Alignment.Center) {
             when {
                 isDone -> Box(Modifier.size(18.dp).background(Ink, CircleShape), contentAlignment = Alignment.Center) { Icon(DesignIcon.CHECK, size = 11.dp, tint = Color.White) }

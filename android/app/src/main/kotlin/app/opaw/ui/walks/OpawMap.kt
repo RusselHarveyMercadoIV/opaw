@@ -15,6 +15,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -183,6 +184,6 @@ fun OpawMap(
 }
 
 /** Swallows touches so a static map can't be panned. */
-private fun Modifier.blockTouches(): Modifier = androidx.compose.ui.input.pointer.pointerInput(Unit) {
+private fun Modifier.blockTouches(): Modifier = pointerInput(Unit) {
     awaitPointerEventScope { while (true) awaitPointerEvent().changes.forEach { it.consume() } }
 }

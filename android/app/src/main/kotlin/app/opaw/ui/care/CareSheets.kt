@@ -1,5 +1,9 @@
 package app.opaw.ui.care
 
+import app.opaw.services.ClockSettings
+import app.opaw.services.formatInstant
+import app.opaw.ui.components.ChoiceChip
+import app.opaw.ui.components.SpeechBubble
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
@@ -50,6 +54,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -153,7 +158,7 @@ fun PoopLogOverlay(data: DogData, onDone: (CareEvent?) -> Unit) {
         )
         Box(Modifier.align(Alignment.BottomCenter).offset(y = offset)) {
             StickerPet(image, Modifier.padding(start = 40.dp, top = 14.dp).size(130.dp, 150.dp), edge = 5.dp, motion = LoopMotion.BREATHE, duration = 2.6)
-            app.opaw.ui.components.SpeechBubble("a little privacy, please", Modifier.padding(start = 170.dp, top = 20.dp))
+            SpeechBubble("a little privacy, please", Modifier.padding(start = 170.dp, top = 20.dp))
             Box(Modifier.padding(top = 120.dp)) {
                 PoopLogForm(data, onLog = onDone)
             }
@@ -267,7 +272,7 @@ fun DateTimePicker(initial: Instant, onDismiss: () -> Unit, onPick: (Instant) ->
             override fun isSelectableDate(utcTimeMillis: Long) = utcTimeMillis <= LocalDate.now().atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
         },
     )
-    val timeState = rememberTimePickerState(start.hour, start.minute, is24Hour = app.opaw.services.ClockSettings.is24Hour)
+    val timeState = rememberTimePickerState(start.hour, start.minute, is24Hour = ClockSettings.is24Hour)
     if (day == null) {
         DatePickerDialog(
             onDismissRequest = onDismiss,
@@ -369,7 +374,7 @@ fun CareLogSheet(data: DogData, initialKind: CareKind, onDismiss: () -> Unit) {
             Column(Modifier.fillMaxWidth().background(colors.surface, RoundedCornerShape(20.dp)).padding(horizontal = 16.dp)) {
                 Row(Modifier.fillMaxWidth().clickable { editTime = true }.padding(vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("When", style = opaw(16.sp, FontWeight.SemiBold), color = colors.ink, modifier = Modifier.weight(1f))
-                    Text(app.opaw.services.formatInstant(date, "d MMM") + ", " + clock(date), style = opaw(15.sp, FontWeight.Bold), color = colors.ink,
+                    Text(formatInstant(date, "d MMM") + ", " + clock(date), style = opaw(15.sp, FontWeight.Bold), color = colors.ink,
                         modifier = Modifier.background(colors.chip, RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 6.dp))
                 }
                 if (kind == CareKind.POOP) {
@@ -378,7 +383,7 @@ fun CareLogSheet(data: DogData, initialKind: CareKind, onDismiss: () -> Unit) {
                         Text("Consistency", style = opaw(16.sp, FontWeight.SemiBold), color = colors.ink)
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             PoopConsistency.pickerCases.forEach { option ->
-                                app.opaw.ui.components.ChoiceChip(option.title, option == consistency) { consistency = option }
+                                ChoiceChip(option.title, option == consistency) { consistency = option }
                             }
                         }
                         if (consistency.isConcerning) {
@@ -519,21 +524,16 @@ fun EditTracksSheet(data: DogData, onDismiss: () -> Unit) {
 }
 
 /** A capsule outline with dashes, for "Add" rows. */
-fun Modifier.dashedCapsule(color: Color, width: Float = 2f, dash: Float = 6f, gap: Float = 5f): Modifier = this.then(
-    Modifier.drawBehindCompat { size, density ->
-        val stroke = width * density
-        drawRoundRect(
-            color,
-            topLeft = Offset(stroke / 2, stroke / 2),
-            size = androidx.compose.ui.geometry.Size(size.width - stroke, size.height - stroke),
-            cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.height / 2),
-            style = Stroke(stroke, pathEffect = PathEffect.dashPathEffect(floatArrayOf(dash * density, gap * density))),
-        )
-    },
-)
-
-private fun Modifier.drawBehindCompat(block: androidx.compose.ui.graphics.drawscope.DrawScope.(androidx.compose.ui.geometry.Size, Float) -> Unit): Modifier =
-    androidx.compose.ui.draw.drawBehind { block(size, density) }
+fun Modifier.dashedCapsule(color: Color, width: Float = 2f, dash: Float = 6f, gap: Float = 5f): Modifier = drawBehind {
+    val stroke = width * density
+    drawRoundRect(
+        color,
+        topLeft = Offset(stroke / 2, stroke / 2),
+        size = androidx.compose.ui.geometry.Size(size.width - stroke, size.height - stroke),
+        cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.height / 2),
+        style = Stroke(stroke, pathEffect = PathEffect.dashPathEffect(floatArrayOf(dash * density, gap * density))),
+    )
+}
 
 /** Six dots, the drag handle in 3h. */
 @Composable

@@ -64,8 +64,8 @@ data class Notice(
     /** The big number or medal on a milestone toast. */
     val medal: String? = null,
     val actionTitle: String? = null,
-    val action: (() -> Unit)? = null,
     override val id: String = UUID.randomUUID().toString(),
+    val action: (() -> Unit)? = null,
 ) : ToastItem {
     enum class Kind {
         /** Someone else in the household logged something. 4 s. */

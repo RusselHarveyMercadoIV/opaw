@@ -1,5 +1,6 @@
 package app.opaw.services
 
+import app.opaw.data.Reminder
 import android.Manifest
 import android.app.AlarmManager
 import android.app.NotificationChannel
@@ -66,7 +67,7 @@ object NotificationService {
     }
 
     /** When a reminder should next fire. */
-    private fun next(reminder: app.opaw.data.Reminder, zone: ZoneId = ZoneId.systemDefault()): ZonedDateTime? {
+    private fun next(reminder: Reminder, zone: ZoneId = ZoneId.systemDefault()): ZonedDateTime? {
         val now = ZonedDateTime.now(zone)
         if (reminder.repeats == ReminderRepeat.DAILY) {
             var at = ZonedDateTime.of(now.toLocalDate(), LocalTime.of(reminder.hour, reminder.minute), zone)

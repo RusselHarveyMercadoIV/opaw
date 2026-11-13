@@ -1,5 +1,6 @@
 package app.opaw.ui.onboarding
 
+import app.opaw.ui.theme.opaw
 import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
@@ -123,7 +124,7 @@ fun CameraStep(onBack: () -> Unit, onPhoto: (Bitmap) -> Unit) {
                     Icon(DesignIcon.SPARKLE, size = 16.dp, weight = 2.4f, tint = Ink)
                     Text(
                         if (granted) "Fit your whole pet in the frame" else "Pick a photo of your whole pet",
-                        style = app.opaw.ui.theme.opaw(15.sp, FontWeight.ExtraBold),
+                        style = opaw(15.sp, FontWeight.ExtraBold),
                         color = Ink,
                     )
                 }

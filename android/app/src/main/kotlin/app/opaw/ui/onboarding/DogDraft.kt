@@ -1,5 +1,6 @@
 package app.opaw.ui.onboarding
 
+import app.opaw.services.NotificationService
 import android.content.Context
 import android.graphics.Bitmap
 import app.opaw.OpawApplication
@@ -76,7 +77,7 @@ data class DogDraft(
             }
         }
         app.settings.setActiveDog(dog.id)
-        app.opaw.services.NotificationService.reschedule(context)
+        NotificationService.reschedule(context)
         return dog
     }
 

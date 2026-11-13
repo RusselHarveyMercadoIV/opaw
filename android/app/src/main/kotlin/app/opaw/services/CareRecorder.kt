@@ -1,5 +1,6 @@
 package app.opaw.services
 
+import app.opaw.core.Badge
 import android.content.Context
 import app.opaw.OpawApplication
 import app.opaw.core.CareKind
@@ -63,7 +64,7 @@ object CareRecorder {
     }
 
     /** Awards any newly earned badges and returns them, so the UI can celebrate. */
-    suspend fun refreshBadges(context: Context, dogId: String, friendsCount: Int = 0): List<app.opaw.core.Badge> {
+    suspend fun refreshBadges(context: Context, dogId: String, friendsCount: Int = 0): List<Badge> {
         val app = context.applicationContext as OpawApplication
         val data = app.repository.loadDogData(dogId) ?: return emptyList()
         val new = data.newBadges(friendsCount)

@@ -1,5 +1,7 @@
 package app.opaw.ui
 
+import app.opaw.ui.walks.WalkDetailScreen
+import app.opaw.ui.walks.WalkTab
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -95,7 +97,7 @@ fun MainTabs() {
             when (selection) {
                 AppTab.HOME -> TabSlot("Home")
                 AppTab.CARE -> CareScreen()
-                AppTab.ACTIVITY -> app.opaw.ui.walks.WalkTab()
+                AppTab.ACTIVITY -> WalkTab()
                 AppTab.MEMORIES -> TabSlot("Memories")
             }
             AnimatedContent(
@@ -141,7 +143,7 @@ private fun RouteScreen(route: Route) {
         is Route.Today -> TodayScreen(route.dogId)
         is Route.History -> HistoryScreen(route.dogId)
         is Route.Schedule -> ScheduleScreen(route.dogId)
-        is Route.WalkDetail -> app.opaw.ui.walks.WalkDetailScreen(route.walkId)
+        is Route.WalkDetail -> WalkDetailScreen(route.walkId)
         else -> TabSlot(route.toString())
     }
 }

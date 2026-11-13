@@ -1,5 +1,7 @@
 package app.opaw.ui.walks
 
+import app.opaw.services.formatDate
+import app.opaw.ui.rememberDogData
 import android.Manifest
 import android.content.Intent
 import android.net.Uri
@@ -75,6 +77,8 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.opaw.OpawApplication
 import app.opaw.core.CareKind
 import app.opaw.core.GeoPoint
 import app.opaw.core.Geo
@@ -296,7 +300,7 @@ private fun BarsCard(data: DogData, modifier: Modifier) {
     val start = weekStart(zone)
     val days = (0..6).map { offset ->
         val day = start.plusDays(offset.toLong())
-        Triple(app.opaw.services.formatDate(day, "EEEEE"), data.walkedKm(day.atStartOfDay(zone).toInstant()), day)
+        Triple(formatDate(day, "EEEEE"), data.walkedKm(day.atStartOfDay(zone).toInstant()), day)
     }
     val dayMax = maxOf(0.5, days.maxOf { it.second })
     Column(modifier.fillMaxWidth().whiteCard().padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -641,7 +645,7 @@ fun WalkDetailScreen(walkId: String) {
     val navigator = LocalNavigator.current
     val walk by produceState<Walk?>(null, walkId) { value = app.repository.walk(walkId) }
     val w = walk ?: return
-    val data = app.opaw.ui.rememberDogData(w.dogId)
+    val data = rememberDogData(w.dogId)
     WalkStory(
         points = w.route,
         pins = w.pins,
@@ -656,17 +660,13 @@ fun WalkDetailScreen(walkId: String) {
 }
 
 @Composable
-private fun storySubtitle(start: Instant, dog: Dog, app: app.opaw.OpawApplication): String {
-    val walker by app.settings.caretakerName.collectAsStateLifecycle()
+private fun storySubtitle(start: Instant, dog: Dog, app: OpawApplication): String {
+    val walker by app.settings.caretakerName.collectAsStateWithLifecycle("")
     val zone = ZoneId.systemDefault()
     val day = if (start.atZone(zone).toLocalDate() == LocalDate.now(zone)) "Today" else formatInstant(start, "EEE d MMM")
     val with = if (walker.isEmpty()) dog.name else "${dog.name} and $walker"
     return "$day ${clock(start)} · with $with"
 }
-
-@Composable
-private fun kotlinx.coroutines.flow.Flow<String>.collectAsStateLifecycle() =
-    androidx.lifecycle.compose.collectAsStateWithLifecycle(this, "")
 
 /** The 3e layout: route map, back and share, then the sheet with the proud pet, stats and weekly progress. */
 @Composable
