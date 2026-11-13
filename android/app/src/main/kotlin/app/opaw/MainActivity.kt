@@ -18,7 +18,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.opaw.ui.MainTabs
-import app.opaw.ui.onboarding.OnboardingPlaceholder
+import app.opaw.ui.onboarding.OnboardingFlow
 import app.opaw.ui.theme.Opaw
 import app.opaw.ui.theme.OpawTheme
 
@@ -49,7 +49,7 @@ private fun RootView(app: OpawApplication) {
             },
             label = "root",
         ) { showsOnboarding ->
-            if (showsOnboarding) OnboardingPlaceholder(app) else MainTabs()
+            if (showsOnboarding) OnboardingFlow(app) else MainTabs()
         }
     }
 }

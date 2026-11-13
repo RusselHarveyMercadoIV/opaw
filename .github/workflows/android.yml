@@ -41,11 +41,18 @@ jobs:
       - name: Install Android platform 36
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" > /dev/null
 
+      # Kotlin errors are turned into annotations so they show on the run page and in the API.
       - name: Core unit tests
-        run: gradle :core:test --stacktrace
+        run: |
+          set -o pipefail
+          gradle :core:test --console=plain 2>&1 | tee build.log || \
+            { grep -E "^e: |FAILED|AssertionError|expected:" build.log | head -50 | sed 's/^/::error::/'; exit 1; }
 
       - name: Build debug APK
-        run: gradle :app:assembleDebug --stacktrace
+        run: |
+          set -o pipefail
+          gradle :app:assembleDebug --console=plain 2>&1 | tee build.log || \
+            { grep -E "^e: |error:|What went wrong" -A2 build.log | head -80 | sed 's/^/::error::/'; exit 1; }
 
       - uses: actions/upload-artifact@v4
         with:

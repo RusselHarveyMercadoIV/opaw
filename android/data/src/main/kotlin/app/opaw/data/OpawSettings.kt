@@ -12,6 +12,23 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
+import java.util.UUID
+
+/** Someone else who looks after the pets, invited with a share link. */
+@Serializable
+data class HouseholdMember(
+    val id: String = UUID.randomUUID().toString(),
+    val name: String,
+    val role: Role,
+) {
+    @Serializable
+    enum class Role(val title: String, val detail: String) {
+        @kotlinx.serialization.SerialName("family") FAMILY("Family", "can log everything"),
+        @kotlinx.serialization.SerialName("walker") WALKER("Walker", "walks and poop only"),
+    }
+}
 
 private val Context.opawPrefs: DataStore<Preferences> by preferencesDataStore(name = "opaw")
 
@@ -26,7 +43,21 @@ class OpawSettings(context: Context) {
         val imperial = booleanPreferencesKey("usesImperialUnits")
         val soundsOn = booleanPreferencesKey("soundsOn")
         val hapticsOn = booleanPreferencesKey("hapticsOn")
+        val household = stringPreferencesKey("householdMembers")
+        val premiumOfferShown = booleanPreferencesKey("premiumOfferShown")
     }
+
+    /** People invited to help look after the pets. */
+    val household: Flow<List<HouseholdMember>> = store.data.map { prefs ->
+        prefs[Keys.household]?.let { runCatching { json.decodeFromString(ListSerializer(HouseholdMember.serializer()), it) }.getOrNull() }.orEmpty()
+    }.distinctUntilChanged()
+
+    suspend fun setHousehold(members: List<HouseholdMember>) = store.edit {
+        it[Keys.household] = json.encodeToString(ListSerializer(HouseholdMember.serializer()), members)
+    }
+
+    val premiumOfferShown: Flow<Boolean> = store.data.map { it[Keys.premiumOfferShown] ?: false }
+    suspend fun setPremiumOfferShown(shown: Boolean) = store.edit { it[Keys.premiumOfferShown] = shown }
 
     /** The dog currently shown on Home and targeted by quick logs. */
     val activeDogId: Flow<String?> = store.data.map { it[Keys.activeDog]?.takeIf(String::isNotEmpty) }.distinctUntilChanged()
