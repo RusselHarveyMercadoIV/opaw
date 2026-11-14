@@ -9,8 +9,8 @@ and order. Design codes (2a, 3b…) are the ones in the Swift comments.
 | iOS (Swift) | Android (Kotlin) | Same | Differences |
 |---|---|---|---|
 | Onboarding 4a–4g `OnboardingFlow.swift` | `ui/onboarding/OnboardingFlow.kt`, `CameraStep.kt`, `DogDraft.kt` | Steps, copy, progress bars, field sheets, track grid, meal times, household, permissions, paywall then one-time offer | Breed detection is weaker (ML Kit has no breed classifier). Date and time use Material pickers instead of iOS wheels. "I already have an account" can't restore App Store purchases. |
-| Home 2a, add a pet 2h `HomeView.swift` | `ui/home/HomeScreen.kt`, `AvatarView.kt` | Pager with dots, living photo with mood motion and tier sound, chips, quote, stats, family chip, share, settings | Generated motion clips download but don't play yet; the living photo shows instead. |
-| Avatar studio `AvatarView.swift` | `ui/home/AvatarStudio.kt` | Mood preview, generate, poll, regenerate | Clip playback (see above). |
+| Home 2a, add a pet 2h `HomeView.swift` | `ui/home/HomeScreen.kt`, `AvatarView.kt` | Pager with dots, motion clip for the mood (else the living photo) and tier sound, chips, quote, stats, family chip, share, settings | |
+| Avatar studio `AvatarView.swift` | `ui/home/AvatarStudio.kt` | Mood preview, generate, poll, regenerate, stacked-alpha clip playback | Clips are composited with an OpenGL shader instead of Core Image; same top-colour, bottom-mask format. |
 | Family tree 2i `FamilyTreeView.swift` | `ui/home/FamilyTree.kt` | Tree layout on the 390-point grid, relatives sheet, at home, invite, pet limit | |
 | Today 2b `TodayView.swift` | `ui/care/CareDetails.kt` | Week strip, six tiles, log with points, hold to delete, offline chip, pull to refresh | |
 | Care 3a, poop log 3b `CareView.swift` | `ui/care/CareScreen.kt`, `CareSheets.kt` | Streak card, circles with badges and due alerts, who's caring, repeat warnings, custom tracks (done, count, amount) | Long-press menu replaces the iOS context menu. |

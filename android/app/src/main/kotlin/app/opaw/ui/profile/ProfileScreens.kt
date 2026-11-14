@@ -1,5 +1,6 @@
 package app.opaw.ui.profile
 
+import app.opaw.ui.home.AvatarClipStore
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
@@ -379,6 +380,7 @@ private fun EditDogScreen(data: DogData, onDone: () -> Unit) {
                     app.scope.launch {
                         PhotoStore.delete(app, dog.photoPath)
                         PhotoStore.delete(app, dog.cutoutPath)
+                        AvatarClipStore.deleteAll(app, dog.id)
                         app.database.dogs().delete(dog)
                         app.settings.setActiveDog(null)
                         NotificationService.reschedule(app)

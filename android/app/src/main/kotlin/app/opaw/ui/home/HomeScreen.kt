@@ -203,8 +203,8 @@ private fun PetPage(data: DogData, dots: @Composable () -> Unit, openStudio: () 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = 92.dp, bottom = 120.dp).statusBarsPadding(), horizontalAlignment = Alignment.CenterHorizontally) {
         // The stage: the avatar and the sound it makes.
         Box(Modifier.fillMaxWidth().height(290.dp)) {
-            LivingPhoto(
-                image, mood,
+            PetAvatar(
+                dog, image, mood,
                 Modifier.fillMaxSize().padding(horizontal = 78.dp).loopMotion(report.tier.motion),
                 sticker = 7.dp,
                 faded = report.tier == CareTier.NEEDS_YOU,

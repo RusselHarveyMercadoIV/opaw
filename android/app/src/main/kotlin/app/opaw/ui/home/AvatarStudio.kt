@@ -60,7 +60,7 @@ fun AvatarStudioScreen(dogId: String) {
     var working by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val pack = app.pack
-    val clips = remember(dog.id) { File(app.filesDir, "clips/${dog.id}").apply { mkdirs() } }
+    val clips = remember(dog.id) { AvatarClipStore.directory(app, dog.id).apply { mkdirs() } }
 
     // Polls the avatar worker while clips are being made.
     LaunchedEffect(dog.avatarStatus, dog.avatarJobId) {
@@ -94,7 +94,7 @@ fun AvatarStudioScreen(dogId: String) {
     Column(Modifier.fillMaxSize().background(colors.cream).statusBarsPadding()) {
         ScreenHeader("Avatar", leading = { RoundIcon(DesignIcon.BACK, onClick = navigator::pop) })
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).navigationBarsPadding().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            LivingPhoto(rememberPetImage(dog), mood, Modifier.fillMaxWidth().height(280.dp), sticker = 6.dp)
+            PetAvatar(dog, rememberPetImage(dog), mood, Modifier.fillMaxWidth().height(280.dp), sticker = 6.dp)
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 AvatarMood.entries.forEach { option -> ChoiceChip(option.raw.replaceFirstChar(Char::uppercase), option == mood) { mood = option } }
             }
