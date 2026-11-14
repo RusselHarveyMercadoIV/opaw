@@ -160,7 +160,7 @@ class StackedAlphaVideoView(context: Context, private val file: File) : TextureV
                 setSurface(videoSurface)
                 isLooping = true
                 setVolume(0f, 0f)
-                setOnVideoSizeChangedListener { _, w, h -> handler.post { videoWidth = w; videoHeight = h } }
+                setOnVideoSizeChangedListener { _, w, h -> handler.post { this@Renderer.videoWidth = w; this@Renderer.videoHeight = h } }
                 setOnPreparedListener { it.start() }
                 prepareAsync()
             }
