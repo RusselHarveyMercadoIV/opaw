@@ -381,6 +381,7 @@ private fun EditDogScreen(data: DogData, onDone: () -> Unit) {
                         PhotoStore.delete(app, dog.photoPath)
                         PhotoStore.delete(app, dog.cutoutPath)
                         AvatarClipStore.deleteAll(app, dog.id)
+                        app.petModels.delete(dog.id)
                         app.database.dogs().delete(dog)
                         app.settings.setActiveDog(null)
                         NotificationService.reschedule(app)

@@ -99,6 +99,7 @@ import app.opaw.core.OpawFormat
 import app.opaw.data.Dog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.opaw.services.CutoutService
+import app.opaw.services.PhotoCheck
 import app.opaw.ui.premium.OneTimeOffer
 import app.opaw.ui.premium.PaywallScreen
 import app.opaw.ui.care.MealTimesCard
@@ -133,7 +134,7 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.roundToInt
 
-private enum class Step { WELCOME, CAMERA, DETAILS, REVEAL, TRACK, HOUSEHOLD, PERMISSIONS }
+private enum class Step { WELCOME, CAMERA, SCAN, DETAILS, REVEAL, TRACK, HOUSEHOLD, PERMISSIONS }
 
 /**
  * First run (4a to 4g): welcome, photo first, details with the detected breed, the avatar reveal,
@@ -154,6 +155,9 @@ fun OnboardingFlow(app: OpawApplication) {
     var saving by remember { mutableStateOf(false) }
     var showPaywall by remember { mutableStateOf(false) }
     var showOffer by remember { mutableStateOf(false) }
+    var wantsLife by remember { mutableStateOf(false) }
+    // The paywall was opened from "Bring to life" on the scan, not at the end of setup.
+    var lifePaywall by remember { mutableStateOf(false) }
     val offerShown by app.settings.premiumOfferShown.collectAsStateWithLifecycle(true)
 
     fun go(next: Step) {
@@ -162,34 +166,46 @@ fun OnboardingFlow(app: OpawApplication) {
         step = next
     }
 
-    /** Takes the new photo, moves on to the details, and builds the avatar in the background. */
+    /** Takes the new photo, scans it for the pet, and checks whether it's clear enough for 3D. */
     fun use(image: Bitmap) {
         capture = CaptureResult(original = image)
         isProcessing = true
-        go(Step.DETAILS)
+        wantsLife = false
+        go(Step.SCAN)
         scope.launch {
-            val (cutout, hasDog, guess) = coroutineScope {
-                val cutout = async { CutoutService.cutout(image) }
+            val started = System.currentTimeMillis()
+            val (segmentation, hasDog, guess) = coroutineScope {
+                val segmentation = async { CutoutService.segment(image) }
                 val hasDog = async { CutoutService.containsDog(image) }
                 val guess = async { CutoutService.guessBreed(image) }
-                Triple(cutout.await(), hasDog.await(), guess.await())
+                Triple(segmentation.await(), hasDog.await(), guess.await())
             }
+            // Let the scan read as a moment rather than a flicker.
+            val remaining = 1600 - (System.currentTimeMillis() - started)
+            if (remaining > 0) kotlinx.coroutines.delay(remaining)
             if (capture.original !== image) return@launch
-            capture = CaptureResult(image, cutout, guess)
+            capture = CaptureResult(image, segmentation?.cutout, guess, segmentation)
             foundDog = hasDog || guess != null
             isProcessing = false
             if (guess != null && draft.breed.isEmpty()) {
                 draft = draft.copy(breed = guess.breed.name, size = guess.breed.size, energy = guess.breed.energy)
             }
-            haptics.success()
+            val issues = PhotoCheck.check(image, segmentation, looksLikePet = foundDog || CutoutService.looksLikePet(image))
+            if (capture.original === image) capture = capture.copy(issues = issues)
         }
+    }
+
+    /** "Bring to life" is Premium: free users see the paywall first. */
+    fun bringToLife() {
+        if (app.premium.isPremium) wantsLife = true else { lifePaywall = true; showPaywall = true }
     }
 
     fun finish() {
         if (saving) return
         saving = true
         scope.launch {
-            draft.save(context, capture.original, capture.cutout)
+            val dog = draft.save(context, capture.original, capture.cutout)
+            if (wantsLife && app.premium.isPremium) app.petModels.start(dog)
             haptics.success()
         }
     }
@@ -197,7 +213,8 @@ fun OnboardingFlow(app: OpawApplication) {
     val previous = when (step) {
         Step.WELCOME -> null
         Step.CAMERA -> Step.WELCOME
-        Step.DETAILS -> Step.CAMERA
+        Step.SCAN -> Step.CAMERA
+        Step.DETAILS -> Step.SCAN
         Step.REVEAL -> Step.DETAILS
         Step.TRACK -> Step.REVEAL
         Step.HOUSEHOLD -> Step.TRACK
@@ -219,7 +236,11 @@ fun OnboardingFlow(app: OpawApplication) {
         when (current) {
             Step.WELCOME -> WelcomeStep(padded) { go(Step.CAMERA) }
             Step.CAMERA -> CameraStep(onBack = { go(Step.WELCOME) }, onPhoto = ::use)
-            Step.DETAILS -> DetailsStep(padded, draft, { draft = it }, capture, isProcessing, foundDog, onBack = { go(Step.CAMERA) }) { go(Step.REVEAL) }
+            Step.SCAN -> ScanStep(
+                padded, draft.displayName, capture, isProcessing, wantsLife, app.premium.isPremium,
+                onBack = { go(Step.CAMERA) }, onRetake = { go(Step.CAMERA) }, onBringToLife = ::bringToLife,
+            ) { go(Step.DETAILS) }
+            Step.DETAILS -> DetailsStep(padded, draft, { draft = it }, capture, isProcessing, foundDog, onBack = { go(Step.SCAN) }) { go(Step.REVEAL) }
             Step.REVEAL -> RevealStep(padded, draft.displayName, capture, isProcessing, onBack = { go(Step.DETAILS) }, onRetake = { go(Step.CAMERA) }) { go(Step.TRACK) }
             Step.TRACK -> TrackStep(padded, draft, { draft = it }, onBack = { go(Step.REVEAL) }) { go(Step.HOUSEHOLD) }
             Step.HOUSEHOLD -> HouseholdStep(padded, draft.displayName, app, onBack = { go(Step.TRACK) }) { go(Step.PERMISSIONS) }
@@ -230,7 +251,18 @@ fun OnboardingFlow(app: OpawApplication) {
     }
 
     // Then the paywall (5a), the one-time offer (5c) once, and home.
-    if (showPaywall) {
+    if (showPaywall && lifePaywall) {
+        // From "Bring to life": back to the scan either way, with it turned on after a purchase.
+        BackHandler { showPaywall = false; lifePaywall = false }
+        PaywallScreen(draft.displayName, capture.cutout ?: capture.original) { purchased ->
+            showPaywall = false
+            lifePaywall = false
+            if (purchased) {
+                wantsLife = true
+                scope.launch { app.settings.setPremiumOfferShown(true) }
+            }
+        }
+    } else if (showPaywall) {
         BackHandler { showPaywall = false; afterPaywall(app, offerShown, { showOffer = true }, ::finish) }
         PaywallScreen(draft.displayName, capture.cutout ?: capture.original) { purchased ->
             showPaywall = false

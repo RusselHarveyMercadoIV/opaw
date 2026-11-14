@@ -96,6 +96,9 @@ dependencies {
     implementation(libs.billing.ktx)
     implementation(libs.glance.appwidget)
     implementation(libs.glance.material3)
+    implementation(libs.filament.android)
+    implementation(libs.filament.gltfio)
+    implementation(libs.filament.utils)
 }
 
 fun localProperty(name: String): String? {

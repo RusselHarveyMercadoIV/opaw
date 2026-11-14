@@ -5,6 +5,7 @@ import android.text.format.DateFormat
 import app.opaw.data.OpawDatabase
 import app.opaw.data.OpawRepository
 import app.opaw.data.OpawSettings
+import app.opaw.services.PetModelService
 import app.opaw.services.ClockSettings
 import app.opaw.services.NotificationService
 import app.opaw.services.PackService
@@ -27,6 +28,7 @@ class OpawApplication : Application() {
     val toasts: ToastCenter by lazy { ToastCenter(this) }
     val pack: PackService by lazy { PackService(this) }
     val premium: PremiumStore by lazy { PremiumStore(this) }
+    val petModels: PetModelService by lazy { PetModelService(this, pack, scope) }
 
     /** Work that should outlive a screen, such as saving after a toast's Undo. */
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -44,5 +46,6 @@ class OpawApplication : Application() {
         }
         NotificationService.reschedule(this)
         premium // Connects to Google Play and checks for Premium.
+        petModels.resume()
     }
 }

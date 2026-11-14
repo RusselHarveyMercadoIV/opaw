@@ -3,6 +3,8 @@ package app.opaw.ui.onboarding
 import app.opaw.services.NotificationService
 import android.content.Context
 import android.graphics.Bitmap
+import app.opaw.services.PhotoIssue
+import app.opaw.services.Segmentation
 import app.opaw.OpawApplication
 import app.opaw.core.BreedGuess
 import app.opaw.core.CareKind
@@ -21,6 +23,10 @@ data class CaptureResult(
     val original: Bitmap? = null,
     val cutout: Bitmap? = null,
     val guess: BreedGuess? = null,
+    /** The pet's full-size outline, for the scan's white highlight. */
+    val segmentation: Segmentation? = null,
+    /** Why the photo can't be brought to life in 3D; empty when it can, null while checking. */
+    val issues: List<PhotoIssue>? = null,
 )
 
 /** Editable fields for a dog before it's saved. Mirrors `DogDraft` in OnboardingView.swift. */

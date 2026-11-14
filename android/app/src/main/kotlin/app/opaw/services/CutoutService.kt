@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
+import android.graphics.Rect
 import android.net.Uri
 import androidx.exifinterface.media.ExifInterface
 import app.opaw.core.BreedCatalog
@@ -33,6 +34,13 @@ object CutoutService {
         label.equals("dog", ignoreCase = true) && confidence > 0.3
     }
 
+    /** Whether ML Kit sees any pet-like animal, not only a dog. Used by the photo check for 3D. */
+    suspend fun looksLikePet(image: Bitmap): Boolean = labels(image).any { (label, confidence) ->
+        label.lowercase() in petLabels && confidence > 0.3
+    }
+
+    private val petLabels = setOf("dog", "cat", "pet", "rabbit", "bird", "horse", "hamster", "animal", "mammal", "puppy", "kitten")
+
     suspend fun guessBreed(image: Bitmap): BreedGuess? = BreedCatalog.bestGuess(labels(image))
 
     private suspend fun labels(image: Bitmap): List<Pair<String, Double>> = runCatching {
@@ -45,34 +53,52 @@ object CutoutService {
     }.getOrDefault(emptyList())
 
     /** The foreground subject on a transparent background, cropped to the subject, or null if none was found. */
-    suspend fun cutout(image: Bitmap): Bitmap? = runCatching {
-        val options = SubjectSegmenterOptions.Builder().enableForegroundBitmap().build()
+    suspend fun cutout(image: Bitmap): Bitmap? = segment(image)?.cutout
+
+    /**
+     * Finds the subjects in the photo. The result keeps the full-size foreground, which lines up
+     * with the photo pixel for pixel, so the scan can draw its white outline right on the photo.
+     */
+    suspend fun segment(image: Bitmap): Segmentation? = runCatching {
+        val options = SubjectSegmenterOptions.Builder()
+            .enableForegroundBitmap()
+            .enableMultipleSubjects(SubjectSegmenterOptions.SubjectResultOptions.Builder().build())
+            .build()
         val segmenter = SubjectSegmentation.getClient(options)
         try {
             val result = segmenter.process(InputImage.fromBitmap(image, 0)).await()
-            result.foregroundBitmap?.let { withContext(Dispatchers.Default) { cropToContent(it) } }
+            val foreground = result.foregroundBitmap ?: return@runCatching null
+            withContext(Dispatchers.Default) {
+                val (bounds, coverage) = contentBounds(foreground) ?: return@withContext null
+                // Ignore specks: only subjects at least 2% of the photo count as another subject.
+                val minArea = image.width * image.height * 0.02
+                val subjects = result.subjects.count { it.width.toDouble() * it.height >= minArea }
+                Segmentation(foreground, bounds, coverage, maxOf(1, subjects))
+            }
         } finally {
             segmenter.close()
         }
     }.getOrNull()
 
-    /** Trims fully transparent edges. */
-    private fun cropToContent(bitmap: Bitmap): Bitmap {
+    /** The box around the non-transparent pixels and the share of the image they cover. */
+    private fun contentBounds(bitmap: Bitmap): Pair<Rect, Float>? {
         val w = bitmap.width
         val h = bitmap.height
         val pixels = IntArray(w * h)
         bitmap.getPixels(pixels, 0, w, 0, 0, w, h)
         var minX = w; var minY = h; var maxX = -1; var maxY = -1
+        var filled = 0
         for (y in 0 until h) for (x in 0 until w) {
             if ((pixels[y * w + x] ushr 24) > 8) {
+                filled++
                 if (x < minX) minX = x
                 if (x > maxX) maxX = x
                 if (y < minY) minY = y
                 if (y > maxY) maxY = y
             }
         }
-        if (maxX < 0) return bitmap
-        return Bitmap.createBitmap(bitmap, minX, minY, maxX - minX + 1, maxY - minY + 1)
+        if (maxX < 0) return null
+        return Rect(minX, minY, maxX + 1, maxY + 1) to filled.toFloat() / (w * h)
     }
 
     /** Reads a photo upright and no larger than [maxDimension] pixels on its longest side. */
@@ -130,4 +156,10 @@ object PhotoStore {
     fun delete(context: Context, path: String?) {
         path?.let { File(context.filesDir, it).delete() }
     }
+}
+
+/** The pet found in a photo. [foreground] is the photo's size, transparent outside the pet. */
+class Segmentation(val foreground: Bitmap, val bounds: Rect, val coverage: Float, val subjects: Int) {
+    /** The pet cropped to its bounds, for the sticker avatar. */
+    val cutout: Bitmap by lazy { Bitmap.createBitmap(foreground, bounds.left, bounds.top, bounds.width(), bounds.height()) }
 }

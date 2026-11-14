@@ -8,7 +8,7 @@ and order. Design codes (2a, 3b…) are the ones in the Swift comments.
 
 | iOS (Swift) | Android (Kotlin) | Same | Differences |
 |---|---|---|---|
-| Onboarding 4a–4g `OnboardingFlow.swift` | `ui/onboarding/OnboardingFlow.kt`, `CameraStep.kt`, `DogDraft.kt` | Steps, copy, progress bars, field sheets, track grid, meal times, household, permissions, paywall then one-time offer | Breed detection is weaker (ML Kit has no breed classifier). Date and time use Material pickers instead of iOS wheels. "I already have an account" can't restore App Store purchases. |
+| Onboarding 4a–4g `OnboardingFlow.swift` | `ui/onboarding/OnboardingFlow.kt`, `CameraStep.kt`, `ScanStep.kt`, `DogDraft.kt` | Steps, copy, progress bars, field sheets, track grid, meal times, household, permissions, paywall then one-time offer | Breed detection is weaker (ML Kit has no breed classifier). Date and time use Material pickers instead of iOS wheels. "I already have an account" can't restore App Store purchases. |
 | Home 2a, add a pet 2h `HomeView.swift` | `ui/home/HomeScreen.kt`, `AvatarView.kt` | Pager with dots, motion clip for the mood (else the living photo) and tier sound, chips, quote, stats, family chip, share, settings | |
 | Avatar studio `AvatarView.swift` | `ui/home/AvatarStudio.kt` | Mood preview, generate, poll, regenerate, stacked-alpha clip playback | Clips are composited with an OpenGL shader instead of Core Image; same top-colour, bottom-mask format. |
 | Family tree 2i `FamilyTreeView.swift` | `ui/home/FamilyTree.kt` | Tree layout on the 390-point grid, relatives sheet, at home, invite, pet limit | |
@@ -40,3 +40,9 @@ and order. Design codes (2a, 3b…) are the ones in the Swift comments.
 
 `PawTrail`, `WalkingPaws`, `PawConfetti`, `CareHistoryView`, `RemindersView` and `BadgeGrid` aren't
 shown on any iOS screen, so they weren't ported.
+
+## Android-only for now
+
+- **Scan and lift (`ScanStep.kt`).** After the photo, a scan line sweeps the photo, the pet gets a thick white outline, and then it's lifted out as a sticker. The add-pet sheet does the same.
+- **Bring to life in 3D (`PetModelService.kt`, `PetModelView.kt`, `PhotoCheck.kt`).** Meshy builds a rigged 3D pet through the `pet-model` Edge Function. Filament renders it, and it takes priority over motion clips and the living photo. iOS gets this next.
+

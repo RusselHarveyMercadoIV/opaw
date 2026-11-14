@@ -75,6 +75,15 @@ data class PackPost(
 data class AvatarJob(val id: String, val status: String, val outputs: Map<String, String> = emptyMap(), val error: String? = null)
 
 @Serializable
+data class PetModelJob(
+    val id: String,
+    val stage: String,
+    val progress: Int = 0,
+    val outputs: Map<String, String> = emptyMap(),
+    val error: String? = null,
+)
+
+@Serializable
 private data class Session(
     @SerialName("access_token") val accessToken: String,
     @SerialName("refresh_token") val refreshToken: String,
@@ -121,12 +130,13 @@ class PackService(private val context: Context) {
         contentType: String = "application/json",
         headers: Map<String, String> = emptyMap(),
         auth: Boolean = true,
+        readTimeoutMs: Int = 30_000,
     ): ByteArray = withContext(Dispatchers.IO) {
         if (!isConfigured) throw PackException("The Pack server isn't set up yet. See docs/SETUP.md.")
         val connection = URL(base + path).openConnection() as HttpURLConnection
         connection.requestMethod = method
         connection.connectTimeout = 15_000
-        connection.readTimeout = 30_000
+        connection.readTimeout = readTimeoutMs
         connection.setRequestProperty("apikey", key)
         connection.setRequestProperty("Authorization", "Bearer ${if (auth) session?.accessToken ?: key else key}")
         headers.forEach { (name, value) -> connection.setRequestProperty(name, value) }
@@ -342,12 +352,18 @@ class PackService(private val context: Context) {
 
     // MARK: Avatar clips
 
-    /** Uploads the dog's cutout and queues a job for the avatar worker. Returns the job id. */
-    suspend fun requestAvatarClips(dog: Dog): String {
+    /** Uploads the dog's cutout to the avatar-inputs bucket and returns its storage path. */
+    private suspend fun uploadAvatarInput(dog: Dog): Pair<String, String> {
         val owner = ensureFreshSession()
         val local = dog.cutoutPath ?: dog.photoPath ?: throw PackException("That photo couldn't be read.")
         val path = "${owner.lowercase()}/${dog.id.lowercase()}-${Instant.now().epochSecond}.png"
         upload("avatar-inputs", path, File(context.filesDir, local).readBytes(), "image/png")
+        return owner to path
+    }
+
+    /** Uploads the dog's cutout and queues a job for the avatar worker. Returns the job id. */
+    suspend fun requestAvatarClips(dog: Dog): String {
+        val (owner, path) = uploadAvatarInput(dog)
         val row = buildJsonObject { put("owner_id", owner); put("dog_id", dog.id); put("breed", dog.breed); put("input_path", path) }
         val created = json.decodeFromString<List<AvatarJob>>(rest("POST", "avatar_jobs", row, query = "?select=id,status,outputs,error", prefer = "return=representation"))
         return created.first().id
@@ -366,6 +382,32 @@ class PackService(private val context: Context) {
             "failed" -> throw PackException(job.error ?: "The avatar worker couldn't make clips.")
             else -> null
         }
+    }
+
+    // MARK: 3D pet models ("Bring to life", the pet-model Edge Function and Meshy)
+
+    /** Uploads the cutout and starts a Meshy job on the server. */
+    suspend fun startPetModel(dog: Dog, heightMeters: Double): PetModelJob {
+        val (_, path) = uploadAvatarInput(dog)
+        return petModelCall(buildJsonObject { put("action", "start"); put("dog_id", dog.id); put("input_path", path); put("height_m", heightMeters) })
+    }
+
+    /** Advances the job on the server and returns where it is. */
+    suspend fun petModelStatus(id: String): PetModelJob = petModelCall(buildJsonObject { put("action", "status"); put("id", id) })
+
+    suspend fun downloadPetModel(path: String): ByteArray = request("GET", "/storage/v1/object/authenticated/pet-models/$path", readTimeoutMs = 120_000)
+
+    private suspend fun petModelCall(body: JsonElement): PetModelJob {
+        ensureFreshSession()
+        val text = try {
+            // Copying the finished models can take a while, so give the function longer than other calls.
+            String(request("POST", "/functions/v1/pet-model", body.toString(), readTimeoutMs = 120_000))
+        } catch (e: PackException) {
+            // The function answers errors as {"error": "..."}; show just the sentence.
+            val message = runCatching { json.parseToJsonElement(e.message ?: "").jsonObject["error"]?.jsonPrimitive?.content }.getOrNull()
+            throw PackException(message ?: e.message ?: "Bring to life failed.")
+        }
+        return json.decodeFromString(PetModelJob.serializer(), text)
     }
 }
 

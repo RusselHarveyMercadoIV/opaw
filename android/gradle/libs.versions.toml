@@ -19,6 +19,7 @@ playLocation = "21.3.0"
 maplibre = "11.8.0"
 billing = "7.1.1"
 glance = "1.1.1"
+filament = "1.71.5"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
@@ -53,6 +54,10 @@ maplibre = { module = "org.maplibre.gl:android-sdk", version.ref = "maplibre" }
 billing-ktx = { module = "com.android.billingclient:billing-ktx", version.ref = "billing" }
 glance-appwidget = { module = "androidx.glance:glance-appwidget", version.ref = "glance" }
 glance-material3 = { module = "androidx.glance:glance-material3", version.ref = "glance" }
+# Filament renders the 3D pet from "Bring to life".
+filament-android = { module = "com.google.android.filament:filament-android", version.ref = "filament" }
+filament-gltfio = { module = "com.google.android.filament:gltfio-android", version.ref = "filament" }
+filament-utils = { module = "com.google.android.filament:filament-utils-android", version.ref = "filament" }
 kotlinx-coroutines-play-services = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-play-services", version.ref = "coroutines" }
 kotlin-test ={ module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
 

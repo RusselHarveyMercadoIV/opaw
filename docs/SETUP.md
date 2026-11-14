@@ -78,3 +78,35 @@ python -m opaw_worker.worker --backend procedural render my-dog.png --out clips/
 > resolution or memory settings. The procedural backend and the clip format are covered by tests.
 
 Keep the service role key on the worker machine only. Never put it in the app.
+
+## 4. Bring pets to life in 3D with Meshy (optional, Android for now)
+
+"Bring to life" turns a pet's cutout into a textured 3D model with a four-legged skeleton, using
+[Meshy](https://www.meshy.ai). The Android app shows it in 3D on Home and in the Avatar studio.
+It walks when the pet is happy, runs when restless or proud, and rests (breathing) otherwise.
+It's a Premium feature.
+
+It runs through the `pet-model` Supabase Edge Function. The function holds your Meshy API key,
+so the key never ships in the app.
+
+1. Apply `supabase/migrations/20261114000000_pet_models.sql` (`supabase db push`, or paste it into
+   the SQL editor). It adds the `pet_models` table and the private `pet-models` bucket.
+2. Create an API key at [meshy.ai](https://www.meshy.ai/api). It starts with `msy_`.
+3. Deploy the function and give it the key:
+
+   ```bash
+   supabase secrets set MESHY_API_KEY=msy_...
+   supabase functions deploy pet-model
+   ```
+
+   Optional: `supabase secrets set PET_MODEL_DAILY_LIMIT=3` caps how many models one account can
+   start per day (3 by default), since each one spends Meshy credits.
+
+Each pet takes two Meshy jobs: image-to-3D (Smart Topology, `meshy-t2.5`), then rigging with
+`animation_type: quadruped`. Meshy's animation library only has two-legged animations, so a pet
+gets the walk and run clips that come with the rig. The app checks the photo on the phone first:
+one whole pet, in focus, close enough, and well lit. If a photo isn't clear enough, it asks for a
+better one instead of spending credits.
+
+> Premium is checked in the app (Google Play). The server only enforces the daily limit. To
+> enforce Premium on the server too, verify the purchase with the Play Developer API in the function.

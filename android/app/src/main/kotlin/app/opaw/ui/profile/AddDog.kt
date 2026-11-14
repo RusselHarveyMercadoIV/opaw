@@ -52,6 +52,13 @@ import app.opaw.core.DogSize
 import app.opaw.core.EnergyLevel
 import app.opaw.core.OpawFormat
 import app.opaw.services.CutoutService
+import app.opaw.services.PhotoCheck
+import app.opaw.ui.onboarding.BringToLifeCard
+import app.opaw.ui.onboarding.ScanPhase
+import app.opaw.ui.onboarding.ScanViewfinder
+import app.opaw.ui.onboarding.rememberScanPhase
+import app.opaw.ui.premium.PaywallScreen
+import app.opaw.ui.rememberApp
 import app.opaw.services.formatDate
 import app.opaw.ui.care.PlainField
 import app.opaw.ui.components.BlackPillButton
@@ -90,21 +97,31 @@ fun AddDogSheet(source: PhotoSource, onDismiss: () -> Unit) {
     var message by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
 
+    var wantsLife by remember { mutableStateOf(false) }
+    var showPaywall by remember { mutableStateOf(false) }
+    val app = rememberApp()
+
     fun use(image: Bitmap) {
         capture = CaptureResult(original = image)
         processing = true
         message = null
+        wantsLife = false
         scope.launch {
-            val (cutout, guess) = coroutineScope {
-                val c = async { CutoutService.cutout(image) }
+            val started = System.currentTimeMillis()
+            val (segmentation, guess) = coroutineScope {
+                val c = async { CutoutService.segment(image) }
                 val g = async { CutoutService.guessBreed(image) }
                 c.await() to g.await()
             }
-            capture = CaptureResult(image, cutout, guess)
+            val remaining = 1600 - (System.currentTimeMillis() - started)
+            if (remaining > 0) kotlinx.coroutines.delay(remaining)
+            if (capture.original !== image) return@launch
+            capture = CaptureResult(image, segmentation?.cutout, guess, segmentation)
             processing = false
-            if (cutout == null) message = "We couldn't find your dog in this photo. Try one where your dog fills more of the frame."
+            if (segmentation == null) message = "We couldn't find your dog in this photo. Try one where your dog fills more of the frame."
             if (guess != null && draft.breed.isEmpty()) draft = draft.copy(breed = guess.breed.name, size = guess.breed.size, energy = guess.breed.energy)
-            haptics.success()
+            val issues = PhotoCheck.check(image, segmentation, looksLikePet = guess != null || CutoutService.looksLikePet(image))
+            if (capture.original === image) capture = capture.copy(issues = issues)
         }
     }
 
@@ -127,7 +144,8 @@ fun AddDogSheet(source: PhotoSource, onDismiss: () -> Unit) {
         saving = true
         val kg = weightText.replace(",", ".").toDoubleOrNull()?.takeIf { it > 0 }?.let { if (OpawFormat.usesImperial) it / OpawFormat.POUNDS_PER_KILOGRAM else it }
         scope.launch {
-            draft.copy(weightKg = kg).save(context, capture.original, capture.cutout)
+            val dog = draft.copy(weightKg = kg).save(context, capture.original, capture.cutout)
+            if (wantsLife && app.premium.isPremium) app.petModels.start(dog)
             haptics.success()
             onDismiss()
         }
@@ -185,26 +203,51 @@ fun AddDogSheet(source: PhotoSource, onDismiss: () -> Unit) {
                     "Whole body, good light. We'll lift them out of the photo and spot the breed, right here on your phone.",
                     style = opaw(16.sp, FontWeight.Medium), color = colors.muted, modifier = Modifier.padding(top = 12.dp),
                 )
-                Box(Modifier.padding(top = 20.dp).fillMaxWidth().height(320.dp).clip(RoundedCornerShape(30.dp)).background(colors.surface), contentAlignment = Alignment.Center) {
-                    when {
-                        processing -> CircularProgressIndicator(color = colors.ink)
-                        capture.cutout != null -> StickerPet(capture.cutout, Modifier.fillMaxSize().padding(30.dp), edge = 5.dp)
-                        capture.original != null -> Image(capture.original!!.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                        else -> Text("No photo yet", style = opaw(15.sp, FontWeight.SemiBold), color = colors.muted)
+                val phase = rememberScanPhase(capture, processing)
+                Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
+                    if (capture.original != null) {
+                        ScanViewfinder(capture.original, capture.segmentation, capture.cutout, phase, Modifier.padding(top = 20.dp).fillMaxWidth().height(320.dp))
+                    } else {
+                        Box(Modifier.padding(top = 20.dp).fillMaxWidth().height(320.dp).clip(RoundedCornerShape(30.dp)).background(colors.surface), contentAlignment = Alignment.Center) {
+                            Text("No photo yet", style = opaw(15.sp, FontWeight.SemiBold), color = colors.muted)
+                        }
+                    }
+                    message?.let { Text(it, style = opaw(14.sp, FontWeight.Medium), color = colors.muted, modifier = Modifier.padding(top = 10.dp)) }
+                    capture.guess?.takeIf { phase == ScanPhase.LIFTED }?.let { Text("Looks like a ${it.breed.name}", style = opaw(15.sp, FontWeight.Bold), color = colors.ink, modifier = Modifier.padding(top = 10.dp)) }
+                    if (capture.original != null && phase == ScanPhase.LIFTED) {
+                        BringToLifeCard(
+                            name = draft.trimmedName,
+                            issues = capture.issues,
+                            isPremium = app.premium.isPremium,
+                            selected = wantsLife,
+                            selectedText = "${draft.trimmedName} comes to life once added",
+                            onBringToLife = { if (app.premium.isPremium) wantsLife = true else showPaywall = true },
+                            onRetake = { open(PhotoSource.CAMERA) },
+                            modifier = Modifier.padding(top = 14.dp),
+                        )
                     }
                 }
-                message?.let { Text(it, style = opaw(14.sp, FontWeight.Medium), color = colors.muted, modifier = Modifier.padding(top = 10.dp)) }
-                capture.guess?.takeIf { !processing }?.let { Text("Looks like a ${it.breed.name}", style = opaw(15.sp, FontWeight.Bold), color = colors.ink, modifier = Modifier.padding(top = 10.dp)) }
                 Row(Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     BlackPillButton("Camera", Modifier.weight(1f), enabled = !processing, height = 56.dp, inverted = true) { open(PhotoSource.CAMERA) }
                     BlackPillButton(if (capture.original == null) "Choose photo" else "Change", Modifier.weight(1f), enabled = !processing, height = 56.dp, inverted = true) { open(PhotoSource.LIBRARY) }
                 }
                 Spacer(Modifier.height(16.dp))
-                BlackPillButton("Add ${draft.trimmedName}", enabled = !processing && capture.original != null && !saving, height = 62.dp, onClick = ::finish)
+                BlackPillButton("Add ${draft.trimmedName}", enabled = !processing && phase == ScanPhase.LIFTED && !saving, height = 62.dp, onClick = ::finish)
                 if (capture.original == null) {
                     Text("Skip for now", style = opaw(15.sp, FontWeight.Medium), color = colors.muted, textAlign = TextAlign.Center,
                         modifier = Modifier.fillMaxWidth().clickable(onClick = ::finish).padding(12.dp))
                 }
+            }
+        }
+    }
+    if (showPaywall) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { showPaywall = false },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+        ) {
+            PaywallScreen(draft.trimmedName, capture.cutout ?: capture.original) { purchased ->
+                showPaywall = false
+                if (purchased) wantsLife = true
             }
         }
     }

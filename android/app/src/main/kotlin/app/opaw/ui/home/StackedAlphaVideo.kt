@@ -29,6 +29,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import app.opaw.core.AvatarMood
 import app.opaw.data.AvatarStatus
 import app.opaw.data.Dog
+import app.opaw.ui.rememberApp
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -269,16 +270,24 @@ fun PetAvatar(
     modifier: Modifier = Modifier,
     sticker: androidx.compose.ui.unit.Dp = 0.dp,
     faded: Boolean = false,
+    /** Lets one finger spin the 3D pet. Off on Home, where a swipe changes pets. */
+    interactive: Boolean = false,
     onTap: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
-    val clip = if (dog.avatarStatus == AvatarStatus.READY) AvatarClipStore.playableFile(context, dog.id, mood.clipName) else null
-    Crossfade(clip, modifier, label = "avatar") { file ->
-        if (file != null) {
-            val tap = if (onTap != null) Modifier.clickable(remember { MutableInteractionSource() }, indication = null, onClick = onTap) else Modifier
-            StackedAlphaVideo(file, Modifier.fillMaxSize().graphicsLayer { alpha = if (faded) 0.6f else 1f }.then(tap))
-        } else {
-            LivingPhoto(image, mood, Modifier.fillMaxSize(), sticker = sticker, faded = faded, onTap = onTap)
+    val app = rememberApp()
+    // A 3D pet from "Bring to life" comes first, then motion clips, then the living photo.
+    val model = app.petModels.file(dog.id, mood)
+    val clip = if (model == null && dog.avatarStatus == AvatarStatus.READY) AvatarClipStore.playableFile(context, dog.id, mood.clipName) else null
+    val shown: File? = model ?: clip
+    Crossfade(shown, modifier, label = "avatar") { file ->
+        val tap = if (onTap != null) Modifier.clickable(remember { MutableInteractionSource() }, indication = null, onClick = onTap) else Modifier
+        val fade = Modifier.graphicsLayer { alpha = if (faded) 0.6f else 1f }
+        when {
+            file != null && file.extension == "glb" ->
+                PetModel3D(file, Modifier.fillMaxSize().then(fade).then(tap), interactive = interactive, breathe = file.nameWithoutExtension == "rest")
+            file != null -> StackedAlphaVideo(file, Modifier.fillMaxSize().then(fade).then(tap))
+            else -> LivingPhoto(image, mood, Modifier.fillMaxSize(), sticker = sticker, faded = faded, onTap = onTap)
         }
     }
 }
