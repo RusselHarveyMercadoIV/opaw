@@ -48,7 +48,11 @@ jobs:
           gradle :core:test --console=plain 2>&1 | tee build.log || \
             { grep -E "^e: |FAILED|AssertionError|expected:" build.log | head -50 | sed 's/^/::error::/'; exit 1; }
 
+      # Connects the test build to Supabase (Pack, avatar clips, Bring to life). Empty on forks.
       - name: Build debug APK
+        env:
+          SUPABASE_HOST: ${{ secrets.SUPABASE_HOST }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
           set -o pipefail
           gradle :app:assembleDebug --console=plain 2>&1 | tee build.log || \
