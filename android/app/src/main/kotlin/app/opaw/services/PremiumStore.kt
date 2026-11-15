@@ -65,7 +65,7 @@ class PremiumStore(private val context: Context) {
 
     val isPremium: Boolean get() = status != null || testPremium
 
-    fun setTestPremium(on: Boolean) {
+    fun switchTestPremium(on: Boolean) {
         if (!BuildConfig.DEBUG) return
         prefs.edit().putBoolean("testPremium", on).apply()
         testPremium = on

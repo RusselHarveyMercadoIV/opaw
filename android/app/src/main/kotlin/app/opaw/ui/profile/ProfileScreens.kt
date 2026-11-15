@@ -172,7 +172,7 @@ fun ProfileScreen(dogId: String) {
                 Card {
                     ToggleRow(DesignIcon.SPARKLE, "Premium (test build)", app.premium.testPremium, first = true) {
                         haptics.tap()
-                        app.premium.setTestPremium(it)
+                        app.premium.switchTestPremium(it)
                     }
                 }
                 Text("Only in test builds. Turns Premium on without Google Play so you can try every feature.",
