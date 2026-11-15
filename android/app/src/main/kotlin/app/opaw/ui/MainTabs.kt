@@ -45,6 +45,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -66,6 +67,7 @@ import app.opaw.ui.memories.MemoriesScreen
 import app.opaw.ui.memories.MemoryDetailScreen
 import app.opaw.ui.profile.ChallengesScreen
 import app.opaw.ui.profile.HouseholdScreen
+import app.opaw.ui.profile.PetProfileScreen
 import app.opaw.ui.profile.ProfileScreen
 import app.opaw.ui.profile.UnitsScreen
 import app.opaw.ui.care.HistoryScreen
@@ -157,6 +159,7 @@ private fun RouteScreen(route: Route) {
         is Route.Schedule -> ScheduleScreen(route.dogId)
         is Route.WalkDetail -> WalkDetailScreen(route.walkId)
         is Route.Profile -> ProfileScreen(route.dogId)
+        is Route.PetProfile -> PetProfileScreen(route.dogId)
         is Route.FamilyTree -> FamilyTreeScreen(route.dogId)
         is Route.Studio -> AvatarStudioScreen(route.dogId)
         is Route.MemoryDetail -> MemoryDetailScreen(route.memoryId)
@@ -192,7 +195,7 @@ private fun ToastWatcher() {
 
 /**
  * The floating bottom bar: the current tab is a black pill with its name, the others are white
- * circles with a small name under the icon.
+ * circles with just their icon.
  */
 @Composable
 fun FloatingTabBar(selection: AppTab, onSelect: (AppTab) -> Unit) {
@@ -241,20 +244,19 @@ private fun SelectedItem(tab: AppTab) {
     }
 }
 
+/** A tab you're not on: just its icon in a white circle. Only the selected tab shows its name (v3 audit). */
 @Composable
 private fun Item(tab: AppTab) {
     val colors = Opaw.colors
-    Column(
+    Box(
         Modifier
             .size(64.dp)
             .shadow(10.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.08f), spotColor = Color.Black.copy(alpha = 0.08f))
-            .background(colors.surface, CircleShape),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+            .background(colors.surface, CircleShape)
+            .semantics { contentDescription = tab.title },
+        contentAlignment = Alignment.Center,
     ) {
-        Icon(tab.icon, size = 20.dp, tint = colors.ink, cutoutColor = colors.surface)
-        Spacer(Modifier.height(2.dp))
-        Text(tab.title, style = opaw(10.sp, FontWeight.ExtraBold), color = colors.ink, maxLines = 1, textAlign = TextAlign.Center)
+        Icon(tab.icon, size = 24.dp, tint = colors.ink, cutoutColor = colors.surface)
     }
 }
 

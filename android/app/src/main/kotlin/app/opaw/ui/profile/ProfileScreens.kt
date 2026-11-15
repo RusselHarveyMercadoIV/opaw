@@ -76,6 +76,7 @@ import app.opaw.ui.components.ScreenHeader
 import app.opaw.ui.components.pressable
 import app.opaw.ui.components.rememberHaptics
 import app.opaw.ui.components.rememberPhoto
+import app.opaw.BuildConfig
 import app.opaw.OpawApplication
 import app.opaw.ui.rememberActiveDog
 import app.opaw.ui.rememberApp
@@ -166,6 +167,16 @@ fun ProfileScreen(dogId: String) {
             Card {
                 SettingsRow(DesignIcon.SPARKLE, "Subscription", value = if (isPremium) "Premium" else "Free", first = true) { navigator.push(Route.Subscription) }
                 SettingsRow(DesignIcon.HELP, "Help") { open(HELP_URL) }
+            }
+            if (BuildConfig.DEBUG) {
+                Card {
+                    ToggleRow(DesignIcon.SPARKLE, "Premium (test build)", app.premium.testPremium, first = true) {
+                        haptics.tap()
+                        app.premium.setTestPremium(it)
+                    }
+                }
+                Text("Only in test builds. Turns Premium on without Google Play so you can try every feature.",
+                    style = opaw(13.sp, FontWeight.Medium), color = colors.muted, modifier = Modifier.padding(horizontal = 4.dp))
             }
             Card {
                 Row(Modifier.fillMaxWidth().clickable { confirmReset = true }.padding(vertical = 13.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -318,7 +329,7 @@ fun UnitsScreen() {
 
 /** Edit a pet's basics and activity goal, or delete them. Mirrors `EditDogView`. */
 @Composable
-private fun EditDogScreen(data: DogData, onDone: () -> Unit) {
+internal fun EditDogScreen(data: DogData, onDone: () -> Unit) {
     val app = rememberApp()
     val navigator = LocalNavigator.current
     val colors = Opaw.colors

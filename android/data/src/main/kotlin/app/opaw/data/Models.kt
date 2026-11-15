@@ -72,6 +72,11 @@ data class Dog(
     val trackedKindsRaw: List<String> = emptyList(),
     /** The order of tracks on the Care screen, as the same keys. Empty means the default order. */
     val trackOrderRaw: List<String> = emptyList(),
+    /** The day the pet came home ("gotcha day"). */
+    val gotchaDate: Instant? = null,
+    val microchip: String = "",
+    /** The vet clinic's name. */
+    val vetClinic: String = "",
 ) {
     /** Meal times as minutes after midnight, sorted. */
     val mealTimes: List<Int>

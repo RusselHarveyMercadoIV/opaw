@@ -126,7 +126,7 @@ fun HomeScreen() {
         HorizontalPager(pager, Modifier.fillMaxSize()) { page ->
             val data = all.getOrNull(page)
             if (data != null) {
-                PetPage(data, dots, openStudio = { navigator.push(Route.Studio(data.dog.id)) }) { navigator.push(Route.Today(data.dog.id)) }
+                PetPage(data, dots, openStudio = { navigator.push(Route.Studio(data.dog.id)) }, openProfile = { navigator.push(Route.PetProfile(data.dog.id)) }) { navigator.push(Route.Today(data.dog.id)) }
             } else {
                 AddPetPage(dots, locked = !Premium.isPremium && all.isNotEmpty(), onAdd = { addSource = it }) { navigator.push(Route.Paywall) }
             }
@@ -193,7 +193,7 @@ private fun FamilyChip(dogs: List<Dog>, current: DogData, onClick: () -> Unit) {
 // MARK: - Pet page
 
 @Composable
-private fun PetPage(data: DogData, dots: @Composable () -> Unit, openStudio: () -> Unit, openToday: () -> Unit) {
+private fun PetPage(data: DogData, dots: @Composable () -> Unit, openStudio: () -> Unit, openProfile: () -> Unit, openToday: () -> Unit) {
     val colors = Opaw.colors
     val now = rememberNow()
     val dog = data.dog
@@ -215,7 +215,7 @@ private fun PetPage(data: DogData, dots: @Composable () -> Unit, openStudio: () 
         Column(Modifier.padding(horizontal = 36.dp).padding(top = 14.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(dog.name, style = opaw(50.sp, FontWeight.Black).copy(letterSpacing = (-0.5).sp), color = colors.ink, maxLines = 1)
             dots()
-            ChipRow(data)
+            ChipRow(data, onClick = openProfile)
             Text("“${report.line}”", style = opaw(17.sp, FontWeight.Bold).copy(lineHeight = 23.sp), color = colors.ink, textAlign = TextAlign.Center)
         }
         val meals = data.count(CareKind.MEAL, now)
@@ -229,8 +229,9 @@ private fun PetPage(data: DogData, dots: @Composable () -> Unit, openStudio: () 
     }
 }
 
+/** Breed, age and weight. Tapping them opens the pet's profile (2j). */
 @Composable
-private fun ChipRow(data: DogData) {
+private fun ChipRow(data: DogData, onClick: () -> Unit) {
     val dog = data.dog
     val chips = buildList {
         if (dog.breed.isNotEmpty()) add(dog.breed)
@@ -238,7 +239,7 @@ private fun ChipRow(data: DogData) {
         dog.weightKg?.let { add(OpawFormat.weight(it)) }
         if (isEmpty()) add(dog.size.title)
     }
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(Modifier.pressable(onClick = onClick), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         chips.forEach { chip ->
             Text(
                 chip, style = opaw(14.sp, FontWeight.ExtraBold), color = Opaw.colors.ink, maxLines = 1,

@@ -548,7 +548,7 @@ fun AddReminderSheet(data: DogData, onDismiss: () -> Unit) {
 
 // MARK: - History
 
-private enum class HistoryRange(val title: String, val days: Long) { WEEK("Week", 7), SIX_MONTHS("6 months", 183), YEAR("Year", 365) }
+internal enum class HistoryRange(val title: String, val days: Long) { WEEK("Week", 7), SIX_MONTHS("6 months", 183), YEAR("Year", 365) }
 
 private sealed interface PoopDay {
     data object Empty : PoopDay
@@ -628,7 +628,7 @@ private fun weeklySummary(data: DogData): String {
     return sentences.joinToString(" ")
 }
 
-private fun weightPoints(data: DogData) = data.careEvents.mapNotNull { e -> e.weightKg?.let { e.date to it } }.sortedBy { it.first }
+internal fun weightPoints(data: DogData) = data.careEvents.mapNotNull { e -> e.weightKg?.let { e.date to it } }.sortedBy { it.first }
 
 private fun weightTrend(data: DogData): String? {
     val points = weightPoints(data)
@@ -686,7 +686,7 @@ private fun WeightCard(data: DogData, range: HistoryRange, modifier: Modifier) {
 
 /** A line with dots, the last one filled, and month or weekday labels under it. */
 @Composable
-private fun WeightChart(points: List<Pair<Instant, Double>>, range: HistoryRange) {
+internal fun WeightChart(points: List<Pair<Instant, Double>>, range: HistoryRange) {
     val colors = Opaw.colors
     val minT = points.first().first.toEpochMilli().toDouble()
     val maxT = points.last().first.toEpochMilli().toDouble().let { if (it == minT) minT + 1 else it }

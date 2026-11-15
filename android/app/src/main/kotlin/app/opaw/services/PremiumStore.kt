@@ -2,6 +2,7 @@ package app.opaw.services
 
 import android.app.Activity
 import android.content.Context
+import app.opaw.BuildConfig
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -52,10 +53,26 @@ class PremiumStore(private val context: Context) {
         private set
     var errorMessage by mutableStateOf<String?>(null)
 
-    val isPremium: Boolean get() = status != null
-
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val prefs = context.getSharedPreferences("premium", Context.MODE_PRIVATE)
+
+    /**
+     * Test builds only: Premium switched on by hand in Settings, because a sideloaded APK can't buy
+     * through Google Play. Always off in release builds.
+     */
+    var testPremium by mutableStateOf(BuildConfig.DEBUG && prefs.getBoolean("testPremium", false))
+        private set
+
+    val isPremium: Boolean get() = status != null || testPremium
+
+    fun setTestPremium(on: Boolean) {
+        if (!BuildConfig.DEBUG) return
+        prefs.edit().putBoolean("testPremium", on).apply()
+        testPremium = on
+        Premium.isPremium = isPremium
+    }
+
+    init { Premium.isPremium = isPremium }
     private var pendingPurchase: CompletableDeferred<Boolean>? = null
 
     private val client: BillingClient = BillingClient.newBuilder(context)
@@ -172,7 +189,7 @@ class PremiumStore(private val context: Context) {
     }
 
     suspend fun refreshStatus() {
-        if (!client.isReady) { Premium.isPremium = status != null; return }
+        if (!client.isReady) { Premium.isPremium = isPremium; return }
         val result = client.queryPurchasesAsync(QueryPurchasesParams.newBuilder().setProductType(BillingClient.ProductType.SUBS).build())
         val owned = result.purchasesList.filter { it.purchaseState == Purchase.PurchaseState.PURCHASED }
         owned.forEach { acknowledge(it) }
@@ -182,7 +199,7 @@ class PremiumStore(private val context: Context) {
             val trial = prefs.getBoolean("trial.$id", false) && start.plusSeconds(7 * 86_400) > Instant.now()
             Status(id, trial, start, if (trial) start.plusSeconds(7 * 86_400) else null, purchase.isAutoRenewing)
         }.maxByOrNull { it.purchaseDate }
-        Premium.isPremium = status != null
+        Premium.isPremium = isPremium
     }
 
     /** Two days before the trial ends, a notification says billing is about to start. */

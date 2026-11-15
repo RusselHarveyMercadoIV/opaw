@@ -11,6 +11,8 @@ sealed interface Route {
     data class WalkDetail(val walkId: String) : Route
     data class MemoryDetail(val memoryId: String) : Route
     data class Profile(val dogId: String) : Route
+    /** The pet's profile (2j): age, weight, birthday and more. */
+    data class PetProfile(val dogId: String) : Route
     data class Household(val dogId: String) : Route
     data class FamilyTree(val dogId: String) : Route
     data class Studio(val dogId: String) : Route
