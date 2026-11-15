@@ -17,6 +17,7 @@ enum class PhotoIssue(val title: String, val tip: String) {
     BLURRY("The photo is blurry", "Hold still, or wait until your pet does."),
     TOO_DARK("It's too dark", "Find some brighter light."),
     TOO_BRIGHT("It's too bright", "Step out of direct sunlight."),
+    SAME_WAY("Both sides face the same way", "One was taken from the wrong side. Their left side has their nose on your left."),
 }
 
 /**

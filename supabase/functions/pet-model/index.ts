@@ -129,19 +129,25 @@ const tripoTask = (id: string) => tripo("GET", `/tasks/${id}`);
 const tripoFailed = (task: Record<string, any>) => ["failed", "cancelled", "banned", "expired"].includes(task.status);
 
 /**
- * Starts the photos-to-3D task from the front photo alone. Owners' side and back shots rarely
- * agree with it (the tail up in one and down in another, the side lit differently, the pet
- * facing either way), and Tripo's multiview blends those disagreements into a lumpy body with
- * a second head. One clear front photo gives a cleaner, truer pet, at the same price.
+ * Starts the photos-to-3D task. With a front and a labelled left or right side, Tripo's multiview
+ * gets the pet's real length and leg height from the sides. Tripo's "left" view is the pet's own
+ * left side (nose on the left of the photo), which is how the app asks for it.
+ *
+ * Older builds send one "side" photo without saying which side. Sent as the wrong one, it put a
+ * second head where the tail should be, so those jobs use the front photo alone.
  */
 async function tripoModel(row: Row): Promise<string> {
   const urls = await signedInputs(row);
   const angles: string[] = JSON.parse(row.outputs.angles ?? "[]");
-  // Older builds send no angles, but always put the front first.
-  const front = urls[Math.max(angles.indexOf("front"), 0)];
-  const task = await tripo("POST", "/generation/image-to-model", {
-    input: front, model: TRIPO_MODEL, texture: true, pbr: false, face_limit: 15000,
-  });
+  const common = { model: TRIPO_MODEL, texture: true, pbr: false, face_limit: 15000 };
+  const views = ["front", "left", "right", "back"]
+    .filter((view) => angles.includes(view))
+    .map((view) => ({ [view]: urls[angles.indexOf(view)] }));
+  const hasSide = angles.includes("left") || angles.includes("right");
+  const task = angles.includes("front") && hasSide
+    ? await tripo("POST", "/generation/multiview-to-model", { inputs: views, ...common })
+    // No angles (older builds) always put the front first.
+    : await tripo("POST", "/generation/image-to-model", { input: urls[Math.max(angles.indexOf("front"), 0)], ...common });
   return task.task_id;
 }
 

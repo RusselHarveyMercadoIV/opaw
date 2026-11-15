@@ -89,12 +89,18 @@ import java.util.concurrent.Executor
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 
-/** The four reference photos (9a). Three body shots teach the 3D model its shape; the face keeps the eyes sharp. */
-enum class LifeAngle(val label: String, val tip: String, val hint: String) {
-    FRONT("Front", "Face the camera, whole body in frame", "Facing you"),
-    SIDE("Side", "Standing side on, nose to tail", "Nose to tail"),
-    BACK("Back", "From behind, tail in frame", "Tail in frame"),
-    FACE("Face", "Close up, eyes in focus", "Close up"),
+/**
+ * The reference photos. The front and both sides go to the 3D model as its front, left and right
+ * views (the sides carry the pet's real length and leg height), the back adds the tail, and the
+ * face close-up keeps the eyes sharp on the reveal. A pet's left side is shot standing at their
+ * left, which puts their nose on the left of the photo; the right side is the mirror of that.
+ */
+enum class LifeAngle(val label: String, val title: String, val tip: String, val hint: String) {
+    FRONT("Front", "Front", "Face the camera, whole body in frame", "Facing you"),
+    LEFT("Left", "Left side", "Their left side · nose to your left", "Nose to your left"),
+    RIGHT("Right", "Right side", "Their right side · nose to your right", "Nose to your right"),
+    BACK("Back", "Back", "From behind, tail in frame", "Tail in frame"),
+    FACE("Face", "Face", "Close up, eyes in focus", "Close up"),
 }
 
 /** One photo in a slot. [scan] is null while the photo is still being looked at. */
@@ -125,11 +131,27 @@ class LifePhotos(private val scope: CoroutineScope) {
         val issues = shots[angle]?.scan?.issues ?: return null
         val ignored = when (angle) {
             LifeAngle.FRONT -> emptySet<PhotoIssue>()
-            LifeAngle.SIDE, LifeAngle.BACK -> setOf(PhotoIssue.NOT_A_PET)
+            LifeAngle.LEFT, LifeAngle.RIGHT, LifeAngle.BACK -> setOf(PhotoIssue.NOT_A_PET)
             LifeAngle.FACE -> setOf(PhotoIssue.NOT_A_PET, PhotoIssue.NO_PET, PhotoIssue.CUT_OFF, PhotoIssue.TOO_SMALL, PhotoIssue.CROWDED)
         }
-        return issues.firstOrNull { it !in ignored }
+        issues.firstOrNull { it !in ignored }?.let { return it }
+        if ((angle == LifeAngle.LEFT || angle == LifeAngle.RIGHT) && sidesFaceSameWay) return PhotoIssue.SAME_WAY
+        return null
     }
+
+    /**
+     * True when both side photos show the pet facing the same way, so one was taken from the
+     * wrong side. The two sides of a pet are mirror images: the left's outline, flipped, should
+     * line up with the right's better than it does unflipped.
+     */
+    private val sidesFaceSameWay: Boolean
+        get() {
+            val left = shots[LifeAngle.LEFT]?.cutout ?: return false
+            val right = shots[LifeAngle.RIGHT]?.cutout ?: return false
+            val a = silhouette(left)
+            val b = silhouette(right)
+            return overlap(a, b, mirrored = false) > overlap(a, b, mirrored = true) + 0.05f
+        }
 
     fun isScanning(angle: LifeAngle): Boolean = shots[angle]?.let { it.scan == null } == true
     fun isGood(angle: LifeAngle): Boolean = shots[angle]?.scan != null && problem(angle) == null
@@ -140,8 +162,8 @@ class LifePhotos(private val scope: CoroutineScope) {
     /** The next empty slot, in the order the design asks for them. */
     val next: LifeAngle? get() = LifeAngle.entries.firstOrNull { it !in shots }
 
-    /** At least three good photos, the front among them. */
-    val isReady: Boolean get() = good >= 3 && isGood(LifeAngle.FRONT) && !scanning
+    /** The front and at least one side: the side is where the pet's length comes from. */
+    val isReady: Boolean get() = isGood(LifeAngle.FRONT) && (isGood(LifeAngle.LEFT) || isGood(LifeAngle.RIGHT)) && !scanning
 
     /** What to hand to the 3D job: the body shots as cut-outs to send, the face to keep for show. */
     fun photos(): List<LifePhoto> = LifeAngle.entries.filter(::isGood).mapNotNull { angle ->
@@ -149,17 +171,43 @@ class LifePhotos(private val scope: CoroutineScope) {
         LifePhoto(shot.cutout ?: shot.photo, send = angle != LifeAngle.FACE, angle = angle.name.lowercase())
     }
 
-    /** "2 of 4 · 1 more to go" */
-    fun countText(name: String, state: PetModelState): String = when {
-        state.isWorking -> "Photos locked while $name comes to life"
-        state.isReady -> "$name is ready"
-        scanning -> "Taking a good look…"
-        LifeAngle.entries.any { problem(it) != null } -> "Retake the marked photo"
-        shots.isNotEmpty() && !isGood(LifeAngle.FRONT) -> "Start with the front"
-        good >= 4 -> "All 4 angles · best result"
-        good == 3 -> "3 of 4 · a 4th angle makes motion smoother"
-        else -> "$good of 4 · ${3 - good} more to go"
+    /** "2 of 5 · add a side" */
+    fun countText(name: String, state: PetModelState): String {
+        val total = LifeAngle.entries.size
+        return when {
+            state.isWorking -> "Photos locked while $name comes to life"
+            state.isReady -> "$name is ready"
+            scanning -> "Taking a good look…"
+            LifeAngle.entries.any { problem(it) != null } -> "Retake the marked photo"
+            shots.isNotEmpty() && !isGood(LifeAngle.FRONT) -> "Start with the front"
+            !isReady -> "$good of $total · add a side for $name's real length"
+            good == total -> "All $total photos · best result"
+            else -> "$good of $total · ready, more angles make $name truer"
+        }
     }
+}
+
+/** The pet's outline at a small fixed size: true where the cut-out is solid. */
+private fun silhouette(cutout: Bitmap): BooleanArray {
+    val w = 48
+    val h = 32
+    val small = Bitmap.createScaledBitmap(cutout, w, h, true)
+    val pixels = IntArray(w * h).also { small.getPixels(it, 0, w, 0, 0, w, h) }
+    return BooleanArray(w * h) { (pixels[it] ushr 24) > 128 }
+}
+
+/** How well two outlines line up (shared over combined area), one of them flipped if [mirrored]. */
+private fun overlap(a: BooleanArray, b: BooleanArray, mirrored: Boolean): Float {
+    val w = 48
+    var both = 0
+    var either = 0
+    for (i in a.indices) {
+        val x = i % w
+        val j = if (mirrored) i - x + (w - 1 - x) else i
+        if (a[i] && b[j]) both++
+        if (a[i] || b[j]) either++
+    }
+    return if (either == 0) 0f else both.toFloat() / either
 }
 
 /**
@@ -182,9 +230,9 @@ fun LifePhotosGrid(
         header()
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 16.dp)) {
             Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 22.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Photos from 4 angles", style = opaw(30.sp, FontWeight.Black), color = colors.ink)
+                Text("Photos from every side", style = opaw(30.sp, FontWeight.Black), color = colors.ink)
                 Text(
-                    "Motion clips are made from these. Take at least 3, all of the same pet.",
+                    "The 3D shape is made from these. The front and at least one side, all of the same pet in the same pose.",
                     style = opaw(16.sp, FontWeight.Medium).copy(lineHeight = 22.sp), color = colors.muted,
                 )
             }
@@ -199,6 +247,8 @@ fun LifePhotosGrid(
                                 modifier = Modifier.weight(1f),
                             ) { onOpen(angle) }
                         }
+                        // An odd one out keeps the same size as the others.
+                        if (row.size == 1) Spacer(Modifier.weight(1f))
                     }
                 }
             }
@@ -208,7 +258,7 @@ fun LifePhotosGrid(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(DesignIcon.SPARKLE, size = 14.dp, weight = 2.4f, tint = colors.ink)
-                Text("Good light · Standing up · Same pet each time", style = opaw(13.sp, FontWeight.Bold), color = colors.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("Good light · Standing up · Camera at their height", style = opaw(13.sp, FontWeight.Bold), color = colors.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Text(
                 photos.countText(name, state),
@@ -238,7 +288,7 @@ private fun LifeSlot(angle: LifeAngle, shot: LifeShot?, problem: PhotoIssue?, is
                 Box(Modifier.size(48.dp).background(if (isNext) Ink else colors.chip, CircleShape), contentAlignment = Alignment.Center) {
                     Icon(DesignIcon.CAMERA, size = 22.dp, tint = if (isNext) Color.White else colors.ghost)
                 }
-                Text(angle.label, style = opaw(17.sp, FontWeight.Black), color = if (isNext) colors.ink else colors.muted)
+                Text(angle.title, style = opaw(17.sp, FontWeight.Black), color = if (isNext) colors.ink else colors.muted)
                 Text(if (isNext) "Tap to take" else angle.hint, style = opaw(13.sp, if (isNext) FontWeight.ExtraBold else FontWeight.Medium), color = if (isNext) colors.ink else colors.ghost)
             }
             return@Box
@@ -261,7 +311,7 @@ private fun LifeSlot(angle: LifeAngle, shot: LifeShot?, problem: PhotoIssue?, is
             )
         }
         Text(
-            angle.label,
+            angle.title,
             style = opaw(12.sp, FontWeight.ExtraBold), color = Color.White,
             modifier = Modifier.align(Alignment.BottomStart).padding(10.dp).background(Ink, CircleShape).padding(horizontal = 10.dp, vertical = 5.dp),
         )
@@ -339,7 +389,7 @@ fun LifeCamera(photos: LifePhotos, start: LifeAngle, onClose: () -> Unit) {
                     contentAlignment = Alignment.Center,
                 ) { Icon(DesignIcon.BACK, size = 22.dp, tint = Ink) }
                 Text(
-                    "${LifeAngle.entries.indexOf(angle) + 1} of 4 · ${angle.label}",
+                    "${LifeAngle.entries.indexOf(angle) + 1} of ${LifeAngle.entries.size} · ${angle.title}",
                     style = opaw(14.sp, FontWeight.ExtraBold), color = Color.White,
                     modifier = Modifier.align(Alignment.Center).background(Ink, CircleShape).padding(horizontal = 14.dp, vertical = 8.dp),
                 )
@@ -376,7 +426,7 @@ fun LifeCamera(photos: LifePhotos, start: LifeAngle, onClose: () -> Unit) {
                     .padding(top = 18.dp, bottom = 14.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     for (option in LifeAngle.entries) {
                         val on = option == angle
                         val done = option in photos.shots
@@ -391,7 +441,7 @@ fun LifeCamera(photos: LifePhotos, start: LifeAngle, onClose: () -> Unit) {
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             if (done) Icon(DesignIcon.CHECK, size = 11.dp, tint = if (on) Color.White else Ink)
-                            Text(option.label, style = opaw(14.sp, FontWeight.ExtraBold), color = if (on) Color.White else Ink.copy(alpha = if (done) 1f else 0.55f))
+                            Text(option.label, style = opaw(13.sp, FontWeight.ExtraBold), maxLines = 1, color = if (on) Color.White else Ink.copy(alpha = if (done) 1f else 0.55f))
                         }
                     }
                 }
