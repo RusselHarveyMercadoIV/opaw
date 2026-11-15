@@ -31,9 +31,10 @@ android {
     // The Play upload key, from the environment (GitHub secrets) or local.properties. Without it,
     // release builds are left unsigned and Play Console won't accept them.
     val keystore = System.getenv("OPAW_KEYSTORE_FILE") ?: localProperty("OPAW_KEYSTORE_FILE")
-    // A fixed debug key, so every test build has the SHA-1 registered for Google sign-in.
-    // CI writes it from the OPAW_DEBUG_KEYSTORE_BASE64 secret; otherwise the usual debug key is used.
+    // A fixed debug key (committed; test builds only), so every test build has the SHA-1
+    // registered for Google sign-in: 30:C5:BF:ED:2D:48:55:82:A6:D8:61:2C:03:33:B7:EA:11:72:96:42.
     val debugKeystore = System.getenv("OPAW_DEBUG_KEYSTORE_FILE") ?: localProperty("OPAW_DEBUG_KEYSTORE_FILE")
+        ?: "opaw-debug.keystore".takeIf { file(it).exists() }
     signingConfigs {
         if (debugKeystore != null) {
             getByName("debug") {
