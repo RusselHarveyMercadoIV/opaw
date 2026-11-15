@@ -42,6 +42,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.TransformOrigin
@@ -337,7 +338,8 @@ fun GhostCycle(modifier: Modifier = Modifier) {
     val time = rememberInfiniteTransition(label = "ghost").animateFloat(
         0f, period, infiniteRepeatable(tween((period * 1000).toInt(), easing = androidx.compose.animation.core.LinearEasing)), label = "ghost",
     )
-    val tint = remember { ColorFilter.tint(Ink.copy(alpha = 0.09f)) }
+    val shade = ghostShade()
+    val tint = remember(shade) { ColorFilter.tint(shade) }
     Box(modifier, contentAlignment = Alignment.BottomCenter) {
         pets.forEachIndexed { index, pet ->
             Image(
@@ -367,9 +369,20 @@ private fun ghostState(time: Float, period: Float): Pair<Float, Float> {
     }
 }
 
+/**
+ * The faint shade a pet's shadow is drawn in: the theme's ink, so it reads as a soft dark shape on
+ * the light ground and a soft light one on the dark ground. [strength] scales how strong it is.
+ */
+@Composable
+fun ghostShade(strength: Float = 1f): Color {
+    val colors = Opaw.colors
+    val dark = colors.cream.luminance() < 0.5f
+    return colors.ink.copy(alpha = ((if (dark) 0.16f else 0.09f) * strength).coerceAtMost(1f))
+}
+
 /** One pet's shadow filling its frame, for a pet that has no photo yet. */
 @Composable
-fun GhostPuppy(modifier: Modifier = Modifier, tint: Color = Ink.copy(alpha = 0.09f)) {
+fun GhostPuppy(modifier: Modifier = Modifier, tint: Color = ghostShade()) {
     Image(painterResource(R.drawable.ghost_puppy), null, modifier, contentScale = ContentScale.Fit, colorFilter = ColorFilter.tint(tint))
 }
 

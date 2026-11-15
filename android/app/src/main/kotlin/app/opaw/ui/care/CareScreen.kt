@@ -314,7 +314,7 @@ fun CareCircle(
                     .then(if (alert) Modifier.border(2.5.dp, colors.alert, CircleShape) else Modifier),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(icon, size = size * 0.38f, tint = if (selected) Color.White else if (alert) colors.alert else colors.ink, cutoutColor = if (selected) Ink else Color.White)
+                Icon(icon, size = size * 0.38f, tint = if (selected) Color.White else if (alert) colors.alert else colors.ink, cutoutColor = if (selected) Ink else colors.surface)
             }
             if (badge != null) {
                 Box(

@@ -8,7 +8,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -163,12 +166,17 @@ fun Icon(
     size: Dp = 22.dp,
     weight: Float? = null,
     tint: Color = Opaw.colors.ink,
-    /** Fill for the cut-out details of solid icons (the photo icon). */
-    cutoutColor: Color = Color.White,
+    /**
+     * Fill for the cut-out details of solid icons (the photo icon). Left unspecified, the details
+     * are punched through so whatever is behind shows, in light and dark alike.
+     */
+    cutoutColor: Color = Color.Unspecified,
 ) {
     val line = weight ?: icon.defaultWeight
     val stroke = remember(line) { Stroke(width = line, cap = StrokeCap.Round, join = StrokeJoin.Round) }
-    Canvas(modifier.size(size)) {
+    val punch = cutoutColor == Color.Unspecified
+    val layer = if (punch && icon.isFilled) Modifier.graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen } else Modifier
+    Canvas(modifier.size(size).then(layer)) {
         scale(this.size.width / 24f, this.size.height / 24f, pivot = Offset.Zero) {
             if (!icon.isFilled) {
                 icon.elements.forEach { shape(it, tint, stroke) }
@@ -179,8 +187,8 @@ fun Icon(
                 }
                 icon.elements.forEach {
                     when (it) {
-                        is IconElement.Cutout -> drawPath(parse(it.d), cutoutColor)
-                        is IconElement.CutoutCircle -> drawCircle(cutoutColor, it.r, Offset(it.x, it.y))
+                        is IconElement.Cutout -> drawPath(parse(it.d), if (punch) Color.Black else cutoutColor, blendMode = if (punch) BlendMode.Clear else BlendMode.SrcOver)
+                        is IconElement.CutoutCircle -> drawCircle(if (punch) Color.Black else cutoutColor, it.r, Offset(it.x, it.y), blendMode = if (punch) BlendMode.Clear else BlendMode.SrcOver)
                         else -> Unit
                     }
                 }
