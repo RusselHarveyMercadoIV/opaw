@@ -412,6 +412,9 @@ class PackService(private val context: Context) {
         })
     }
 
+    /** Picks a failed job back up when its 3D model was already built; throws if it has to start over. */
+    suspend fun petModelRetry(id: String): PetModelJob = petModelCall(buildJsonObject { put("action", "retry"); put("id", id) })
+
     /** Advances the job on the server and returns where it is. */
     suspend fun petModelStatus(id: String): PetModelJob = petModelCall(buildJsonObject { put("action", "status"); put("id", id) })
 

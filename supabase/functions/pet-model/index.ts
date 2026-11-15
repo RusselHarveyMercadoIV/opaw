@@ -5,7 +5,8 @@
 // One to four photos of the same pet from different angles (front, side, back). Older builds send
 // a single "input_path" instead, which still works.
 //   { "action": "status", "id": "<pet_models row id>" }
-// Each status call advances the job one step: photos to 3D, then quadruped rigging, then copying
+//   { "action": "retry", "id": "<pet_models row id>" } picks a job whose rigging failed back up.
+// Each status call advances the job one step: photos to 3D, then rigging, then copying
 // the GLBs (rest pose, walk and run) into the private pet-models bucket, because Meshy's links expire.
 //
 // Secrets: MESHY_API_KEY (supabase secrets set MESHY_API_KEY=msy_...). Optional: PET_MODEL_DAILY_LIMIT.
@@ -124,6 +125,16 @@ async function start(user: string, body: Record<string, unknown>) {
   return reply(view(data as Row));
 }
 
+/** Saves the unrigged model as the rest pose and finishes, for pets Meshy can't rig. */
+async function keepStill(row: Row, task: { model_urls?: { glb?: string } }): Promise<Row> {
+  const url = task.model_urls?.glb;
+  if (!url) return update(row, { stage: "failed", error: "Meshy didn't return a model." });
+  row = await update(row, { stage: "saving", progress: 92 });
+  const path = `${row.owner_id}/${row.dog_id}/${row.id}/rest.glb`;
+  await copyToStorage(url, path);
+  return update(row, { stage: "done", progress: 100, outputs: { rest: path } });
+}
+
 async function advance(row: Row): Promise<Row> {
   if (row.stage === "modeling" && row.meshy_model_task) {
     const kind = row.outputs.source === "multi" ? "multi-image-to-3d" : "image-to-3d";
@@ -132,17 +143,33 @@ async function advance(row: Row): Promise<Row> {
       return update(row, { stage: "failed", error: task.task_error?.message || "Meshy couldn't build a 3D model from these photos." });
     }
     if (task.status !== "SUCCEEDED") return update(row, { progress: Math.round((task.progress ?? 0) * 0.6) });
-    const rig = await meshy("POST", "/v1/rigging", {
-      input_task_id: row.meshy_model_task,
-      animation_type: "quadruped",
-      height_meters: Number(row.outputs.height_m ?? 0.5),
-    });
+    let rig;
+    try {
+      rig = await meshy("POST", "/v1/rigging", {
+        input_task_id: row.meshy_model_task,
+        height_meters: Number(row.outputs.height_m ?? 0.5),
+      });
+    } catch (error) {
+      // Meshy's rigging only takes two-legged, humanoid characters, so most pets fail its pose
+      // estimation (422). Keep the model it already built: the app breathes the still pose.
+      if (/^Meshy 422/.test(String((error as Error).message))) return keepStill(row, task);
+      throw error;
+    }
     return update(row, { stage: "rigging", progress: 60, meshy_rig_task: rig.result });
+  }
+  // A still model whose copy was cut off: fetch the model again and finish saving it.
+  if (row.stage === "saving" && !row.meshy_rig_task && row.meshy_model_task) {
+    const kind = row.outputs.source === "multi" ? "multi-image-to-3d" : "image-to-3d";
+    return keepStill(row, await meshy("GET", `/v1/${kind}/${row.meshy_model_task}`));
   }
   // "saving" is retried too, in case an earlier call was cut off while copying files.
   if ((row.stage === "rigging" || row.stage === "saving") && row.meshy_rig_task) {
     const task = await meshy("GET", `/v1/rigging/${row.meshy_rig_task}`);
     if (task.status === "FAILED" || task.status === "CANCELED") {
+      // No skeleton, but the model itself is fine: keep it still rather than lose it.
+      const kind = row.outputs.source === "multi" ? "multi-image-to-3d" : "image-to-3d";
+      const model = await meshy("GET", `/v1/${kind}/${row.meshy_model_task}`).catch(() => null);
+      if (model?.model_urls?.glb) return keepStill(row, model);
       return update(row, { stage: "failed", error: task.task_error?.message || "Meshy couldn't add a skeleton to this model." });
     }
     if (task.status !== "SUCCEEDED") return update(row, { progress: 60 + Math.round((task.progress ?? 0) * 0.3) });
@@ -178,6 +205,16 @@ Deno.serve(async (request) => {
   try {
     const body = await request.json();
     if (body.action === "start") return await start(user, body);
+    if (body.action === "retry") {
+      // Trying again after only the rigging failed: the 3D model is already built, so pick that
+      // job back up instead of spending another generation. The app starts over if this says no.
+      const { data } = await admin.from("pet_models").select().eq("id", String(body.id ?? "")).eq("owner_id", user).maybeSingle();
+      const row = data as Row | null;
+      if (!row || row.stage !== "failed" || !row.meshy_model_task || !/pose estimation|skeleton/i.test(row.error ?? "")) {
+        return reply({ error: "Start over." }, 409);
+      }
+      return reply(view(await update(row, { stage: "modeling", error: null, meshy_rig_task: null })));
+    }
     if (body.action === "status") {
       const { data } = await admin.from("pet_models").select().eq("id", String(body.id ?? "")).eq("owner_id", user).maybeSingle();
       if (!data) return reply({ error: "That job doesn't exist." }, 404);

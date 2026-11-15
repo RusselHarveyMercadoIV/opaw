@@ -201,8 +201,15 @@ class PetModelService(private val context: Context, private val pack: PackServic
         val state = state(dogId)
         if (!state.isFailed || state.send == 0) return
         hidden.remove(dogId)
+        val previous = state.jobId
         save(dogId, state.copy(jobId = null, stage = "uploading", progress = LifeStep.CUTOUT.from, error = null, seen = false, startedAt = System.currentTimeMillis()))
-        launch(dogId) { run(dogId) }
+        launch(dogId) {
+            // If the model was built and only the motion step failed, the server reuses it.
+            val revived = previous?.let { runCatching { pack.petModelRetry(it) }.getOrNull() }
+            if (revived == null) return@launch run(dogId)
+            save(dogId, state(dogId).copy(jobId = revived.id, stage = revived.stage, progress = overall(revived.stage, revived.progress)))
+            follow(dogId)
+        }
     }
 
     /** Uploads the saved photos, starts the Meshy job and follows it to the end. */
