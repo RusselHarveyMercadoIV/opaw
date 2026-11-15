@@ -129,13 +129,18 @@ fun SignInScreen() {
                         app.pack.signInWithGoogle(idToken, rawNonce)
                         haptics.success()
                     } catch (cancelled: GetCredentialCancellationException) {
-                        // The user closed the account sheet; stay here quietly.
+                        // Closing the sheet is quiet. Google also reports setup problems this way
+                        // (such as "[16] Account reauth failed" for an unregistered SHA-1), so show those.
+                        val reason = cancelled.message.orEmpty()
+                        if (!reason.contains("cancelled by the user", ignoreCase = true) && reason.isNotBlank()) {
+                            error = failureText(reason)
+                        }
                     } catch (none: NoCredentialException) {
                         error = "No Google account on this phone. Add one in Settings, then try again."
                     } catch (stop: CancellationException) {
                         throw stop
                     } catch (failure: Exception) {
-                        error = "Couldn't sign in with Google. Check your connection and try again."
+                        error = failureText(failure.message.orEmpty())
                     } finally {
                         signing = false
                     }
@@ -150,6 +155,12 @@ fun SignInScreen() {
             )
         }
     }
+}
+
+/** The design's message, plus Google's or Supabase's own reason in test builds, to find setup problems. */
+private fun failureText(reason: String): String {
+    val base = "Couldn't sign in with Google. Check your connection and try again."
+    return if (BuildConfig.DEBUG && reason.isNotBlank()) "$base\n\n${reason.take(300)}" else base
 }
 
 /** The black 62pt pill with Google's "G" in a white circle, or a spinner while signing in. */
