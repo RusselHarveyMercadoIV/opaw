@@ -7,6 +7,7 @@ import app.opaw.data.OpawRepository
 import app.opaw.data.OpawSettings
 import app.opaw.services.PetModelService
 import app.opaw.services.ClockSettings
+import app.opaw.services.CrashLog
 import app.opaw.services.NotificationService
 import app.opaw.services.PackService
 import app.opaw.services.PremiumStore
@@ -35,6 +36,7 @@ class OpawApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        if (BuildConfig.DEBUG) CrashLog.install(this)
         // Units must be right before the first number is drawn.
         runBlocking { settings.syncFormat() }
         ClockSettings.is24Hour = DateFormat.is24HourFormat(this)

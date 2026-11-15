@@ -6,6 +6,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.graphics.Rect
 import android.net.Uri
+import android.util.Log
 import androidx.exifinterface.media.ExifInterface
 import app.opaw.core.BreedCatalog
 import app.opaw.core.BreedGuess
@@ -14,6 +15,7 @@ import com.google.mlkit.vision.label.ImageLabeling
 import com.google.mlkit.vision.label.defaults.ImageLabelerOptions
 import com.google.mlkit.vision.segmentation.subject.SubjectSegmentation
 import com.google.mlkit.vision.segmentation.subject.SubjectSegmenterOptions
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
@@ -24,25 +26,34 @@ import kotlin.math.max
 /**
  * Finds the pet in a photo and lifts it off the background, entirely on device, with ML Kit.
  * Mirrors Services/CutoutService.swift.
- *
- * ML Kit's on-device labeler knows "Dog" but not breeds, so [guessBreed] only works when a
- * label happens to match the breed catalog; the person can always pick the breed.
  */
 object CutoutService {
-    /** Whether ML Kit recognizes a dog in the photo. */
-    suspend fun containsDog(image: Bitmap): Boolean = labels(image).any { (label, confidence) ->
-        label.equals("dog", ignoreCase = true) && confidence > 0.3
+    /**
+     * Everything the app learns from one photo: the pet's outline, a breed guess, and whether it's
+     * clear enough for 3D. Never throws; a photo it can't read comes back with nothing found.
+     * The models run one after another, which keeps memory low on small phones.
+     */
+    suspend fun scan(image: Bitmap): PetScan = try {
+        val labels = labels(image)
+        val segmentation = segment(image)
+        val guess = BreedCatalog.bestGuess(labels)
+        val hasDog = labels.any { (label, confidence) -> label.equals("dog", ignoreCase = true) && confidence > 0.3 }
+        val looksLikePet = hasDog || guess != null || labels.any { (label, confidence) -> label.lowercase() in petLabels && confidence > 0.3 }
+        PetScan(segmentation, guess, hasDog, PhotoCheck.check(image, segmentation, looksLikePet))
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (error: Throwable) {
+        Log.e("Opaw", "Scanning the photo failed", error)
+        PetScan(null, null, false, listOf(PhotoIssue.NO_PET))
     }
 
-    /** Whether ML Kit sees any pet-like animal, not only a dog. Used by the photo check for 3D. */
-    suspend fun looksLikePet(image: Bitmap): Boolean = labels(image).any { (label, confidence) ->
-        label.lowercase() in petLabels && confidence > 0.3
-    }
-
+    /** Animals ML Kit's labeler can name, for the 3D photo check. */
     private val petLabels = setOf("dog", "cat", "pet", "rabbit", "bird", "horse", "hamster", "animal", "mammal", "puppy", "kitten")
 
-    suspend fun guessBreed(image: Bitmap): BreedGuess? = BreedCatalog.bestGuess(labels(image))
-
+    /**
+     * ML Kit's on-device labels with their confidence. It knows "Dog" but not breeds, so a breed
+     * guess only works when a label happens to match the catalog.
+     */
     private suspend fun labels(image: Bitmap): List<Pair<String, Double>> = runCatching {
         val labeler = ImageLabeling.getClient(ImageLabelerOptions.DEFAULT_OPTIONS)
         try {
@@ -52,40 +63,33 @@ object CutoutService {
         }
     }.getOrDefault(emptyList())
 
-    /** The foreground subject on a transparent background, cropped to the subject, or null if none was found. */
-    suspend fun cutout(image: Bitmap): Bitmap? = segment(image)?.cutout
-
     /**
-     * Finds the subjects in the photo. The result keeps the full-size foreground, which lines up
+     * Lifts the pet off the background. The result keeps the full-size foreground, which lines up
      * with the photo pixel for pixel, so the scan can draw its white outline right on the photo.
+     * Everything is copied out before the segmenter closes, so nothing depends on it afterwards.
      */
-    suspend fun segment(image: Bitmap): Segmentation? = runCatching {
-        val options = SubjectSegmenterOptions.Builder()
-            .enableForegroundBitmap()
-            .enableMultipleSubjects(SubjectSegmenterOptions.SubjectResultOptions.Builder().build())
-            .build()
-        val segmenter = SubjectSegmentation.getClient(options)
+    private suspend fun segment(image: Bitmap): Segmentation? = runCatching {
+        val segmenter = SubjectSegmentation.getClient(SubjectSegmenterOptions.Builder().enableForegroundBitmap().build())
         try {
             val result = segmenter.process(InputImage.fromBitmap(image, 0)).await()
-            val foreground = result.foregroundBitmap ?: return@runCatching null
+            val found = result.foregroundBitmap ?: return@runCatching null
             withContext(Dispatchers.Default) {
-                val (bounds, coverage) = contentBounds(foreground) ?: return@withContext null
-                // Ignore specks: only subjects at least 2% of the photo count as another subject.
-                val minArea = image.width * image.height * 0.02
-                val subjects = result.subjects.count { it.width.toDouble() * it.height >= minArea }
-                Segmentation(foreground, bounds, coverage, maxOf(1, subjects))
+                val w = found.width
+                val h = found.height
+                val pixels = IntArray(w * h)
+                found.getPixels(pixels, 0, w, 0, 0, w, h)
+                val (bounds, coverage) = contentBounds(pixels, w, h) ?: return@withContext null
+                val foreground = Bitmap.createBitmap(pixels, w, h, Bitmap.Config.ARGB_8888)
+                val cutout = Bitmap.createBitmap(foreground, bounds.left, bounds.top, bounds.width(), bounds.height())
+                Segmentation(foreground, cutout, bounds, coverage, countSubjects(pixels, w, h))
             }
         } finally {
             segmenter.close()
         }
-    }.getOrNull()
+    }.onFailure { Log.w("Opaw", "Lifting the pet out failed", it) }.getOrNull()
 
     /** The box around the non-transparent pixels and the share of the image they cover. */
-    private fun contentBounds(bitmap: Bitmap): Pair<Rect, Float>? {
-        val w = bitmap.width
-        val h = bitmap.height
-        val pixels = IntArray(w * h)
-        bitmap.getPixels(pixels, 0, w, 0, 0, w, h)
+    private fun contentBounds(pixels: IntArray, w: Int, h: Int): Pair<Rect, Float>? {
         var minX = w; var minY = h; var maxX = -1; var maxY = -1
         var filled = 0
         for (y in 0 until h) for (x in 0 until w) {
@@ -99,6 +103,39 @@ object CutoutService {
         }
         if (maxX < 0) return null
         return Rect(minX, minY, maxX + 1, maxY + 1) to filled.toFloat() / (w * h)
+    }
+
+    /**
+     * How many separate things were lifted out: the connected blobs in the foreground, on a
+     * coarse grid. Blobs under 2% of the photo are specks and don't count.
+     */
+    private fun countSubjects(pixels: IntArray, w: Int, h: Int): Int {
+        val step = max(1, max(w, h) / 160)
+        val gw = w / step
+        val gh = h / step
+        if (gw == 0 || gh == 0) return 1
+        val open = BooleanArray(gw * gh) { i -> (pixels[(i / gw) * step * w + (i % gw) * step] ushr 24) > 128 }
+        val minCells = gw * gh * 0.02
+        val stack = IntArray(gw * gh)
+        var subjects = 0
+        for (start in open.indices) {
+            if (!open[start]) continue
+            var top = 0
+            var cells = 0
+            stack[top++] = start
+            open[start] = false
+            while (top > 0) {
+                val i = stack[--top]
+                cells++
+                val x = i % gw
+                if (x > 0 && open[i - 1]) { open[i - 1] = false; stack[top++] = i - 1 }
+                if (x < gw - 1 && open[i + 1]) { open[i + 1] = false; stack[top++] = i + 1 }
+                if (i >= gw && open[i - gw]) { open[i - gw] = false; stack[top++] = i - gw }
+                if (i < gw * (gh - 1) && open[i + gw]) { open[i + gw] = false; stack[top++] = i + gw }
+            }
+            if (cells >= minCells) subjects++
+        }
+        return max(1, subjects)
     }
 
     /** Reads a photo upright and no larger than [maxDimension] pixels on its longest side. */
@@ -158,8 +195,11 @@ object PhotoStore {
     }
 }
 
-/** The pet found in a photo. [foreground] is the photo's size, transparent outside the pet. */
-class Segmentation(val foreground: Bitmap, val bounds: Rect, val coverage: Float, val subjects: Int) {
-    /** The pet cropped to its bounds, for the sticker avatar. */
-    val cutout: Bitmap by lazy { Bitmap.createBitmap(foreground, bounds.left, bounds.top, bounds.width(), bounds.height()) }
-}
+/**
+ * The pet found in a photo. [foreground] is the photo's size and transparent outside the pet;
+ * [cutout] is the same pet cropped to its [bounds], for the sticker avatar.
+ */
+class Segmentation(val foreground: Bitmap, val cutout: Bitmap, val bounds: Rect, val coverage: Float, val subjects: Int)
+
+/** What [CutoutService.scan] found. [issues] says why the photo can't become a 3D pet; empty when it can. */
+class PetScan(val segmentation: Segmentation?, val guess: BreedGuess?, val hasDog: Boolean, val issues: List<PhotoIssue>)

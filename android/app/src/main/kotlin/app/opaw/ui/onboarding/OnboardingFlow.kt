@@ -99,7 +99,6 @@ import app.opaw.core.OpawFormat
 import app.opaw.data.Dog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.opaw.services.CutoutService
-import app.opaw.services.PhotoCheck
 import app.opaw.ui.premium.OneTimeOffer
 import app.opaw.ui.premium.PaywallScreen
 import app.opaw.ui.care.MealTimesCard
@@ -124,8 +123,6 @@ import app.opaw.ui.profile.HouseholdCards
 import app.opaw.ui.theme.Opaw
 import app.opaw.ui.theme.opaw
 import app.opaw.ui.theme.whiteCard
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
@@ -174,24 +171,17 @@ fun OnboardingFlow(app: OpawApplication) {
         go(Step.SCAN)
         scope.launch {
             val started = System.currentTimeMillis()
-            val (segmentation, hasDog, guess) = coroutineScope {
-                val segmentation = async { CutoutService.segment(image) }
-                val hasDog = async { CutoutService.containsDog(image) }
-                val guess = async { CutoutService.guessBreed(image) }
-                Triple(segmentation.await(), hasDog.await(), guess.await())
-            }
+            val scan = CutoutService.scan(image)
             // Let the scan read as a moment rather than a flicker.
             val remaining = 1600 - (System.currentTimeMillis() - started)
             if (remaining > 0) kotlinx.coroutines.delay(remaining)
             if (capture.original !== image) return@launch
-            capture = CaptureResult(image, segmentation?.cutout, guess, segmentation)
-            foundDog = hasDog || guess != null
+            capture = CaptureResult(image, scan.segmentation?.cutout, scan.guess, scan.segmentation, scan.issues)
+            foundDog = scan.hasDog || scan.guess != null
             isProcessing = false
-            if (guess != null && draft.breed.isEmpty()) {
-                draft = draft.copy(breed = guess.breed.name, size = guess.breed.size, energy = guess.breed.energy)
+            scan.guess?.let { guess ->
+                if (draft.breed.isEmpty()) draft = draft.copy(breed = guess.breed.name, size = guess.breed.size, energy = guess.breed.energy)
             }
-            val issues = PhotoCheck.check(image, segmentation, looksLikePet = foundDog || CutoutService.looksLikePet(image))
-            if (capture.original === image) capture = capture.copy(issues = issues)
         }
     }
 

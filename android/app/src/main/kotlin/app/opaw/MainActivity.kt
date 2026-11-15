@@ -14,9 +14,23 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.opaw.services.CrashLog
 import app.opaw.ui.MainTabs
 import app.opaw.ui.onboarding.OnboardingFlow
 import app.opaw.ui.theme.Opaw
@@ -30,6 +44,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             OpawTheme {
                 RootView(app)
+                if (BuildConfig.DEBUG) CrashReport(app)
             }
         }
     }
@@ -52,4 +67,23 @@ private fun RootView(app: OpawApplication) {
             if (showsOnboarding) OnboardingFlow(app) else MainTabs()
         }
     }
+}
+
+/** Test builds only: after a crash, the next launch shows why, ready to copy and send. */
+@Composable
+private fun CrashReport(app: OpawApplication) {
+    var report by remember { mutableStateOf(CrashLog.take(app)) }
+    val text = report ?: return
+    val clipboard = LocalClipboardManager.current
+    AlertDialog(
+        onDismissRequest = { report = null },
+        title = { Text("Opaw crashed last time") },
+        text = {
+            SelectionContainer {
+                Text(text, Modifier.verticalScroll(rememberScrollState()), fontFamily = FontFamily.Monospace, fontSize = 11.sp, lineHeight = 14.sp)
+            }
+        },
+        confirmButton = { TextButton({ clipboard.setText(AnnotatedString(text)); report = null }) { Text("Copy and close") } },
+        dismissButton = { TextButton({ report = null }) { Text("Close") } },
+    )
 }

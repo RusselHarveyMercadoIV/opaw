@@ -32,7 +32,6 @@ import androidx.compose.ui.unit.sp
 import app.opaw.core.AvatarMood
 import app.opaw.data.AvatarStatus
 import app.opaw.services.CutoutService
-import app.opaw.services.PhotoCheck
 import app.opaw.services.PhotoIssue
 import app.opaw.services.PhotoStore
 import app.opaw.ui.LocalNavigator
@@ -76,7 +75,7 @@ fun AvatarStudioScreen(dogId: String) {
     LaunchedEffect(dog.photoPath, dog.cutoutPath) {
         val photo = withContext(Dispatchers.IO) { PhotoStore.load(app, dog.photoPath, maxDimension = 1600) }
         issues = when {
-            photo != null -> PhotoCheck.check(photo, CutoutService.segment(photo), looksLikePet = CutoutService.looksLikePet(photo) || CutoutService.containsDog(photo))
+            photo != null -> CutoutService.scan(photo).issues
             dog.cutoutPath != null -> emptyList()
             else -> listOf(PhotoIssue.NO_PET)
         }

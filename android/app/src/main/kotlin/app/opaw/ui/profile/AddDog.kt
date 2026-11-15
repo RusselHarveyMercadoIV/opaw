@@ -52,7 +52,6 @@ import app.opaw.core.DogSize
 import app.opaw.core.EnergyLevel
 import app.opaw.core.OpawFormat
 import app.opaw.services.CutoutService
-import app.opaw.services.PhotoCheck
 import app.opaw.ui.onboarding.BringToLifeCard
 import app.opaw.ui.onboarding.ScanPhase
 import app.opaw.ui.onboarding.ScanViewfinder
@@ -72,8 +71,6 @@ import app.opaw.ui.onboarding.CaptureResult
 import app.opaw.ui.onboarding.DogDraft
 import app.opaw.ui.theme.Opaw
 import app.opaw.ui.theme.opaw
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import java.io.File
 import java.time.LocalDate
@@ -108,20 +105,16 @@ fun AddDogSheet(source: PhotoSource, onDismiss: () -> Unit) {
         wantsLife = false
         scope.launch {
             val started = System.currentTimeMillis()
-            val (segmentation, guess) = coroutineScope {
-                val c = async { CutoutService.segment(image) }
-                val g = async { CutoutService.guessBreed(image) }
-                c.await() to g.await()
-            }
+            val scan = CutoutService.scan(image)
             val remaining = 1600 - (System.currentTimeMillis() - started)
             if (remaining > 0) kotlinx.coroutines.delay(remaining)
             if (capture.original !== image) return@launch
-            capture = CaptureResult(image, segmentation?.cutout, guess, segmentation)
+            capture = CaptureResult(image, scan.segmentation?.cutout, scan.guess, scan.segmentation, scan.issues)
             processing = false
-            if (segmentation == null) message = "We couldn't find your dog in this photo. Try one where your dog fills more of the frame."
-            if (guess != null && draft.breed.isEmpty()) draft = draft.copy(breed = guess.breed.name, size = guess.breed.size, energy = guess.breed.energy)
-            val issues = PhotoCheck.check(image, segmentation, looksLikePet = guess != null || CutoutService.looksLikePet(image))
-            if (capture.original === image) capture = capture.copy(issues = issues)
+            if (scan.segmentation == null) message = "We couldn't find your dog in this photo. Try one where your dog fills more of the frame."
+            scan.guess?.let { guess ->
+                if (draft.breed.isEmpty()) draft = draft.copy(breed = guess.breed.name, size = guess.breed.size, energy = guess.breed.energy)
+            }
         }
     }
 
