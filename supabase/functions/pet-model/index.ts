@@ -23,7 +23,8 @@ import { createClient } from "jsr:@supabase/supabase-js@2.49.4";
 
 const MESHY = "https://api.meshy.ai/openapi";
 const MESHY_KEY = Deno.env.get("MESHY_API_KEY") ?? "";
-const TRIPO = "https://openapi.tripo3d.com/v3";
+// The international platform (platform.tripo3d.ai). China accounts use openapi.tripo3d.com.
+const TRIPO = Deno.env.get("TRIPO_API_BASE") ?? "https://openapi.tripo3d.ai/v3";
 const TRIPO_KEY = Deno.env.get("TRIPO_API_KEY") ?? "";
 const PROVIDER = (Deno.env.get("PET_MODEL_PROVIDER") ?? (TRIPO_KEY ? "tripo" : "meshy")).toLowerCase();
 const DAILY_LIMIT = Number(Deno.env.get("PET_MODEL_DAILY_LIMIT") ?? "3");
