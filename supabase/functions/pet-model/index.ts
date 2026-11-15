@@ -128,20 +128,20 @@ async function tripo(method: string, path: string, body?: unknown) {
 const tripoTask = (id: string) => tripo("GET", `/tasks/${id}`);
 const tripoFailed = (task: Record<string, any>) => ["failed", "cancelled", "banned", "expired"].includes(task.status);
 
-/** Starts the photos-to-3D task. Several angles become one multiview task, the front required. */
+/**
+ * Starts the photos-to-3D task from the front photo alone. Owners' side and back shots rarely
+ * agree with it (the tail up in one and down in another, the side lit differently, the pet
+ * facing either way), and Tripo's multiview blends those disagreements into a lumpy body with
+ * a second head. One clear front photo gives a cleaner, truer pet, at the same price.
+ */
 async function tripoModel(row: Row): Promise<string> {
   const urls = await signedInputs(row);
   const angles: string[] = JSON.parse(row.outputs.angles ?? "[]");
-  // The side shot is sent as Tripo's "left" view; older builds send front, side, back in order.
-  const views = urls.map((url, index) => {
-    const angle = angles[index] ?? ["front", "side", "back"][index] ?? "right";
-    return { [angle === "side" ? "left" : angle]: url };
+  // Older builds send no angles, but always put the front first.
+  const front = urls[Math.max(angles.indexOf("front"), 0)];
+  const task = await tripo("POST", "/generation/image-to-model", {
+    input: front, model: TRIPO_MODEL, texture: true, pbr: false, face_limit: 15000,
   });
-  const front = views.find((view) => "front" in view);
-  const common = { model: TRIPO_MODEL, texture: true, pbr: false, face_limit: 15000 };
-  const task = views.length > 1 && front
-    ? await tripo("POST", "/generation/multiview-to-model", { inputs: views, ...common })
-    : await tripo("POST", "/generation/image-to-model", { input: Object.values(front ?? views[0])[0], ...common });
   return task.task_id;
 }
 
