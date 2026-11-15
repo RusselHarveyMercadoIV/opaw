@@ -28,8 +28,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import app.opaw.core.AvatarMood
-import app.opaw.ui.components.DesignIcon
-import app.opaw.ui.components.Icon
+import app.opaw.ui.components.GhostPuppy
 import app.opaw.ui.components.Ink
 import app.opaw.ui.components.rememberHaptics
 import kotlinx.coroutines.launch
@@ -101,7 +100,7 @@ fun LivingPhoto(image: Bitmap?, mood: AvatarMood, modifier: Modifier = Modifier,
                 Image(bitmap, null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
             }
         } else {
-            Box(layer.padding(40.dp), contentAlignment = Alignment.Center) { Icon(DesignIcon.PAW, size = 160.dp, tint = Ink.copy(alpha = 0.3f)) }
+            GhostPuppy(layer.padding(40.dp), tint = Ink.copy(alpha = 0.3f))
         }
     }
 }

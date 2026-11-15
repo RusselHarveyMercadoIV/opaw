@@ -12,7 +12,6 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -22,6 +21,7 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -40,26 +40,25 @@ import androidx.compose.ui.composed
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
-import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.opaw.R
 import app.opaw.services.Sounds
 import app.opaw.ui.theme.Opaw
 import app.opaw.ui.theme.opaw
-import kotlin.math.min
 
 // Pieces shared across screens. Mirrors DesignKit.swift and the shared views in Theme.swift.
 
@@ -174,7 +173,7 @@ fun Modifier.loopMotion(motion: LoopMotion?, duration: Double? = null): Modifier
     }
 }
 
-/** The pet's cut-out photo with the white sticker edge, or a soft paw before there is one. */
+/** The pet's cut-out photo with the white sticker edge, or a faint pet shadow before there is one. */
 @Composable
 fun StickerPet(
     image: Bitmap?,
@@ -186,7 +185,7 @@ fun StickerPet(
 ) {
     Box(modifier.loopMotion(motion, duration), contentAlignment = Alignment.Center) {
         if (image == null) {
-            Icon(DesignIcon.PAW, Modifier.padding(28.dp), size = 120.dp, tint = Ink.copy(alpha = 0.09f))
+            GhostPuppy(Modifier.fillMaxSize().padding(12.dp))
             return@Box
         }
         val bitmap = remember(image) { image.asImageBitmap() }
@@ -313,67 +312,64 @@ fun ProgressBar(value: Float, modifier: Modifier = Modifier) {
     }
 }
 
-/** Three faint silhouettes (dog, cat, bunny) taking turns to appear, every 9 seconds. */
+/**
+ * A pet's shadow, standing in before there is a photo. [height] is how tall it stands in its slot,
+ * so a bunny looks small beside a retriever. The biggest stops short of the top to stay clear of
+ * the speech bubble on the welcome screen.
+ */
+enum class GhostPet(val art: Int, val height: Float) {
+    RETRIEVER(R.drawable.ghost_retriever, 0.9f),
+    CAT(R.drawable.ghost_cat, 0.7f),
+    BUNNY(R.drawable.ghost_bunny, 0.56f),
+    CORGI(R.drawable.ghost_corgi, 0.58f),
+    FLUFFY_CAT(R.drawable.ghost_fluffy_cat, 0.72f),
+    LOP_BUNNY(R.drawable.ghost_lop_bunny, 0.48f),
+}
+
+/** Seconds each shadow gets before the next one starts to appear. */
+private const val GHOST_TURN = 3f
+
+/** Faint pet shadows taking turns to appear, each at its own size on the same ground line. */
 @Composable
 fun GhostCycle(modifier: Modifier = Modifier) {
-    val time by rememberInfiniteTransition(label = "ghost").animateFloat(
-        0f, 9f, infiniteRepeatable(tween(9000, easing = androidx.compose.animation.core.LinearEasing)), label = "ghost",
+    val pets = GhostPet.entries
+    val period = pets.size * GHOST_TURN
+    val time = rememberInfiniteTransition(label = "ghost").animateFloat(
+        0f, period, infiniteRepeatable(tween((period * 1000).toInt(), easing = androidx.compose.animation.core.LinearEasing)), label = "ghost",
     )
-    val shapes = remember { (0..2).map(::ghostPath) }
-    Canvas(modifier) {
-        val s = min(size.width / 200f, size.height / 220f)
-        shapes.forEachIndexed { index, path ->
-            val (opacity, scale) = ghostState(time - index * 3f)
-            if (opacity <= 0f) return@forEachIndexed
-            scale(scale * s, pivot = Offset.Zero) {
-                drawPath(path, Ink.copy(alpha = 0.09f * opacity))
-            }
+    val tint = remember { ColorFilter.tint(Ink.copy(alpha = 0.09f)) }
+    Box(modifier, contentAlignment = Alignment.BottomCenter) {
+        pets.forEachIndexed { index, pet ->
+            Image(
+                painterResource(pet.art), null,
+                Modifier.fillMaxWidth().fillMaxHeight(pet.height).graphicsLayer {
+                    val (opacity, scale) = ghostState(time.value - index * GHOST_TURN, period)
+                    alpha = opacity
+                    scaleX = scale
+                    scaleY = scale
+                    // Grow from the middle of the whole slot, not the middle of this pet.
+                    transformOrigin = TransformOrigin(0.5f, 1f - 0.5f / pet.height)
+                },
+                alignment = Alignment.BottomCenter, contentScale = ContentScale.Fit, colorFilter = tint,
+            )
         }
     }
 }
 
-/** The design's ghost-cycle keyframes: fade in by 6%, hold to 28%, fade out by 34%. */
-private fun ghostState(time: Float): Pair<Float, Float> {
-    val t = (((time % 9f) + 9f) % 9f) / 9f
+/** The design's ghost-cycle keyframes: fade in over 0.54 s, hold to 2.52 s, fade out by 3.06 s. */
+private fun ghostState(time: Float, period: Float): Pair<Float, Float> {
+    val t = ((time % period) + period) % period
     return when {
-        t < 0.06f -> (t / 0.06f).let { it to 0.94f + 0.06f * it }
-        t < 0.28f -> 1f to 1f
-        t < 0.34f -> ((t - 0.28f) / 0.06f).let { (1 - it) to 1 + 0.03f * it }
+        t < 0.54f -> (t / 0.54f).let { it to 0.94f + 0.06f * it }
+        t < 2.52f -> 1f to 1f
+        t < 3.06f -> ((t - 2.52f) / 0.54f).let { (1 - it) to 1 + 0.03f * it }
         else -> 0f to 1.03f
     }
 }
 
-/** Silhouettes drawn in a 200×220 box: 0 dog, 1 cat, 2 bunny. */
-private fun ghostPath(kind: Int): Path {
-    val path = Path()
-    fun ellipse(cx: Float, cy: Float, rx: Float, ry: Float, rotate: Float = 0f) {
-        val oval = Path().apply { addOval(androidx.compose.ui.geometry.Rect(-rx, -ry, rx, ry)) }
-        val m = androidx.compose.ui.graphics.Matrix().apply { translate(cx, cy); rotateZ(rotate) }
-        oval.transform(m)
-        path.addPath(oval)
-    }
-    fun pill(x: Float, y: Float, w: Float, h: Float) {
-        path.addRoundRect(androidx.compose.ui.geometry.RoundRect(x, y, x + w, y + h, androidx.compose.ui.geometry.CornerRadius(w / 2)))
-    }
-    when (kind) {
-        0 -> {
-            ellipse(100f, 165f, 56f, 50f); ellipse(100f, 78f, 40f, 40f)
-            ellipse(64f, 70f, 13f, 30f, 22f); ellipse(136f, 70f, 13f, 30f, -22f)
-            ellipse(100f, 100f, 20f, 15f); pill(70f, 180f, 20f, 36f); pill(110f, 180f, 20f, 36f)
-        }
-        1 -> {
-            ellipse(100f, 160f, 46f, 56f); ellipse(100f, 82f, 36f, 36f)
-            path.moveTo(68f, 66f); path.lineTo(74f, 28f); path.lineTo(96f, 52f); path.close()
-            path.moveTo(132f, 66f); path.lineTo(126f, 28f); path.lineTo(104f, 52f); path.close()
-            // The tail, as a thick curve approximated by a filled band.
-            path.addPath(androidx.compose.ui.graphics.vector.PathParser().parsePathString("M139 199 C176 194 184 156 168 131 L160 137 C172 156 168 186 149 193 Z").toPath())
-            pill(76f, 184f, 18f, 32f); pill(106f, 184f, 18f, 32f)
-        }
-        else -> {
-            ellipse(100f, 168f, 50f, 46f); ellipse(100f, 104f, 32f, 32f)
-            ellipse(84f, 48f, 11f, 38f, -8f); ellipse(116f, 48f, 11f, 38f, 8f); ellipse(150f, 186f, 14f, 14f)
-        }
-    }
-    return path
+/** One pet's shadow filling its frame, for a pet that has no photo yet. */
+@Composable
+fun GhostPuppy(modifier: Modifier = Modifier, tint: Color = Ink.copy(alpha = 0.09f)) {
+    Image(painterResource(R.drawable.ghost_puppy), null, modifier, contentScale = ContentScale.Fit, colorFilter = ColorFilter.tint(tint))
 }
 
