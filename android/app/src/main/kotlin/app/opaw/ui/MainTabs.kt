@@ -63,6 +63,9 @@ import app.opaw.ui.pack.PackScreen
 import app.opaw.ui.premium.PaywallRoute
 import app.opaw.ui.premium.SubscriptionScreen
 import app.opaw.ui.home.HomeScreen
+import app.opaw.ui.life.LifeRoute
+import app.opaw.ui.life.LifePhotosRoute
+import app.opaw.ui.life.LifeToastHost
 import app.opaw.ui.memories.MemoriesScreen
 import app.opaw.ui.memories.MemoryDetailScreen
 import app.opaw.ui.profile.ChallengesScreen
@@ -136,6 +139,7 @@ fun MainTabs() {
             // Toasts sit 12 points above the bottom buttons.
             ToastHost(bottom = if (showsTabBar) 100.dp else 40.dp)
             ToastWatcher()
+            LifeToastHost()
         }
     }
     LaunchedEffect(app.toasts.showChallenges) {
@@ -162,6 +166,8 @@ private fun RouteScreen(route: Route) {
         is Route.PetProfile -> PetProfileScreen(route.dogId)
         is Route.FamilyTree -> FamilyTreeScreen(route.dogId)
         is Route.Studio -> AvatarStudioScreen(route.dogId)
+        is Route.LifePhotos -> LifePhotosRoute(route.dogId)
+        is Route.Life -> LifeRoute(route.dogId)
         is Route.MemoryDetail -> MemoryDetailScreen(route.memoryId)
         is Route.Household -> HouseholdScreen(route.dogId)
         Route.Units -> UnitsScreen()

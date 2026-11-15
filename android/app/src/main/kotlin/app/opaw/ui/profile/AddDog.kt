@@ -52,6 +52,8 @@ import app.opaw.core.DogSize
 import app.opaw.core.EnergyLevel
 import app.opaw.core.OpawFormat
 import app.opaw.services.CutoutService
+import app.opaw.ui.LocalNavigator
+import app.opaw.ui.Route
 import app.opaw.ui.onboarding.BringToLifeCard
 import app.opaw.ui.onboarding.ScanPhase
 import app.opaw.ui.onboarding.ScanViewfinder
@@ -86,6 +88,7 @@ fun AddDogSheet(source: PhotoSource, onDismiss: () -> Unit) {
     val colors = Opaw.colors
     val haptics = rememberHaptics()
     val scope = rememberCoroutineScope()
+    val navigator = LocalNavigator.current
     var draft by remember { mutableStateOf(DogDraft(trackedKinds = emptyList())) }
     var weightText by remember { mutableStateOf("") }
     var onPhoto by remember { mutableStateOf(false) }
@@ -138,7 +141,8 @@ fun AddDogSheet(source: PhotoSource, onDismiss: () -> Unit) {
         val kg = weightText.replace(",", ".").toDoubleOrNull()?.takeIf { it > 0 }?.let { if (OpawFormat.usesImperial) it / OpawFormat.POUNDS_PER_KILOGRAM else it }
         scope.launch {
             val dog = draft.copy(weightKg = kg).save(context, capture.original, capture.cutout)
-            if (wantsLife && app.premium.isPremium) app.petModels.start(dog)
+            // Bring to life needs a few more angles, so the photos screen opens next.
+            if (wantsLife && app.premium.isPremium) navigator.push(Route.LifePhotos(dog.id))
             haptics.success()
             onDismiss()
         }
@@ -213,7 +217,7 @@ fun AddDogSheet(source: PhotoSource, onDismiss: () -> Unit) {
                             issues = capture.issues,
                             isPremium = app.premium.isPremium,
                             selected = wantsLife,
-                            selectedText = "${draft.trimmedName} comes to life once added",
+                            selectedText = "Next: a few more angles of ${draft.trimmedName}",
                             onBringToLife = { if (app.premium.isPremium) wantsLife = true else showPaywall = true },
                             onRetake = { open(PhotoSource.CAMERA) },
                             modifier = Modifier.padding(top = 14.dp),

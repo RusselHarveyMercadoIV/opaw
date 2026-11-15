@@ -16,6 +16,10 @@ sealed interface Route {
     data class Household(val dogId: String) : Route
     data class FamilyTree(val dogId: String) : Route
     data class Studio(val dogId: String) : Route
+    /** Photos from four angles, to bring a pet to life in 3D (9a). */
+    data class LifePhotos(val dogId: String) : Route
+    /** A pet coming to life: the checkpoints while it works, then the 3D reveal. */
+    data class Life(val dogId: String) : Route
     data object Challenges : Route
     data object Units : Route
     data object Pack : Route

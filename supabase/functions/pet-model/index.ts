@@ -1,9 +1,11 @@
-// "Bring to life": turns a pet's cutout into a rigged, animated 3D model with Meshy.
+// "Bring to life": turns a pet's cutouts into a rigged, animated 3D model with Meshy.
 //
 // The app calls this function with the signed-in user's token:
-//   { "action": "start", "dog_id": "...", "input_path": "<uid>/<file>.png", "height_m": 0.5 }
+//   { "action": "start", "dog_id": "...", "input_paths": ["<uid>/<file>.png", ...], "height_m": 0.5 }
+// One to four photos of the same pet from different angles (front, side, back). Older builds send
+// a single "input_path" instead, which still works.
 //   { "action": "status", "id": "<pet_models row id>" }
-// Each status call advances the job one step: image-to-3D, then quadruped rigging, then copying
+// Each status call advances the job one step: photos to 3D, then quadruped rigging, then copying
 // the GLBs (rest pose, walk and run) into the private pet-models bucket, because Meshy's links expire.
 //
 // Secrets: MESHY_API_KEY (supabase secrets set MESHY_API_KEY=msy_...). Optional: PET_MODEL_DAILY_LIMIT.
@@ -71,9 +73,13 @@ async function copyToStorage(url: string, path: string) {
 
 async function start(user: string, body: Record<string, unknown>) {
   const dogId = String(body.dog_id ?? "");
-  const inputPath = String(body.input_path ?? "");
+  const given: unknown[] = Array.isArray(body.input_paths) ? body.input_paths : [body.input_path];
+  const paths = given.map((path) => String(path ?? "")).filter(Boolean).slice(0, 4);
+  const inputPath = paths[0] ?? "";
   const height = Math.min(Math.max(Number(body.height_m ?? 0.5) || 0.5, 0.15), 1.2);
-  if (!dogId || !inputPath.startsWith(`${user}/`)) return reply({ error: "Missing dog or photo." }, 400);
+  if (!dogId || !paths.length || paths.some((path) => !path.startsWith(`${user}/`))) {
+    return reply({ error: "Missing dog or photo." }, 400);
+  }
 
   // Each generation spends Meshy credits, so cap how many one account can start per day.
   const since = new Date(Date.now() - 86_400_000).toISOString();
@@ -81,23 +87,38 @@ async function start(user: string, body: Record<string, unknown>) {
     .eq("owner_id", user).gte("created_at", since);
   if ((count ?? 0) >= DAILY_LIMIT) return reply({ error: "You've brought enough pets to life for today. Try again tomorrow." }, 429);
 
-  const signed = await admin.storage.from("avatar-inputs").createSignedUrl(inputPath, 3600);
-  if (signed.error) return reply({ error: "Couldn't read the photo." }, 400);
+  const urls: string[] = [];
+  for (const path of paths) {
+    const signed = await admin.storage.from("avatar-inputs").createSignedUrl(path, 3600);
+    if (signed.error) return reply({ error: "Couldn't read the photo." }, 400);
+    urls.push(signed.data.signedUrl);
+  }
 
-  // Smart topology is Meshy's recommended pipeline for a character that will be rigged.
-  const task = await meshy("POST", "/v1/image-to-3d", {
-    image_url: signed.data.signedUrl,
-    model_type: "smart-topology",
-    ai_model: "meshy-t2.5",
-    target_polycount: 15000,
-    should_texture: true,
-    enable_pbr: false,
-    name: `opaw-${dogId}`,
-  });
+  // Several angles give Meshy the pet's real shape, so the walk and run clips move a body it has
+  // seen from every side. A single photo uses smart topology, Meshy's pipeline for rigged characters.
+  const source = urls.length > 1 ? "multi" : "single";
+  const task = source === "multi"
+    ? await meshy("POST", "/v1/multi-image-to-3d", {
+      image_urls: urls,
+      should_remesh: true,
+      topology: "triangle",
+      target_polycount: 15000,
+      should_texture: true,
+      enable_pbr: false,
+    })
+    : await meshy("POST", "/v1/image-to-3d", {
+      image_url: urls[0],
+      model_type: "smart-topology",
+      ai_model: "meshy-t2.5",
+      target_polycount: 15000,
+      should_texture: true,
+      enable_pbr: false,
+      name: `opaw-${dogId}`,
+    });
   const { data, error } = await admin.from("pet_models").insert({
     owner_id: user, dog_id: dogId, input_path: inputPath, stage: "modeling", meshy_model_task: task.result,
-    // Remembered for the rigging step.
-    outputs: { height_m: String(height) },
+    // Remembered for the next steps: the pet's height for rigging, and which Meshy task to ask about.
+    outputs: { height_m: String(height), source },
   }).select().single();
   if (error) throw error;
   return reply(view(data as Row));
@@ -105,9 +126,10 @@ async function start(user: string, body: Record<string, unknown>) {
 
 async function advance(row: Row): Promise<Row> {
   if (row.stage === "modeling" && row.meshy_model_task) {
-    const task = await meshy("GET", `/v1/image-to-3d/${row.meshy_model_task}`);
+    const kind = row.outputs.source === "multi" ? "multi-image-to-3d" : "image-to-3d";
+    const task = await meshy("GET", `/v1/${kind}/${row.meshy_model_task}`);
     if (task.status === "FAILED" || task.status === "CANCELED") {
-      return update(row, { stage: "failed", error: task.task_error?.message || "Meshy couldn't build a 3D model from this photo." });
+      return update(row, { stage: "failed", error: task.task_error?.message || "Meshy couldn't build a 3D model from these photos." });
     }
     if (task.status !== "SUCCEEDED") return update(row, { progress: Math.round((task.progress ?? 0) * 0.6) });
     const rig = await meshy("POST", "/v1/rigging", {

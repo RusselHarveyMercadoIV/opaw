@@ -12,6 +12,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -19,6 +20,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
@@ -36,6 +39,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -103,6 +107,13 @@ import app.opaw.ui.premium.OneTimeOffer
 import app.opaw.ui.premium.PaywallScreen
 import app.opaw.ui.care.MealTimesCard
 import app.opaw.ui.care.TrackGrid
+import app.opaw.ui.life.LifeAngle
+import app.opaw.ui.life.LifeCamera
+import app.opaw.ui.life.LifePhotos
+import app.opaw.ui.life.LifePhotosGrid
+import app.opaw.ui.life.LifeProgressScreen
+import app.opaw.ui.life.LifeRevealScreen
+import app.opaw.ui.life.LifeToast
 import app.opaw.ui.components.BlackPillButton
 import app.opaw.ui.components.DesignIcon
 import app.opaw.ui.components.DesignToggle
@@ -131,12 +142,16 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.roundToInt
 
-private enum class Step { WELCOME, CAMERA, SCAN, DETAILS, REVEAL, TRACK, HOUSEHOLD, PERMISSIONS }
+private enum class Step { WELCOME, PHOTOS, CAMERA, DETAILS, REVEAL, TRACK, HOUSEHOLD, PERMISSIONS }
+
+/** The screen over the steps while a pet comes to life: its progress, or meeting it in 3D. */
+private enum class LifeScreen { NONE, PROGRESS, REVEAL }
 
 /**
- * First run (4a to 4g): welcome, photo first, details with the detected breed, the avatar reveal,
- * what to track, the household and permissions, then home. Mirrors OnboardingFlow.swift.
- * The paywall that follows on iOS (5a, 5c) arrives with Play Billing in Phase 7.
+ * First run (4a to 4g, with 9a): welcome, photos from four angles, details with the detected breed,
+ * the avatar reveal, what to track, the household and permissions, then home. "Bring to life"
+ * starts from the photos and keeps going in the background through the rest of setup, with a
+ * toast at the top. Mirrors OnboardingFlow.swift.
  */
 @Composable
 fun OnboardingFlow(app: OpawApplication) {
@@ -146,16 +161,31 @@ fun OnboardingFlow(app: OpawApplication) {
     var step by rememberSaveable { mutableStateOf(Step.WELCOME) }
     var forward by remember { mutableStateOf(true) }
     var draft by remember { mutableStateOf(DogDraft()) }
-    var capture by remember { mutableStateOf(CaptureResult()) }
-    var isProcessing by remember { mutableStateOf(false) }
+    val photos = remember { LifePhotos(scope) }
+    var cameraAngle by remember { mutableStateOf(LifeAngle.FRONT) }
+    var lifeScreen by remember { mutableStateOf(LifeScreen.NONE) }
     var foundDog by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
     var showPaywall by remember { mutableStateOf(false) }
     var showOffer by remember { mutableStateOf(false) }
-    var wantsLife by remember { mutableStateOf(false) }
-    // The paywall was opened from "Bring to life" on the scan, not at the end of setup.
+    // The paywall was opened from "Bring to life" on the photos, not at the end of setup.
     var lifePaywall by remember { mutableStateOf(false) }
     val offerShown by app.settings.premiumOfferShown.collectAsStateWithLifecycle(true)
+    val model = app.petModels.state(draft.id)
+
+    // The front photo is the pet's picture everywhere else in setup.
+    val front = photos.shots[LifeAngle.FRONT]
+    val isProcessing = front != null && front.scan == null
+    val capture = remember(front) {
+        CaptureResult(front?.photo, front?.cutout, front?.scan?.guess, front?.scan?.segmentation, front?.scan?.issues)
+    }
+    LaunchedEffect(front?.scan) {
+        val scan = front?.scan ?: return@LaunchedEffect
+        foundDog = scan.hasDog || scan.guess != null
+        scan.guess?.let { guess ->
+            if (draft.breed.isEmpty()) draft = draft.copy(breed = guess.breed.name, size = guess.breed.size, energy = guess.breed.energy)
+        }
+    }
 
     fun go(next: Step) {
         forward = next > step
@@ -163,48 +193,31 @@ fun OnboardingFlow(app: OpawApplication) {
         step = next
     }
 
-    /** Takes the new photo, scans it for the pet, and checks whether it's clear enough for 3D. */
-    fun use(image: Bitmap) {
-        capture = CaptureResult(original = image)
-        isProcessing = true
-        wantsLife = false
-        go(Step.SCAN)
-        scope.launch {
-            val started = System.currentTimeMillis()
-            val scan = CutoutService.scan(image)
-            // Let the scan read as a moment rather than a flicker.
-            val remaining = 1600 - (System.currentTimeMillis() - started)
-            if (remaining > 0) kotlinx.coroutines.delay(remaining)
-            if (capture.original !== image) return@launch
-            capture = CaptureResult(image, scan.segmentation?.cutout, scan.guess, scan.segmentation, scan.issues)
-            foundDog = scan.hasDog || scan.guess != null
-            isProcessing = false
-            scan.guess?.let { guess ->
-                if (draft.breed.isEmpty()) draft = draft.copy(breed = guess.breed.name, size = guess.breed.size, energy = guess.breed.energy)
-            }
-        }
+    fun startLife() {
+        haptics.medium()
+        app.petModels.start(draft.id, photos.photos(), draft.size)
+        lifeScreen = LifeScreen.PROGRESS
     }
 
     /** "Bring to life" is Premium: free users see the paywall first. */
     fun bringToLife() {
-        if (app.premium.isPremium) wantsLife = true else { lifePaywall = true; showPaywall = true }
+        if (app.premium.isPremium) startLife() else { lifePaywall = true; showPaywall = true }
     }
 
     fun finish() {
         if (saving) return
         saving = true
         scope.launch {
-            val dog = draft.save(context, capture.original, capture.cutout)
-            if (wantsLife && app.premium.isPremium) app.petModels.start(dog)
+            draft.save(context, capture.original, capture.cutout)
             haptics.success()
         }
     }
 
     val previous = when (step) {
         Step.WELCOME -> null
-        Step.CAMERA -> Step.WELCOME
-        Step.SCAN -> Step.CAMERA
-        Step.DETAILS -> Step.SCAN
+        Step.PHOTOS -> Step.WELCOME
+        Step.CAMERA -> Step.PHOTOS
+        Step.DETAILS -> Step.PHOTOS
         Step.REVEAL -> Step.DETAILS
         Step.TRACK -> Step.REVEAL
         Step.HOUSEHOLD -> Step.TRACK
@@ -212,49 +225,104 @@ fun OnboardingFlow(app: OpawApplication) {
     }
     BackHandler(enabled = previous != null) { previous?.let(::go) }
 
-    AnimatedContent(
-        targetState = step,
-        transitionSpec = {
-            val direction = if (forward) 1 else -1
-            (slideInHorizontally(spring(dampingRatio = 0.88f, stiffness = 300f)) { it / 7 * direction } + fadeIn()) togetherWith
-                (slideOutHorizontally(spring(dampingRatio = 0.88f, stiffness = 300f)) { -it / 7 * direction } + fadeOut())
-        },
-        modifier = Modifier.fillMaxSize().background(Opaw.colors.cream),
-        label = "onboarding",
-    ) { current ->
-        val padded = Modifier.fillMaxSize().safeDrawingPadding()
-        when (current) {
-            Step.WELCOME -> WelcomeStep(padded) { go(Step.CAMERA) }
-            Step.CAMERA -> CameraStep(onBack = { go(Step.WELCOME) }, onPhoto = ::use)
-            Step.SCAN -> ScanStep(
-                padded, draft.displayName, capture, isProcessing, wantsLife, app.premium.isPremium,
-                onBack = { go(Step.CAMERA) }, onRetake = { go(Step.CAMERA) }, onBringToLife = ::bringToLife,
-            ) { go(Step.DETAILS) }
-            Step.DETAILS -> DetailsStep(padded, draft, { draft = it }, capture, isProcessing, foundDog, onBack = { go(Step.SCAN) }) { go(Step.REVEAL) }
-            Step.REVEAL -> RevealStep(padded, draft.displayName, capture, isProcessing, onBack = { go(Step.DETAILS) }, onRetake = { go(Step.CAMERA) }) { go(Step.TRACK) }
-            Step.TRACK -> TrackStep(padded, draft, { draft = it }, onBack = { go(Step.REVEAL) }) { go(Step.HOUSEHOLD) }
-            Step.HOUSEHOLD -> HouseholdStep(padded, draft.displayName, app, onBack = { go(Step.TRACK) }) { go(Step.PERMISSIONS) }
-            Step.PERMISSIONS -> PermissionsStep(padded, draft.displayName, capture.cutout ?: capture.original, onBack = { go(Step.HOUSEHOLD) }) {
-                if (app.premium.isPremium) finish() else showPaywall = true
+    // The toast rides along on every setup screen once the job has started.
+    val showsToast = model.isStarted && lifeScreen == LifeScreen.NONE && step != Step.WELCOME && step != Step.CAMERA
+    val toastSpace by animateDpAsState(if (showsToast) 78.dp else 0.dp, label = "toast")
+    val name = draft.displayName
+
+    Box(Modifier.fillMaxSize().background(Opaw.colors.cream)) {
+        AnimatedContent(
+            targetState = step,
+            transitionSpec = {
+                val direction = if (forward) 1 else -1
+                (slideInHorizontally(spring(dampingRatio = 0.88f, stiffness = 300f)) { it / 7 * direction } + fadeIn()) togetherWith
+                    (slideOutHorizontally(spring(dampingRatio = 0.88f, stiffness = 300f)) { -it / 7 * direction } + fadeOut())
+            },
+            modifier = Modifier.fillMaxSize(),
+            label = "onboarding",
+        ) { current ->
+            val padded = Modifier.fillMaxSize().safeDrawingPadding().padding(top = toastSpace)
+            when (current) {
+                Step.WELCOME -> WelcomeStep(padded) { go(Step.PHOTOS) }
+                Step.PHOTOS -> LifePhotosGrid(
+                    photos, name, model, padded,
+                    onOpen = { cameraAngle = it; go(Step.CAMERA) },
+                    header = { StepHeader(1, onBack = { go(Step.WELCOME) }) },
+                ) {
+                    when {
+                        model.isReady -> BottomActions("Meet $name", secondary = "Continue setup", secondaryAction = { go(Step.DETAILS) }) { lifeScreen = LifeScreen.REVEAL }
+                        model.isStarted -> BottomActions("Continue setup") { go(Step.DETAILS) }
+                        else -> BottomActions(
+                            "Bring $name to life", enabled = photos.isReady,
+                            // Free, and enough for the sticker avatar: one good look at the front.
+                            secondary = if (front?.scan != null) "Continue with one photo" else null,
+                            secondaryAction = { go(Step.DETAILS) }, action = ::bringToLife,
+                        )
+                    }
+                }
+                Step.CAMERA -> LifeCamera(photos, cameraAngle) { go(Step.PHOTOS) }
+                Step.DETAILS -> DetailsStep(padded, draft, { draft = it }, capture, isProcessing, foundDog, onBack = { go(Step.PHOTOS) }) { go(Step.REVEAL) }
+                Step.REVEAL -> RevealStep(padded, name, capture, isProcessing, onBack = { go(Step.DETAILS) }, onRetake = if (model.isWorking) null else ({ go(Step.PHOTOS) })) { go(Step.TRACK) }
+                Step.TRACK -> TrackStep(padded, draft, { draft = it }, onBack = { go(Step.REVEAL) }) { go(Step.HOUSEHOLD) }
+                Step.HOUSEHOLD -> HouseholdStep(padded, name, app, onBack = { go(Step.TRACK) }) { go(Step.PERMISSIONS) }
+                Step.PERMISSIONS -> PermissionsStep(padded, name, capture.cutout ?: capture.original, onBack = { go(Step.HOUSEHOLD) }) {
+                    if (app.premium.isPremium) finish() else showPaywall = true
+                }
+            }
+        }
+        AnimatedVisibility(
+            showsToast,
+            Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(horizontal = 18.dp).padding(top = 8.dp),
+            enter = slideInVertically { -it } + fadeIn(), exit = slideOutVertically { -it } + fadeOut(),
+        ) {
+            LifeToast(name, model, capture.cutout ?: capture.original) {
+                lifeScreen = if (model.isReady) LifeScreen.REVEAL else LifeScreen.PROGRESS
+            }
+        }
+        // Progress and the 3D reveal sit over the steps, so setup is right where it was left.
+        AnimatedContent(lifeScreen, transitionSpec = { fadeIn(tween(250)) togetherWith fadeOut(tween(200)) }, label = "life") { screen ->
+            val over = Modifier.fillMaxSize().background(Opaw.colors.cream).safeDrawingPadding()
+            when (screen) {
+                LifeScreen.NONE -> Unit
+                LifeScreen.PROGRESS -> {
+                    BackHandler { lifeScreen = LifeScreen.NONE }
+                    LifeProgressScreen(
+                        draft.id, name, capture.cutout ?: capture.original, over,
+                        leaveTitle = "Keep setting up while it works",
+                        onLeave = {
+                            lifeScreen = LifeScreen.NONE
+                            if (step == Step.PHOTOS && model.isWorking) go(Step.DETAILS)
+                        },
+                        onMeet = { lifeScreen = LifeScreen.REVEAL },
+                        onRetake = { lifeScreen = LifeScreen.NONE; go(Step.PHOTOS) },
+                    )
+                }
+                LifeScreen.REVEAL -> {
+                    BackHandler { lifeScreen = LifeScreen.NONE }
+                    LifeRevealScreen(draft.id, name, over, onBack = { lifeScreen = LifeScreen.NONE }) {
+                        lifeScreen = LifeScreen.NONE
+                        if (step == Step.PHOTOS) go(Step.DETAILS)
+                    }
+                }
             }
         }
     }
 
     // Then the paywall (5a), the one-time offer (5c) once, and home.
     if (showPaywall && lifePaywall) {
-        // From "Bring to life": back to the scan either way, with it turned on after a purchase.
+        // From "Bring to life": back to the photos either way, and it starts after a purchase.
         BackHandler { showPaywall = false; lifePaywall = false }
-        PaywallScreen(draft.displayName, capture.cutout ?: capture.original) { purchased ->
+        PaywallScreen(name, capture.cutout ?: capture.original) { purchased ->
             showPaywall = false
             lifePaywall = false
             if (purchased) {
-                wantsLife = true
                 scope.launch { app.settings.setPremiumOfferShown(true) }
+                if (photos.isReady) startLife()
             }
         }
     } else if (showPaywall) {
         BackHandler { showPaywall = false; afterPaywall(app, offerShown, { showOffer = true }, ::finish) }
-        PaywallScreen(draft.displayName, capture.cutout ?: capture.original) { purchased ->
+        PaywallScreen(name, capture.cutout ?: capture.original) { purchased ->
             showPaywall = false
             if (purchased) scope.launch { app.settings.setPremiumOfferShown(true) }
             afterPaywall(app, offerShown || purchased, { showOffer = true }, ::finish)
@@ -345,7 +413,7 @@ private fun WelcomeStep(modifier: Modifier, onStart: () -> Unit) {
         Column(Modifier.padding(horizontal = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Your pet, alive on your phone", style = opaw(40.sp, FontWeight.Black).copy(lineHeight = 42.sp), color = colors.ink)
             Text(
-                "Snap one photo and we turn it into an avatar that reacts to every walk, meal and cuddle you log.",
+                "Snap a few photos and we turn them into an avatar that reacts to every walk, meal and cuddle you log.",
                 style = opaw(16.sp, FontWeight.Medium).copy(lineHeight = 22.sp),
                 color = colors.muted,
             )
@@ -664,7 +732,8 @@ private fun RevealStep(
     capture: CaptureResult,
     isProcessing: Boolean,
     onBack: () -> Unit,
-    onRetake: () -> Unit,
+    /** Null while the photos are locked, because a 3D pet is being made from them. */
+    onRetake: (() -> Unit)?,
     onNext: () -> Unit,
 ) {
     val colors = Opaw.colors
@@ -723,10 +792,12 @@ private fun RevealStep(
         }
         Spacer(Modifier.weight(1f))
         Row(Modifier.padding(horizontal = 20.dp).padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Box(
-                Modifier.size(64.dp).pressable(onClick = onRetake).shadow(10.dp, CircleShape).background(Color.White, CircleShape),
-                contentAlignment = Alignment.Center,
-            ) { Icon(DesignIcon.REFRESH, size = 22.dp, tint = Ink) }
+            if (onRetake != null) {
+                Box(
+                    Modifier.size(64.dp).pressable(onClick = onRetake).shadow(10.dp, CircleShape).background(Color.White, CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) { Icon(DesignIcon.REFRESH, size = 22.dp, tint = Ink) }
+            }
             BlackPillButton("Looks like $name", Modifier.weight(1f), enabled = !isProcessing, onClick = onNext)
         }
     }

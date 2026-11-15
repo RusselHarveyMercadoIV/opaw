@@ -18,6 +18,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
@@ -386,10 +388,28 @@ class PackService(private val context: Context) {
 
     // MARK: 3D pet models ("Bring to life", the pet-model Edge Function and Meshy)
 
-    /** Uploads the cutout and starts a Meshy job on the server. */
-    suspend fun startPetModel(dog: Dog, heightMeters: Double): PetModelJob {
-        val (_, path) = uploadAvatarInput(dog)
-        return petModelCall(buildJsonObject { put("action", "start"); put("dog_id", dog.id); put("input_path", path); put("height_m", heightMeters) })
+    /**
+     * Uploads the pet's photos (front, side, back) and starts a Meshy job on the server.
+     * [onUploaded] is told how many photos are up so far.
+     */
+    suspend fun startPetModel(dogId: String, photos: List<File>, heightMeters: Double, onUploaded: (Int) -> Unit = {}): PetModelJob {
+        val owner = ensureFreshSession()
+        val stamp = Instant.now().epochSecond
+        val paths = photos.mapIndexed { index, file ->
+            val path = "${owner.lowercase()}/${dogId.lowercase()}-$stamp-$index.png"
+            upload("avatar-inputs", path, withContext(Dispatchers.IO) { file.readBytes() }, "image/png")
+            onUploaded(index + 1)
+            path
+        }
+        if (paths.isEmpty()) throw PackException("Those photos couldn't be read.")
+        return petModelCall(buildJsonObject {
+            put("action", "start")
+            put("dog_id", dogId)
+            put("input_paths", JsonArray(paths.map { JsonPrimitive(it) }))
+            // Read by servers that haven't been updated to take several photos.
+            put("input_path", paths.first())
+            put("height_m", heightMeters)
+        })
     }
 
     /** Advances the job on the server and returns where it is. */

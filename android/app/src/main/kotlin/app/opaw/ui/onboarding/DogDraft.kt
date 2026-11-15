@@ -31,6 +31,8 @@ data class CaptureResult(
 
 /** Editable fields for a dog before it's saved. Mirrors `DogDraft` in OnboardingView.swift. */
 data class DogDraft(
+    /** The pet's id from the start, so "Bring to life" can begin before the pet is saved. */
+    val id: String = java.util.UUID.randomUUID().toString(),
     val name: String = "",
     val breed: String = "",
     val hasBirthDate: Boolean = false,
@@ -56,6 +58,7 @@ data class DogDraft(
 
     fun makeDog(): Dog {
         var dog = Dog.create(trimmedName, breed.trim(), birthInstant, weightKg, size, energy).copy(
+            id = id,
             species = species,
             sex = sex,
             isNeutered = isNeutered,
