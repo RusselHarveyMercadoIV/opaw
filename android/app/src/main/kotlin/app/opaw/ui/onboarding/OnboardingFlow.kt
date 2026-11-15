@@ -142,13 +142,13 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.roundToInt
 
-private enum class Step { WELCOME, PHOTOS, CAMERA, DETAILS, REVEAL, TRACK, HOUSEHOLD, PERMISSIONS }
+private enum class Step { PHOTOS, CAMERA, DETAILS, REVEAL, TRACK, HOUSEHOLD, PERMISSIONS }
 
 /** The screen over the steps while a pet comes to life: its progress, or meeting it in 3D. */
 private enum class LifeScreen { NONE, PROGRESS, REVEAL }
 
 /**
- * First run (4a to 4g, with 9a): welcome, photos from four angles, details with the detected breed,
+ * First run (4b to 4g, with 9a), after Google sign-in on the welcome screen: photos from four angles, details with the detected breed,
  * the avatar reveal, what to track, the household and permissions, then home. "Bring to life"
  * starts from the photos and keeps going in the background through the rest of setup, with a
  * toast at the top. Mirrors OnboardingFlow.swift.
@@ -158,7 +158,7 @@ fun OnboardingFlow(app: OpawApplication) {
     val context = LocalContext.current
     val haptics = rememberHaptics()
     val scope = rememberCoroutineScope()
-    var step by rememberSaveable { mutableStateOf(Step.WELCOME) }
+    var step by rememberSaveable { mutableStateOf(Step.PHOTOS) }
     var forward by remember { mutableStateOf(true) }
     var draft by remember { mutableStateOf(DogDraft()) }
     val photos = remember { LifePhotos(scope) }
@@ -214,8 +214,8 @@ fun OnboardingFlow(app: OpawApplication) {
     }
 
     val previous = when (step) {
-        Step.WELCOME -> null
-        Step.PHOTOS -> Step.WELCOME
+        // Welcome is the Google sign-in screen, before onboarding; there's no going back to it.
+        Step.PHOTOS -> null
         Step.CAMERA -> Step.PHOTOS
         Step.DETAILS -> Step.PHOTOS
         Step.REVEAL -> Step.DETAILS
@@ -226,7 +226,7 @@ fun OnboardingFlow(app: OpawApplication) {
     BackHandler(enabled = previous != null) { previous?.let(::go) }
 
     // The toast rides along on every setup screen once the job has started.
-    val showsToast = model.isStarted && lifeScreen == LifeScreen.NONE && step != Step.WELCOME && step != Step.CAMERA
+    val showsToast = model.isStarted && lifeScreen == LifeScreen.NONE && step != Step.CAMERA
     val toastSpace by animateDpAsState(if (showsToast) 78.dp else 0.dp, label = "toast")
     val name = draft.displayName
 
@@ -243,11 +243,10 @@ fun OnboardingFlow(app: OpawApplication) {
         ) { current ->
             val padded = Modifier.fillMaxSize().safeDrawingPadding().padding(top = toastSpace)
             when (current) {
-                Step.WELCOME -> WelcomeStep(padded) { go(Step.PHOTOS) }
                 Step.PHOTOS -> LifePhotosGrid(
                     photos, name, model, padded,
                     onOpen = { cameraAngle = it; go(Step.CAMERA) },
-                    header = { StepHeader(1, onBack = { go(Step.WELCOME) }) },
+                    header = { StepHeader(1, onBack = null) },
                 ) {
                     when {
                         model.isReady -> BottomActions("Meet $name", secondary = "Continue setup", secondaryAction = { go(Step.DETAILS) }) { lifeScreen = LifeScreen.REVEAL }
@@ -349,14 +348,14 @@ private fun afterPaywall(app: OpawApplication, offerShown: Boolean, showOffer: (
 
 /** Back button, six progress bars and "n of 6". */
 @Composable
-internal fun StepHeader(index: Int, inset: Int = 20, onBack: () -> Unit) {
+internal fun StepHeader(index: Int, inset: Int = 20, onBack: (() -> Unit)?) {
     val colors = Opaw.colors
     Row(
         Modifier.fillMaxWidth().padding(horizontal = inset.dp).padding(top = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        RoundIcon(DesignIcon.BACK, onClick = onBack)
+        if (onBack != null) RoundIcon(DesignIcon.BACK, onClick = onBack)
         Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
             for (bar in 1..6) {
                 val fill by androidx.compose.animation.animateColorAsState(if (bar <= index) Ink else Color(0xFFDCDCDF), tween(300), label = "bar")
@@ -395,31 +394,6 @@ private fun BottomActions(
         if (secondary != null && secondaryAction != null) {
             Text(secondary, style = opaw(15.sp, FontWeight.Bold), color = secondaryColor, modifier = Modifier.clickable(onClick = secondaryAction).padding(4.dp))
         }
-    }
-}
-
-// MARK: - 4a Welcome
-
-@Composable
-private fun WelcomeStep(modifier: Modifier, onStart: () -> Unit) {
-    val colors = Opaw.colors
-    Column(modifier) {
-        Box(Modifier.fillMaxWidth().padding(top = 56.dp).height(330.dp)) {
-            GhostCycle(Modifier.padding(top = 40.dp).size(230.dp, 260.dp).align(Alignment.TopCenter).loopMotion(LoopMotion.BOB, 3.2))
-            SpeechBubble("hi! take my picture?", Modifier.align(Alignment.TopEnd).padding(end = 12.dp))
-        }
-        Spacer(Modifier.weight(1f))
-        Column(Modifier.padding(horizontal = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("Your pet, alive on your phone", style = opaw(40.sp, FontWeight.Black).copy(lineHeight = 42.sp), color = colors.ink)
-            Text(
-                "Snap a few photos and we turn them into an avatar that reacts to every walk, meal and cuddle you log.",
-                style = opaw(16.sp, FontWeight.Medium).copy(lineHeight = 22.sp),
-                color = colors.muted,
-            )
-        }
-        Spacer(Modifier.height(24.dp))
-        // Already signed in with Google by now, so there's no "I already have an account" here.
-        BottomActions("Get started", action = onStart)
     }
 }
 
