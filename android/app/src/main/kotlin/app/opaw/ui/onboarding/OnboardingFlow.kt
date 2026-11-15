@@ -403,7 +403,6 @@ private fun BottomActions(
 @Composable
 private fun WelcomeStep(modifier: Modifier, onStart: () -> Unit) {
     val colors = Opaw.colors
-    var restoreNote by remember { mutableStateOf<String?>(null) }
     Column(modifier) {
         Box(Modifier.fillMaxWidth().padding(top = 56.dp).height(330.dp)) {
             GhostCycle(Modifier.padding(top = 40.dp).size(230.dp, 260.dp).align(Alignment.TopCenter).loopMotion(LoopMotion.BOB, 3.2))
@@ -419,18 +418,8 @@ private fun WelcomeStep(modifier: Modifier, onStart: () -> Unit) {
             )
         }
         Spacer(Modifier.height(24.dp))
-        BottomActions("Get started", secondary = "I already have an account", secondaryAction = {
-            restoreNote = "Opaw keeps your pets on this phone, so there's nothing to sign in to. Tap Get started to add your pet."
-        }, action = onStart)
-    }
-    restoreNote?.let { note ->
-        AlertDialog(
-            onDismissRequest = { restoreNote = null },
-            title = { Text("Welcome back", style = opaw(20.sp, FontWeight.Black)) },
-            text = { Text(note, style = opaw(15.sp, FontWeight.Medium)) },
-            confirmButton = { TextButton({ restoreNote = null }) { Text("OK", color = colors.ink) } },
-            containerColor = colors.surface,
-        )
+        // Already signed in with Google by now, so there's no "I already have an account" here.
+        BottomActions("Get started", action = onStart)
     }
 }
 

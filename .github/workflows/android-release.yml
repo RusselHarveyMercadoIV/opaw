@@ -51,6 +51,7 @@ jobs:
           OPAW_KEY_PASSWORD: ${{ secrets.OPAW_KEY_PASSWORD }}
           SUPABASE_HOST: ${{ secrets.SUPABASE_HOST }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
           OPAW_VERSION_CODE: ${{ inputs.version_code }}
           OPAW_VERSION_NAME: ${{ inputs.version_name }}
         run: gradle :app:bundleRelease

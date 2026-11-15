@@ -24,12 +24,25 @@ android {
             (project.findProperty(name) as String?) ?: System.getenv(name) ?: localProperty(name) ?: ""
         buildConfigField("String", "SUPABASE_HOST", "\"${secret("SUPABASE_HOST")}\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"${secret("SUPABASE_ANON_KEY")}\"")
+        // The Web OAuth client ID from Google Cloud, the same one set on Supabase's Google provider.
+        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"${secret("GOOGLE_WEB_CLIENT_ID")}\"")
     }
 
     // The Play upload key, from the environment (GitHub secrets) or local.properties. Without it,
     // release builds are left unsigned and Play Console won't accept them.
     val keystore = System.getenv("OPAW_KEYSTORE_FILE") ?: localProperty("OPAW_KEYSTORE_FILE")
+    // A fixed debug key, so every test build has the SHA-1 registered for Google sign-in.
+    // CI writes it from the OPAW_DEBUG_KEYSTORE_BASE64 secret; otherwise the usual debug key is used.
+    val debugKeystore = System.getenv("OPAW_DEBUG_KEYSTORE_FILE") ?: localProperty("OPAW_DEBUG_KEYSTORE_FILE")
     signingConfigs {
+        if (debugKeystore != null) {
+            getByName("debug") {
+                storeFile = file(debugKeystore)
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
+        }
         if (keystore != null) {
             create("upload") {
                 storeFile = file(keystore)
@@ -99,6 +112,9 @@ dependencies {
     implementation(libs.filament.android)
     implementation(libs.filament.gltfio)
     implementation(libs.filament.utils)
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play)
+    implementation(libs.googleid)
 }
 
 fun localProperty(name: String): String? {

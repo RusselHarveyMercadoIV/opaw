@@ -32,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.opaw.services.CrashLog
 import app.opaw.ui.MainTabs
+import app.opaw.ui.SignInScreen
 import app.opaw.ui.onboarding.OnboardingFlow
 import app.opaw.ui.theme.Opaw
 import app.opaw.ui.theme.OpawTheme
@@ -50,21 +51,35 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-/** Onboarding until there's a dog, then the tabs. Mirrors `RootView` in OpawApp.swift. */
+private enum class Root { SIGN_IN, ONBOARDING, TABS }
+
+/**
+ * Google sign-in first (there's no anonymous mode), then onboarding until there's a dog, then
+ * the tabs. Signing out or deleting the account clears the session and lands back on sign-in.
+ */
 @Composable
 private fun RootView(app: OpawApplication) {
     val dogs by app.database.dogs().observeAll().collectAsStateWithLifecycle(initialValue = null)
     Box(Modifier.fillMaxSize().background(Opaw.colors.cream)) {
         // Wait for the first read so onboarding doesn't flash for returning users.
         val current = dogs ?: return@Box
+        val root = when {
+            !app.pack.isSignedIn -> Root.SIGN_IN
+            current.isEmpty() -> Root.ONBOARDING
+            else -> Root.TABS
+        }
         AnimatedContent(
-            targetState = current.isEmpty(),
+            targetState = root,
             transitionSpec = {
                 (fadeIn(tween(600)) + scaleIn(tween(600), initialScale = 1.04f)) togetherWith fadeOut(tween(600))
             },
             label = "root",
-        ) { showsOnboarding ->
-            if (showsOnboarding) OnboardingFlow(app) else MainTabs()
+        ) { screen ->
+            when (screen) {
+                Root.SIGN_IN -> SignInScreen()
+                Root.ONBOARDING -> OnboardingFlow(app)
+                Root.TABS -> MainTabs()
+            }
         }
     }
 }

@@ -111,6 +111,7 @@ fun ProfileScreen(dogId: String) {
     var showWidgetHelp by remember { mutableStateOf(false) }
     var showBackupNote by remember { mutableStateOf(false) }
     var confirmReset by remember { mutableStateOf(false) }
+    var confirmSignOut by remember { mutableStateOf(false) }
     val isPremium = Premium.isPremium
     fun paywall() = navigator.push(Route.Paywall)
     fun open(url: String) = context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
@@ -168,6 +169,9 @@ fun ProfileScreen(dogId: String) {
                 SettingsRow(DesignIcon.SPARKLE, "Subscription", value = if (isPremium) "Premium" else "Free", first = true) { navigator.push(Route.Subscription) }
                 SettingsRow(DesignIcon.HELP, "Help") { open(HELP_URL) }
             }
+            Card {
+                SettingsRow(DesignIcon.BACK, "Sign out", value = app.pack.email, first = true) { confirmSignOut = true }
+            }
             if (BuildConfig.DEBUG) {
                 Card {
                     ToggleRow(DesignIcon.SPARKLE, "Premium (test build)", app.premium.testPremium, first = true) {
@@ -191,6 +195,22 @@ fun ProfileScreen(dogId: String) {
 
     if (showWidgetHelp) InfoDialog("Add an Opaw widget", "Touch and hold your home screen, tap Widgets, then find Opaw and drag it into place.") { showWidgetHelp = false }
     if (showBackupNote) InfoDialog("Backup", "Backup to the cloud is coming soon. For now, everything stays on this phone.") { showBackupNote = false }
+    if (confirmSignOut) {
+        AlertDialog(
+            onDismissRequest = { confirmSignOut = false },
+            containerColor = colors.surface,
+            title = { Text("Sign out?", style = opaw(19.sp, FontWeight.Black)) },
+            text = { Text("Your pets stay on this phone. You'll need to sign in with Google again to keep using Opaw.", style = opaw(15.sp, FontWeight.Medium)) },
+            confirmButton = {
+                TextButton({
+                    confirmSignOut = false
+                    navigator.popToRoot()
+                    app.scope.launch { app.pack.signOut() }
+                }) { Text("Sign out", color = colors.alert, style = opaw(15.sp, FontWeight.ExtraBold)) }
+            },
+            dismissButton = { TextButton({ confirmSignOut = false }) { Text("Cancel", color = colors.ink) } },
+        )
+    }
     if (confirmReset) {
         AlertDialog(
             onDismissRequest = { confirmReset = false },

@@ -93,7 +93,11 @@ private data class Session(
     val user: User,
 ) {
     @Serializable
-    data class User(val id: String)
+    data class User(
+        val id: String,
+        val email: String? = null,
+        @SerialName("is_anonymous") val isAnonymous: Boolean = false,
+    )
 }
 
 @Serializable
@@ -112,12 +116,25 @@ class PackService(private val context: Context) {
     private val json = Json { ignoreUnknownKeys = true; explicitNulls = false }
     private val prefs = context.getSharedPreferences("pack", Context.MODE_PRIVATE)
 
-    private var session: Session? = prefs.getString("session", null)?.let { runCatching { json.decodeFromString(Session.serializer(), it) }.getOrNull() }
+    // Anonymous sessions from older builds don't count: everyone signs in with Google now.
+    private var session: Session? = prefs.getString("session", null)
+        ?.let { runCatching { json.decodeFromString(Session.serializer(), it) }.getOrNull() }
+        ?.takeUnless { it.user.isAnonymous }
 
     var userId by mutableStateOf(session?.user?.id)
         private set
+    var email by mutableStateOf(session?.user?.email)
+        private set
     var hasAcceptedRules by mutableStateOf(prefs.getBoolean("acceptedRules", false))
         private set
+
+    init {
+        // Drop a leftover anonymous session and the Pack state that went with it.
+        if (session == null && prefs.contains("session")) {
+            prefs.edit().remove("session").putBoolean("acceptedRules", false).apply()
+            hasAcceptedRules = false
+        }
+    }
 
     val isConfigured: Boolean get() = host.isNotEmpty() && key.isNotEmpty()
     val isSignedIn: Boolean get() = userId != null
@@ -158,21 +175,23 @@ class PackService(private val context: Context) {
     private fun saveSession(value: Session?) {
         session = value
         userId = value?.user?.id
+        email = value?.user?.email
         prefs.edit().apply { if (value == null) remove("session") else putString("session", json.encodeToString(Session.serializer(), value)) }.apply()
     }
 
-    /** Signs in anonymously when there's no session, and refreshes an expired one. */
+    /** Refreshes an expired session. There is no anonymous fallback: without a session, sign in with Google. */
     private suspend fun ensureFreshSession(): String {
-        val current = session
-        if (current == null) {
-            val created = json.decodeFromString(Session.serializer(), String(request("POST", "/auth/v1/signup", "{}", auth = false)))
-            saveSession(created)
-            return created.user.id
-        }
+        val current = session ?: throw PackException("Sign in with Google first.")
         val expires = current.expiresAt ?: 0
         if (expires != 0L && expires - 60 < Instant.now().epochSecond) {
             val body = buildJsonObject { put("refresh_token", current.refreshToken) }.toString()
-            val refreshed = json.decodeFromString(Session.serializer(), String(request("POST", "/auth/v1/token?grant_type=refresh_token", body, auth = false)))
+            val refreshed = try {
+                json.decodeFromString(Session.serializer(), String(request("POST", "/auth/v1/token?grant_type=refresh_token", body, auth = false)))
+            } catch (error: PackException) {
+                // A revoked or reused refresh token can't recover; send the user back to sign in.
+                if (Regex("refresh.?token", RegexOption.IGNORE_CASE).containsMatchIn(error.message.orEmpty())) saveSession(null)
+                throw error
+            }
             saveSession(refreshed)
         }
         return current.user.id
@@ -195,7 +214,29 @@ class PackService(private val context: Context) {
 
     // MARK: Account
 
-    /** Signs in anonymously (no account needed) and records that the community rules were accepted. */
+    /**
+     * Exchanges a Google ID token for a Supabase session. [rawNonce] is the unhashed nonce whose
+     * SHA-256 was given to Google, so Supabase can check the token was made for this request.
+     */
+    suspend fun signInWithGoogle(idToken: String, rawNonce: String) {
+        val body = buildJsonObject {
+            put("provider", "google")
+            put("id_token", idToken)
+            put("nonce", rawNonce)
+        }.toString()
+        val created = json.decodeFromString(Session.serializer(), String(request("POST", "/auth/v1/token?grant_type=id_token", body, auth = false)))
+        saveSession(created)
+    }
+
+    /** Ends the session on this phone. Pets stay on the phone; the app asks to sign in again. */
+    suspend fun signOut() {
+        if (session != null) runCatching { request("POST", "/auth/v1/logout") }
+        saveSession(null)
+        hasAcceptedRules = false
+        prefs.edit().putBoolean("acceptedRules", false).apply()
+    }
+
+    /** Records the user's Pack name and that the community rules were accepted. */
     suspend fun join(displayName: String) {
         val id = ensureFreshSession()
         val profile = buildJsonObject {

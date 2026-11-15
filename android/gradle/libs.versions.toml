@@ -20,6 +20,8 @@ maplibre = "11.8.0"
 billing = "7.1.1"
 glance = "1.1.1"
 filament = "1.71.5"
+credentials = "1.5.0"
+googleid = "1.1.1"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
@@ -59,6 +61,10 @@ filament-android = { module = "com.google.android.filament:filament-android", ve
 filament-gltfio = { module = "com.google.android.filament:gltfio-android", version.ref = "filament" }
 filament-utils = { module = "com.google.android.filament:filament-utils-android", version.ref = "filament" }
 kotlinx-coroutines-play-services = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-play-services", version.ref = "coroutines" }
+# Sign in with Google: Credential Manager hands back a Google ID token for Supabase.
+androidx-credentials = { module = "androidx.credentials:credentials", version.ref = "credentials" }
+androidx-credentials-play = { module = "androidx.credentials:credentials-play-services-auth", version.ref = "credentials" }
+googleid = { module = "com.google.android.libraries.identity.googleid:googleid", version.ref = "googleid" }
 kotlin-test ={ module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
 
 [plugins]
