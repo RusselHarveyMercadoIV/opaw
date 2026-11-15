@@ -430,10 +430,10 @@ class PackService(private val context: Context) {
     // MARK: 3D pet models ("Bring to life", the pet-model Edge Function and Meshy)
 
     /**
-     * Uploads the pet's photos (front, side, back) and starts a Meshy job on the server.
+     * Uploads the pet's photos (front, side, back) and starts a 3D job on the server.
      * [onUploaded] is told how many photos are up so far.
      */
-    suspend fun startPetModel(dogId: String, photos: List<File>, heightMeters: Double, onUploaded: (Int) -> Unit = {}): PetModelJob {
+    suspend fun startPetModel(dogId: String, photos: List<File>, heightMeters: Double, angles: List<String> = emptyList(), onUploaded: (Int) -> Unit = {}): PetModelJob {
         val owner = ensureFreshSession()
         val stamp = Instant.now().epochSecond
         val paths = photos.mapIndexed { index, file ->
@@ -450,6 +450,8 @@ class PackService(private val context: Context) {
             // Read by servers that haven't been updated to take several photos.
             put("input_path", paths.first())
             put("height_m", heightMeters)
+            // Which view each photo is, so a skipped side shot doesn't turn the back into the side.
+            if (angles.size == paths.size) put("angles", JsonArray(angles.map { JsonPrimitive(it) }))
         })
     }
 

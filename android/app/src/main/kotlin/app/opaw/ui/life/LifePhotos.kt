@@ -89,7 +89,7 @@ import java.util.concurrent.Executor
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 
-/** The four reference photos (9a). Three body shots teach Meshy the shape; the face keeps the eyes sharp. */
+/** The four reference photos (9a). Three body shots teach the 3D model its shape; the face keeps the eyes sharp. */
 enum class LifeAngle(val label: String, val tip: String, val hint: String) {
     FRONT("Front", "Face the camera, whole body in frame", "Facing you"),
     SIDE("Side", "Standing side on, nose to tail", "Nose to tail"),
@@ -146,7 +146,7 @@ class LifePhotos(private val scope: CoroutineScope) {
     /** What to hand to the 3D job: the body shots as cut-outs to send, the face to keep for show. */
     fun photos(): List<LifePhoto> = LifeAngle.entries.filter(::isGood).mapNotNull { angle ->
         val shot = shots[angle] ?: return@mapNotNull null
-        LifePhoto(shot.cutout ?: shot.photo, send = angle != LifeAngle.FACE)
+        LifePhoto(shot.cutout ?: shot.photo, send = angle != LifeAngle.FACE, angle = angle.name.lowercase())
     }
 
     /** "2 of 4 · 1 more to go" */

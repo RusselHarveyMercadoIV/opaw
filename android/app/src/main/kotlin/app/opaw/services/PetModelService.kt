@@ -27,9 +27,10 @@ enum class LifeStep(val title: String, val detail: String, val from: Int, val to
 }
 
 /** One reference photo for "Bring to life". The face close-up is kept for show but not sent. */
-class LifePhoto(val image: Bitmap, val send: Boolean)
+/** [angle] is "front", "side", "back" or "face", so the server can tell the 3D service which view each photo is. */
+class LifePhoto(val image: Bitmap, val send: Boolean, val angle: String = "")
 
-/** Where a pet's 3D model is: none yet, being built by Meshy, ready on this phone, or failed. */
+/** Where a pet's 3D model is: none yet, being built on the server, ready on this phone, or failed. */
 @Serializable
 data class PetModelState(
     val jobId: String? = null,
@@ -40,8 +41,10 @@ data class PetModelState(
     val error: String? = null,
     /** The reference photos, as file names in the pet's refs folder. */
     val photos: List<String> = emptyList(),
-    /** How many of [photos], from the first, are sent to Meshy. */
+    /** How many of [photos], from the first, are sent to be modelled. */
     val send: Int = 0,
+    /** The angle of each photo sent ("front", "side", "back"), in the same order. */
+    val angles: List<String> = emptyList(),
     val heightMeters: Double = 0.5,
     /** The motion clips that came back: "rest", "walk", "run". */
     val clips: List<String> = emptyList(),
@@ -120,10 +123,14 @@ class PetModelService(private val context: Context, private val pack: PackServic
         },
     )
 
-    /** One motion clip by name, falling back to the rest pose. */
+    /**
+     * One motion clip by name, falling back to the nearest one this pet has: a run falls back to the
+     * walk (four-legged pets from Tripo only get a walk), and anything else to the rest pose.
+     */
     fun clip(dogId: String, name: String): File? {
         if (!state(dogId).isReady) return null
-        return File(directory(dogId), "$name.glb").takeIf { it.exists() } ?: File(directory(dogId), "rest.glb").takeIf { it.exists() }
+        val order = if (name == "run") listOf("run", "walk", "rest") else listOf(name, "rest")
+        return order.map { File(directory(dogId), "$it.glb") }.firstOrNull { it.exists() }
     }
 
     /** The clips on this phone, in play order. */
@@ -177,7 +184,7 @@ class PetModelService(private val context: Context, private val pack: PackServic
                     "$index.png".also { name -> File(refs(dogId), name).outputStream().use { fitted(photo.image).compress(Bitmap.CompressFormat.PNG, 100, it) } }
                 }
             }
-            save(dogId, state(dogId).copy(stage = "uploading", progress = LifeStep.CUTOUT.from, photos = names, send = ordered.count { it.send }))
+            save(dogId, state(dogId).copy(stage = "uploading", progress = LifeStep.CUTOUT.from, photos = names, send = ordered.count { it.send }, angles = ordered.filter { it.send }.map { it.angle }))
             run(dogId)
         }
     }
@@ -212,12 +219,12 @@ class PetModelService(private val context: Context, private val pack: PackServic
         }
     }
 
-    /** Uploads the saved photos, starts the Meshy job and follows it to the end. */
+    /** Uploads the saved photos, starts the 3D job and follows it to the end. */
     private suspend fun run(dogId: String) {
         val state = state(dogId)
         val files = photoFiles(dogId).take(state.send)
         val span = LifeStep.CUTOUT.to - LifeStep.CUTOUT.from
-        val job = pack.startPetModel(dogId, files, state.heightMeters) { done ->
+        val job = pack.startPetModel(dogId, files, state.heightMeters, state.angles.take(files.size)) { done ->
             save(dogId, state(dogId).copy(progress = LifeStep.CUTOUT.from + span * done / files.size))
         }
         save(dogId, state(dogId).copy(jobId = job.id, stage = job.stage, progress = overall(job.stage, job.progress)))
@@ -272,7 +279,7 @@ class PetModelService(private val context: Context, private val pack: PackServic
                         }
                         return save(dogId, state(dogId).copy(stage = "done", progress = 100, error = null, clips = listOf("rest", "walk", "run").filter { it in job.outputs }))
                     }
-                    "failed" -> return fail(dogId, job.error ?: "Meshy couldn't bring these photos to life.")
+                    "failed" -> return fail(dogId, job.error ?: "We couldn't bring these photos to life.")
                     // Never let the bar slide back when the server reports a little less.
                     else -> save(dogId, current.copy(stage = job.stage, progress = max(current.progress, overall(job.stage, job.progress))))
                 }

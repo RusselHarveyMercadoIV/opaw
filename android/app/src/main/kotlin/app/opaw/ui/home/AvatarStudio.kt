@@ -159,7 +159,7 @@ fun AvatarStudioScreen(dogId: String) {
                 }
             }
             Text(
-                "We send ${dog.name}'s photos from three or four angles to Meshy, which sculpts a textured 3D model and gives it a four-legged skeleton with walk and run animations.",
+                "We send ${dog.name}'s photos from three or four angles to be sculpted into a textured 3D model with a four-legged skeleton, so they can walk around your screen.",
                 style = opaw(13.sp, FontWeight.Medium).copy(lineHeight = 18.sp), color = colors.muted,
             )
             Text("Realistic motion", style = opaw(13.sp, FontWeight.Bold), color = colors.muted, modifier = Modifier.padding(top = 8.dp))
