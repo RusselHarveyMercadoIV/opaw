@@ -13,6 +13,11 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import app.opaw.services.PhotoStore
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,7 +38,7 @@ import app.opaw.ui.components.rememberPetImage
 import app.opaw.ui.rememberApp
 import app.opaw.ui.rememberDogData
 
-/** Photos from four angles for a pet that's already in the app, opened from the Avatar screen. */
+/** The angle photos for a pet that's already in the app, opened from the Avatar screen. */
 @Composable
 fun LifePhotosRoute(dogId: String) {
     val app = rememberApp()
@@ -41,7 +46,16 @@ fun LifePhotosRoute(dogId: String) {
     val haptics = rememberHaptics()
     val scope = rememberCoroutineScope()
     val dog = rememberDogData(dogId)?.dog ?: return
-    val photos = remember { LifePhotos(scope) }
+    val context = LocalContext.current
+    // The photos already taken for this pet (during setup or last time) fill the grid; retake any.
+    val photos = remember(dogId) { LifePhotos(scope, LifePhotos.folder(context, dogId)) }
+    LaunchedEffect(photos) {
+        photos.restore()
+        // Pets added before the angles were saved, or through Add pet: their picture is the front.
+        if (LifeAngle.FRONT !in photos.shots) {
+            withContext(Dispatchers.IO) { PhotoStore.load(context, dog.photoPath, maxDimension = 1600) }?.let { photos.add(LifeAngle.FRONT, it) }
+        }
+    }
     var camera by remember { mutableStateOf<LifeAngle?>(null) }
     val model = app.petModels.state(dogId)
 

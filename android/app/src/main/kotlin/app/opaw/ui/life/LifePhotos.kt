@@ -84,7 +84,12 @@ import app.opaw.ui.theme.Opaw
 import app.opaw.ui.theme.opaw
 import app.opaw.ui.theme.whiteCard
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import android.content.Context
+import android.graphics.BitmapFactory
+import java.io.File
 import java.util.concurrent.Executor
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
@@ -108,18 +113,47 @@ class LifeShot(val photo: Bitmap, val scan: PetScan?) {
     val cutout: Bitmap? get() = scan?.segmentation?.cutout
 }
 
-/** The photos taken so far, and whether there are enough good ones to bring a pet to life. */
-class LifePhotos(private val scope: CoroutineScope) {
+/**
+ * The photos taken so far, and whether there are enough good ones to bring a pet to life.
+ *
+ * The photos belong to the pet, not to this screen: with a [folder] each one is saved as it's
+ * taken, and [restore] brings them back. So the angles taken during setup are still there when
+ * the owner comes back later to bring the pet to life, and only a retake replaces one.
+ */
+class LifePhotos(private val scope: CoroutineScope, private val folder: File? = null) {
     val shots = mutableStateMapOf<LifeAngle, LifeShot>()
 
     /** Puts a new photo in a slot and scans it for the pet. */
-    fun add(angle: LifeAngle, photo: Bitmap) {
+    fun add(angle: LifeAngle, photo: Bitmap, keep: Boolean = true) {
         shots[angle] = LifeShot(photo, null)
         scope.launch {
+            if (keep && folder != null) {
+                withContext(Dispatchers.IO) {
+                    folder.mkdirs()
+                    val file = File(folder, "${angle.name.lowercase()}.jpg")
+                    File(folder, "${file.name}.part").apply { outputStream().use { photo.compress(Bitmap.CompressFormat.JPEG, 90, it) } }.renameTo(file)
+                }
+            }
             val scan = CutoutService.scan(photo)
             // Retaken while scanning: the newer photo wins.
             if (shots[angle]?.photo === photo) shots[angle] = LifeShot(photo, scan)
         }
+    }
+
+    /** Brings back the photos saved for this pet, leaving any slot already filled here alone. */
+    suspend fun restore() {
+        val folder = folder ?: return
+        for (angle in LifeAngle.entries) {
+            if (angle in shots) continue
+            val file = File(folder, "${angle.name.lowercase()}.jpg")
+            val photo = withContext(Dispatchers.IO) { if (file.exists()) BitmapFactory.decodeFile(file.path) else null } ?: continue
+            add(angle, photo, keep = false)
+        }
+    }
+
+    companion object {
+        /** Where a pet's angle photos live, kept apart from the 3D job's own copies. */
+        fun folder(context: Context, dogId: String) = File(context.filesDir, "pets/angles/$dogId")
     }
 
     /**

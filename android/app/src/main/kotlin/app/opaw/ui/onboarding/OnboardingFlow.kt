@@ -161,7 +161,8 @@ fun OnboardingFlow(app: OpawApplication) {
     var step by rememberSaveable { mutableStateOf(Step.PHOTOS) }
     var forward by remember { mutableStateOf(true) }
     var draft by remember { mutableStateOf(DogDraft()) }
-    val photos = remember { LifePhotos(scope) }
+    // Saved to the pet as they're taken, so "Bring to life" later reuses them instead of asking again.
+    val photos = remember { LifePhotos(scope, LifePhotos.folder(context, draft.id)) }
     var cameraAngle by remember { mutableStateOf(LifeAngle.FRONT) }
     var lifeScreen by remember { mutableStateOf(LifeScreen.NONE) }
     var foundDog by remember { mutableStateOf(false) }

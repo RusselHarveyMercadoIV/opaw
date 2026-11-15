@@ -82,8 +82,8 @@ fun SignInScreen() {
     val ready = app.pack.isConfigured && BuildConfig.GOOGLE_WEB_CLIENT_ID.isNotBlank()
 
     Column(Modifier.fillMaxSize().background(colors.cream).safeDrawingPadding()) {
-        Box(Modifier.fillMaxWidth().padding(top = 56.dp).height(330.dp)) {
-            GhostCycle(Modifier.padding(top = 40.dp).size(230.dp, 260.dp).align(Alignment.TopCenter).loopMotion(LoopMotion.BOB, 3.2))
+        Box(Modifier.fillMaxWidth().padding(top = 40.dp).height(380.dp)) {
+            GhostCycle(Modifier.padding(top = 40.dp).size(300.dp, 340.dp).align(Alignment.TopCenter).loopMotion(LoopMotion.BOB, 3.2))
             SpeechBubble("hi! take my picture?", Modifier.align(Alignment.TopEnd).padding(end = 12.dp))
         }
         Spacer(Modifier.weight(1f))
