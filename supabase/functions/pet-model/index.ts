@@ -163,8 +163,9 @@ const tripoFailed = (task: Record<string, any>) => ["failed", "cancelled", "bann
  * second head where the tail should be, so those jobs use the front photo alone.
  */
 async function tripoModel(row: Row): Promise<string> {
-  const common0 = { model: TRIPO_MODEL, texture: true, pbr: false, face_limit: 15000 };
-  // The owner approved a reference sheet: model its clean front and left views.
+  // The owner approved a reference sheet: model its clean front and left views. Detailed
+  // texture and more faces (+10 credits) keep the eyes, nose and fur markings sharp.
+  const common0 = { model: TRIPO_MODEL, texture: true, pbr: false, face_limit: 40000, texture_quality: "detailed" };
   if (row.outputs.views) {
     const views: Record<string, string> = JSON.parse(row.outputs.views);
     const inputs = [];
