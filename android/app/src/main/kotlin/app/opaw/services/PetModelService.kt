@@ -325,6 +325,23 @@ class PetModelService(private val context: Context, private val pack: PackServic
         else -> 0
     }
 
+    /**
+     * A pet brought back to this phone (a reinstall, a new phone): fetches the 3D pet it was
+     * already brought to life as, if there is one, without paying for it again.
+     */
+    fun restore(dogId: String) {
+        if (state(dogId).stage != "none") return
+        scope.launch {
+            // Nothing to bring back, or no connection: the pet simply stays as its photo.
+            val rows = runCatching {
+                pack.householdRest("GET", "pet_models", query = "?dog_id=eq.$dogId&stage=eq.done&order=updated_at.desc&limit=1&select=id")
+            }.getOrNull() ?: return@launch
+            val id = Regex("\"id\"\\s*:\\s*\"([^\"]+)\"").find(rows)?.groupValues?.get(1) ?: return@launch
+            save(dogId, state(dogId).copy(jobId = id, stage = "saving", progress = LifeStep.FINISH.from))
+            this@PetModelService.launch(dogId) { follow(dogId) }
+        }
+    }
+
     /** Picks up jobs that were still running when the app was closed. */
     fun resume() {
         File(context.filesDir, "models").listFiles()?.forEach { dir ->

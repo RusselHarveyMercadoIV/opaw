@@ -55,6 +55,13 @@ class HouseholdSync(private val app: OpawApplication) {
     private val mutex = Mutex()
     private var soon: Job? = null
 
+    /** Pets invited for during setup, before they're saved here: not to be brought down as new. */
+    private val settingUp = mutableSetOf<String>()
+
+    /** True once this sign-in has looked for pets saved to the account (after a reinstall, say). */
+    var hasChecked by mutableStateOf(false)
+        private set
+
     /** Each shared pet's id and this user's role for it: "owner", "family" or "walker". */
     var roles by mutableStateOf(loadRoles())
         private set
@@ -97,6 +104,7 @@ class HouseholdSync(private val app: OpawApplication) {
      * may not be saved on the phone yet (during setup), and goes up in full once it is.
      */
     suspend fun invite(pet: Dog, name: String, role: String): Pair<String, String> {
+        if (app.database.dogs().get(pet.id) == null) settingUp += pet.id
         if (roles[pet.id] == null) {
             pack.householdRest("POST", "shared_pets", buildJsonObject {
                 put("id", pet.id)
@@ -195,8 +203,40 @@ class HouseholdSync(private val app: OpawApplication) {
     suspend fun syncAll() {
         if (!pack.isSignedIn || !pack.isConfigured) return
         mutex.withLock {
-            runCatching { discover() }
+            val found = runCatching { discover() }.isSuccess
+            runCatching { backUp() }
             for (petId in roles.keys.toList()) runCatching { sync(petId) }
+            if (found) hasChecked = true
+        }
+    }
+
+    /**
+     * Before setup on a fresh install: brings back the pets saved to this account, giving up after
+     * [timeoutMs] so a bad connection doesn't keep the app from opening.
+     */
+    suspend fun restore(timeoutMs: Long = 20_000) {
+        kotlinx.coroutines.withTimeoutOrNull(timeoutMs) { syncAll() }
+        hasChecked = true
+    }
+
+    /**
+     * Saves every pet owned on this phone to the account (as a household of one until someone is
+     * invited), so its logs and walks come back after a reinstall or on a new phone.
+     */
+    private suspend fun backUp() {
+        val skip = prefs.getStringSet("notMine", emptySet()).orEmpty()
+        for (dog in app.database.dogs().all()) {
+            if (roles[dog.id] != null || dog.id in skip) continue
+            try {
+                pack.householdRest("POST", "shared_pets", buildJsonObject {
+                    put("id", dog.id)
+                    put("profile", profileOf(dog))
+                }, prefer = "resolution=merge-duplicates")
+                setRole(dog.id, "owner")
+            } catch (error: PackException) {
+                // Someone else's pet this phone helped with before: it isn't this user's to save.
+                prefs.edit().putStringSet("notMine", skip + dog.id).apply()
+            }
         }
     }
 
@@ -227,7 +267,7 @@ class HouseholdSync(private val app: OpawApplication) {
             return
         }
         var dog = db.dogs().get(petId)
-        if (dog == null && role == "owner") return // Still being set up on this phone.
+        if (dog == null && petId in settingUp) return // Still being set up on this phone.
         val remoteProfile = row["profile"]?.let { it as? JsonObject } ?: JsonObject(emptyMap())
         val remoteHash = remoteProfile.toString().hashCode()
         if (dog == null) {
@@ -238,6 +278,8 @@ class HouseholdSync(private val app: OpawApplication) {
             db.dogs().upsert(dog)
             ledger.profile = remoteHash
             ledger.profileSeen = remoteHash
+            // The owner's own pet coming back: its 3D self comes back too.
+            if (role == "owner") app.petModels.restore(petId)
         } else if (remoteHash != ledger.profileSeen) {
             // Someone else changed the pet; theirs wins over any edit here not yet sent.
             dog = applyProfile(dog, remoteProfile)
@@ -509,6 +551,8 @@ class HouseholdSync(private val app: OpawApplication) {
     }
 
     private fun forget(petId: String) {
+        val skip = prefs.getStringSet("notMine", emptySet()).orEmpty()
+        prefs.edit().putStringSet("notMine", skip + petId).apply()
         roles = roles - petId
         prefs.edit().putString("roles", json.encodeToString(MapSerializer(String.serializer(), String.serializer()), roles)).apply()
         ledgerFile(petId).delete()
@@ -521,6 +565,7 @@ class HouseholdSync(private val app: OpawApplication) {
         prefs.edit().clear().apply()
         File(app.filesDir, "household").deleteRecursively()
         pendingCode = null
+        hasChecked = false
     }
 
     private fun newCode(): String {

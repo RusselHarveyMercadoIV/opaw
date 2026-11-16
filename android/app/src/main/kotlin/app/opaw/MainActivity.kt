@@ -2,6 +2,15 @@ package app.opaw
 
 import android.content.Intent
 import android.os.Bundle
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import app.opaw.ui.theme.opaw
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -95,6 +104,16 @@ private fun RootView(app: OpawApplication) {
         // Wait for the first read so onboarding doesn't flash for returning users.
         val current = dogs ?: return@Box
         val skippedSetup = skipped ?: return@Box
+        // No pets here but signed in (a reinstall, a new phone): look for the account's pets first.
+        val needsRestore = app.pack.isSignedIn && current.isEmpty() && !skippedSetup && !app.household.hasChecked
+        LaunchedEffect(needsRestore) { if (needsRestore) app.household.restore() }
+        if (needsRestore) {
+            Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                CircularProgressIndicator(color = Opaw.colors.ink)
+                Text("Looking for your pets…", style = opaw(16.sp, FontWeight.ExtraBold), color = Opaw.colors.ink, modifier = Modifier.padding(top = 16.dp))
+            }
+            return@Box
+        }
         val root = when {
             !app.pack.isSignedIn -> Root.SIGN_IN
             current.isEmpty() && !skippedSetup -> Root.ONBOARDING
