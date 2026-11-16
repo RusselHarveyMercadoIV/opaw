@@ -86,9 +86,7 @@ private class PetModelLayout(context: Context) : FrameLayout(context), Choreogra
     private var stage: PetStage? = null
     private var aspect = 1f
     private var lastNanos = 0L
-    private var phase = 0f
-    private var legSpeed = PetMotion.Style.IDLE.speed
-    private var legAmount = PetMotion.Style.IDLE.amount
+    private val motion = PetMotion.State()
     private val shadow = StageShadow(context)
 
     fun show(file: File, interactive: Boolean, motion: String? = null, temperament: app.opaw.core.Temperament? = null) {
@@ -303,17 +301,34 @@ private class PetModelLayout(context: Context) : FrameLayout(context), Choreogra
         val asset = modelViewer.asset ?: return
         val skeleton = player ?: return
         stage.step(dt)
-        // Ease the legs between standing, walking and running instead of snapping.
-        val ease = 1f - exp(-dt * 6f)
-        legSpeed += (stage.style.speed * stage.pace - legSpeed) * ease
-        legAmount += (stage.style.amount - legAmount) * ease
-        phase += dt * legSpeed
-        skeleton.pose(phase, legAmount, modelViewer.engine.transformManager)
-        modelViewer.animator?.updateBoneMatrices()
-
-        // About one stage unit long, standing on the floor, turned the way it's heading.
         val (wide, tall, deep) = measured.size
         val k = 1f / max(max(wide, deep), 1e-6f)
+
+        // Legs: ease between standing, walking and trotting, and step in time with the ground
+        // covered so the paws don't slide. Turning on the spot steps too.
+        val ease = 1f - exp(-dt * 6f)
+        val gait = when (stage.style) {
+            PetMotion.Style.RUN -> 1.3f
+            PetMotion.Style.WALK -> 0f
+            PetMotion.Style.IDLE -> motion.gait
+        }
+        motion.gait += (gait - motion.gait) * ease
+        val stepping = stage.style != PetMotion.Style.IDLE || stage.turned > 0.002f
+        motion.stride += ((if (stepping) 1f else 0f) - motion.stride) * (1f - exp(-dt * 8f))
+        val leg = (skeleton.legLength * k).coerceAtLeast(0.05f)
+        motion.phase += stage.moved / (skeleton.cycleLength(motion.gait) * leg) + stage.turned * 0.35f
+        motion.time += dt
+        motion.lookYaw = stage.lookYaw
+        motion.lookPitch = stage.lookPitch
+        motion.tilt = stage.tilt
+        motion.wag = stage.wag
+        motion.wagSpeed = stage.wagSpeed
+        motion.tailRaise = stage.tailRaise
+        skeleton.apply(motion, modelViewer.engine.transformManager)
+        modelViewer.animator?.updateBoneMatrices()
+        val bounce = skeleton.bob(motion) * leg
+
+        // About one stage unit long, standing on the floor, turned the way it's heading.
         val turn = stage.heading - measured.facing
         val c = cos(turn)
         val s = sin(turn)
@@ -328,7 +343,7 @@ private class PetModelLayout(context: Context) : FrameLayout(context), Choreogra
                 across * c, 0f, -across * s, 0f,
                 0f, up, 0f, 0f,
                 across * s, 0f, across * c, 0f,
-                stage.x - across * (c * cx + s * cz), PetStage.FLOOR + stage.hop - up * bottom, stage.z - across * (-s * cx + c * cz), 1f,
+                stage.x - across * (c * cx + s * cz), PetStage.FLOOR + stage.hop + bounce - up * bottom, stage.z - across * (-s * cx + c * cz), 1f,
             ),
         )
 

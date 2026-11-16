@@ -16,7 +16,9 @@ import kotlin.random.Random
  * sits at z = 1 looking down -z, the floor is at [FLOOR], and the pet is about one unit long.
  *
  * Each frame, [step] moves the pet on; the view reads [x], [z], [heading], [hop], [squash] and
- * [style] to place it and play its legs.
+ * [style] to place it, [moved] and [turned] to step its legs in time with the ground covered, and
+ * where it's looking and how its tail wags. Looking about is the head's job: the body only turns
+ * to go somewhere, or when the head can't reach round far enough, and it steps as it turns.
  */
 internal class PetStage(private val temperament: Temperament, private val random: Random = Random.Default) {
     /** Where the pet stands on the floor. */
@@ -41,9 +43,34 @@ internal class PetStage(private val temperament: Temperament, private val random
     var style = PetMotion.Style.IDLE
         private set
 
-    /** How fast the legs go, against the style's own speed. */
-    var pace = 1f
+    /** Ground covered and turn made in the last step, for the legs. */
+    var moved = 0f
         private set
+    var turned = 0f
+        private set
+
+    /** Where the head points, from straight ahead: turn (positive away from its side), nose up, and tilt. */
+    var lookYaw = 0f
+        private set
+    var lookPitch = 0f
+        private set
+    var tilt = 0f
+        private set
+
+    /** The tail: wag size, wags a second, and how high it's carried. */
+    var wag = 0.25f
+        private set
+    var wagSpeed = 1.5f
+        private set
+    var tailRaise = 0f
+        private set
+
+    private enum class Gaze { CAMERA, GLANCE, SNIFF, AHEAD }
+    private var gaze = Gaze.CAMERA
+    private var gazeLeft = 2f
+    private var glanceYaw = 0f
+    private var glancePitch = 0f
+    private var wantTilt = 0f
 
     private val mood = Mood.of(temperament)
     private val queue = ArrayDeque<Step>()
@@ -56,7 +83,69 @@ internal class PetStage(private val temperament: Temperament, private val random
     fun step(dt: Float) {
         val d = dt.coerceIn(0f, 0.05f)
         clock += d
+        val x0 = x
+        val z0 = z
+        val h0 = heading
         if (run(current, d)) next()
+        moved = hypot(x - x0, z - z0)
+        turned = abs(heading - h0)
+        look(d)
+        tail(d)
+    }
+
+    /** The angle from its nose round to the camera, which sits at x = 0, z = 1. */
+    private fun cameraAngle(): Float = wrap(atan2(-x, 1f - z) - heading)
+
+    /** Picks where to look every few seconds, by temperament and by what it's doing, and eases the head there. */
+    private fun look(dt: Float) {
+        gazeLeft -= dt
+        val moving = style != PetMotion.Style.IDLE
+        val forced = (current as? Step.Look)?.takeIf { it.toCamera }
+        if (forced != null) {
+            gaze = Gaze.CAMERA
+            if (forced.tilt && wantTilt == 0f) wantTilt = if (random.nextBoolean()) 0.32f else -0.32f
+        } else if (gazeLeft <= 0f) {
+            gazeLeft = 1.4f + random.nextFloat() * 2.6f
+            val roll = random.nextFloat()
+            val camera = if (moving) mood.watch * 0.5f else mood.watch
+            gaze = when {
+                roll < camera -> Gaze.CAMERA
+                moving && roll < camera + 0.45f -> Gaze.AHEAD
+                roll < camera + 0.15f -> Gaze.SNIFF
+                else -> Gaze.GLANCE
+            }
+            glanceYaw = (random.nextFloat() * 2f - 1f) * 0.9f
+            glancePitch = random.nextFloat() * 0.35f - 0.15f
+            // A curious little head tilt now and then when it looks at you.
+            wantTilt = if (gaze == Gaze.CAMERA && random.nextFloat() < mood.tilting) (if (random.nextBoolean()) 0.3f else -0.3f) else 0f
+        }
+        var yaw = 0f
+        var pitch = 0f
+        when (gaze) {
+            Gaze.CAMERA -> { yaw = cameraAngle().coerceIn(-1.15f, 1.15f); pitch = 0.12f }
+            Gaze.GLANCE -> { yaw = glanceYaw; pitch = glancePitch }
+            Gaze.SNIFF -> { yaw = glanceYaw * 0.3f; pitch = -0.5f }
+            Gaze.AHEAD -> Unit
+        }
+        val ease = 1f - kotlin.math.exp(-dt * 5f)
+        lookYaw += (yaw - lookYaw) * ease
+        lookPitch += (pitch - lookPitch) * ease
+        tilt += (wantTilt - tilt) * (1f - kotlin.math.exp(-dt * 3f))
+    }
+
+    /** Wags by temperament, harder when it's excited. */
+    private fun tail(dt: Float) {
+        val excited = current is Step.Spin || current is Step.Hop || style == PetMotion.Style.RUN
+        val targetWag = mood.wag * if (excited) 1.4f else 1f
+        val ease = 1f - kotlin.math.exp(-dt * 3f)
+        wag += (targetWag - wag) * ease
+        wagSpeed += (mood.wagSpeed * (if (excited) 1.3f else 1f) - wagSpeed) * ease
+        tailRaise += (mood.tailRaise - tailRaise) * ease
+    }
+
+    private fun wrap(angle: Float): Float {
+        val turn = 2f * PI.toFloat()
+        return ((angle + PI.toFloat()) % turn + turn) % turn - PI.toFloat()
     }
 
     private fun next() {
@@ -109,11 +198,15 @@ internal class PetStage(private val temperament: Temperament, private val random
     private fun run(step: Step, dt: Float): Boolean = when (step) {
         is Step.Look -> {
             style = PetMotion.Style.IDLE
-            pace = 1f
-            // Glance about, or settle facing the camera with a curious tilt of the body.
-            val target = if (step.toCamera) (if (step.tilt) step.aim + 0.25f * sin(clock * 1.7f) else step.aim + 0.2f * sin(clock * 0.9f))
-            else 0.35f + 0.6f * sin(clock * 0.6f + step.seed)
-            turn(target, 2.2f * dt)
+            // The head does the looking. The body only turns, stepping, to face where a peek
+            // points it, or when the camera is too far round for the head to reach.
+            val aim = step.aim
+            if (aim != null) {
+                turn(aim, 2.2f * dt)
+            } else {
+                val toCamera = cameraAngle()
+                if (gaze == Gaze.CAMERA && abs(toCamera) > 1.3f) turn(heading + toCamera - Math.signum(toCamera) * 0.6f, 1.6f * dt)
+            }
             clock >= step.seconds
         }
         is Step.Wait -> {
@@ -130,7 +223,6 @@ internal class PetStage(private val temperament: Temperament, private val random
                 true
             } else {
                 style = if (step.run) PetMotion.Style.RUN else PetMotion.Style.WALK
-                pace = mood.speed
                 val want = atan2(dx, dz)
                 val off = turn(want, (if (step.run) 5f else 3.2f) * dt)
                 // Turn on the spot first when facing well away from where it's going.
@@ -195,7 +287,7 @@ internal class PetStage(private val temperament: Temperament, private val random
     private data class Spot(val x: Float, val z: Float)
 
     private sealed class Step {
-        class Look(val seconds: Float, val toCamera: Boolean = false, val tilt: Boolean = false, val aim: Float = 0f, val seed: Float = Random.nextFloat() * 6f) : Step()
+        class Look(val seconds: Float, val toCamera: Boolean = false, val tilt: Boolean = false, val aim: Float? = null) : Step()
         class Wait(val seconds: Float) : Step()
         class Go(val to: Spot, val run: Boolean, val offStage: Boolean = false) : Step()
         class Spin(val turns: Int, var from: Float = Float.NaN) : Step()
@@ -216,6 +308,13 @@ internal class PetStage(private val temperament: Temperament, private val random
         val double: Float = 0f,
         val wobble: Boolean = false,
         val retreat: Float = 0.3f,
+        /** How often it looks at you, and tilts its head when it does. */
+        val watch: Float = 0.4f,
+        val tilting: Float = 0.3f,
+        /** The tail: wag size (radians), wags a second, and how high it's carried. */
+        val wag: Float = 0.3f,
+        val wagSpeed: Float = 1.8f,
+        val tailRaise: Float = 0f,
     ) {
         fun weight(kind: Kind) = weights[kind] ?: 0f
 
@@ -224,22 +323,27 @@ internal class PetStage(private val temperament: Temperament, private val random
                 Temperament.PLAYFUL -> Mood(
                     mapOf(Kind.WANDER to 2f, Kind.DASH to 3f, Kind.SPIN to 3f, Kind.HOP to 3f, Kind.PEEK to 1f, Kind.CLOSE to 2f, Kind.LOOK to 1f),
                     speed = 1.15f, pause = 0.6f..1.6f, near = NEAR_Z, far = FAR_Z, hopHeight = 0.2f, hops = 3, double = 0.3f, retreat = 0.1f,
+                    watch = 0.5f, tilting = 0.3f, wag = 0.55f, wagSpeed = 3f, tailRaise = 0.15f,
                 )
                 Temperament.CALM -> Mood(
                     mapOf(Kind.WANDER to 3f, Kind.CLOSE to 1f, Kind.LOOK to 4f),
                     speed = 0.75f, pause = 2.5f..5f, near = -3.0f, far = -6f,
+                    watch = 0.4f, tilting = 0.15f, wag = 0.2f, wagSpeed = 1.2f,
                 )
                 Temperament.CURIOUS -> Mood(
                     mapOf(Kind.WANDER to 3f, Kind.DASH to 1f, Kind.HOP to 1f, Kind.PEEK to 2f, Kind.CLOSE to 3f, Kind.LOOK to 2f),
                     speed = 1f, pause = 1.2f..2.5f, near = NEAR_Z, far = FAR_Z, retreat = 0.15f,
+                    watch = 0.6f, tilting = 0.6f, wag = 0.35f, wagSpeed = 2.2f, tailRaise = 0.1f,
                 )
                 Temperament.SHY -> Mood(
                     mapOf(Kind.WANDER to 2f, Kind.PEEK to 5f, Kind.LOOK to 2f),
                     speed = 0.85f, pause = 1.5f..3f, near = -4.2f, far = FAR_Z, retreat = 0.6f,
+                    watch = 0.3f, tilting = 0.4f, wag = 0.12f, wagSpeed = 1f, tailRaise = -0.3f,
                 )
                 Temperament.GOOFY -> Mood(
                     mapOf(Kind.WANDER to 1f, Kind.DASH to 2f, Kind.SPIN to 4f, Kind.HOP to 3f, Kind.PEEK to 2f, Kind.CLOSE to 1f, Kind.LOOK to 1f),
                     speed = 1.1f, pause = 0.6f..1.4f, near = NEAR_Z, far = FAR_Z, hopHeight = 0.24f, hops = 3, double = 0.5f, wobble = true, retreat = 0.2f,
+                    watch = 0.45f, tilting = 0.5f, wag = 0.6f, wagSpeed = 3.4f, tailRaise = 0.1f,
                 )
             }
         }
