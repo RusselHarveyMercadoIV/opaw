@@ -265,13 +265,24 @@ private fun LifeReview(dogId: String, name: String, modifier: Modifier, onLeave:
             if (state.error != null) {
                 Text(state.error, style = opaw(14.sp, FontWeight.Bold), color = colors.alert, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 28.dp).padding(top = 12.dp))
             }
+            // What to look for, so the check is quick.
+            Column(Modifier.fillMaxWidth().padding(horizontal = 28.dp).padding(top = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                for (point in listOf("Face, coat colour and markings", "Ears, tail and legs", "Body shape and size")) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(22.dp).border(2.dp, colors.ink, CircleShape), contentAlignment = Alignment.Center) {
+                            Icon(DesignIcon.CHECK, size = 11.dp, tint = colors.ink)
+                        }
+                        Text(point, style = opaw(14.sp, FontWeight.Bold), color = colors.ink)
+                    }
+                }
+            }
         }
         Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
             BlackPillButton("Yes, that's $name", enabled = sheet != null) { haptics.medium(); app.petModels.approve(dogId) }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 if (onRetake != null) BlackPillButton("New photos", Modifier.weight(1f), inverted = true, onClick = onRetake)
                 BlackPillButton(
-                    if (state.drawsLeft > 0) "Draw again" else "No tries left",
+                    if (state.drawsLeft > 0) "Draw again · ${state.drawsLeft} left" else "No tries left",
                     Modifier.weight(1f), inverted = true, enabled = state.drawsLeft > 0,
                 ) { haptics.select(); app.petModels.redraw(dogId) }
             }
@@ -406,6 +417,8 @@ fun LifeRevealScreen(
     onBack: () -> Unit,
     /** Start over with new photos; null where that isn't offered. */
     onRetake: (() -> Unit)? = null,
+    /** How it will play on Home, such as "Playful, so expect zoomies on Home." */
+    note: String? = null,
     onDone: () -> Unit,
 ) {
     val app = rememberApp()
@@ -419,18 +432,33 @@ fun LifeRevealScreen(
     Column(modifier) {
         Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 10.dp)) {
             RoundIcon(DesignIcon.BACK, onClick = onBack)
-            Box(Modifier.align(Alignment.Center)) { SparkleChip(if (clips.size > 1) "Avatar and ${clips.size} motion clips ready" else "Avatar ready") }
+            Box(Modifier.align(Alignment.Center)) { SparkleChip("$name in 3D") }
         }
         Box(Modifier.fillMaxWidth().weight(1f).padding(horizontal = 20.dp).padding(top = 8.dp), contentAlignment = Alignment.Center) {
+            // A soft disc for the pet to stand on.
+            Box(
+                Modifier.align(Alignment.BottomCenter).padding(bottom = 30.dp).fillMaxWidth(0.78f).height(46.dp)
+                    .background(androidx.compose.ui.graphics.Brush.radialGradient(listOf(Color.Black.copy(alpha = 0.1f), Color.Transparent)), CircleShape),
+            )
             app.petModels.clip(dogId, clip)?.let { file ->
                 val motion = app.petModels.motion(dogId, clip)
                 PetModel3D(file, Modifier.fillMaxSize(), interactive = true, breathe = motion == null && file.nameWithoutExtension == "rest", motion = motion)
+            }
+            Row(
+                Modifier.align(Alignment.BottomCenter).padding(bottom = 4.dp)
+                    .shadow(8.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.06f), spotColor = Color.Black.copy(alpha = 0.06f))
+                    .background(colors.surface, CircleShape).padding(horizontal = 14.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(DesignIcon.REFRESH, size = 14.dp, tint = colors.ink)
+                Text("Drag to spin", style = opaw(13.sp, FontWeight.ExtraBold), color = colors.ink)
             }
         }
         Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("Say hi to $name", style = opaw(30.sp, FontWeight.Black), color = colors.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
-                (if (photos > 0) "Made from your $photos photos. " else "") + "Drag to spin, tap a clip to play it.",
+                (if (photos > 0) "Made from your $photos photos. " else "") + (note ?: "Tap a clip to play it."),
                 style = opaw(15.sp, FontWeight.Medium), color = colors.muted, textAlign = TextAlign.Center,
             )
         }

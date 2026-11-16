@@ -57,6 +57,7 @@ import app.opaw.ui.components.GhostCycle
 import app.opaw.ui.components.LoopMotion
 import app.opaw.ui.components.SpeechBubble
 import app.opaw.ui.components.loopMotion
+import app.opaw.ui.onboarding.CareOrbs
 import app.opaw.ui.theme.Opaw
 import app.opaw.ui.theme.opaw
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
@@ -67,7 +68,7 @@ import java.security.MessageDigest
 import java.security.SecureRandom
 
 /**
- * The welcome screen (9a/9b), which is also Google sign-in: there is no guest mode, so the only
+ * The welcome screen (10a), which is also Google sign-in: there is no guest mode, so the only
  * way on is "Continue with Google". Signing in goes straight to the photos step of onboarding.
  */
 @Composable
@@ -83,6 +84,8 @@ fun SignInScreen() {
 
     Column(Modifier.fillMaxSize().background(colors.cream).safeDrawingPadding()) {
         Box(Modifier.fillMaxWidth().padding(top = 40.dp).height(380.dp)) {
+            // 10a: the care icons drift around the pet, like a small world.
+            CareOrbs(Modifier.matchParentSize())
             GhostCycle(Modifier.padding(top = 40.dp).size(300.dp, 340.dp).align(Alignment.TopCenter).loopMotion(LoopMotion.BOB, 3.2))
             SpeechBubble("hi! take my picture?", Modifier.align(Alignment.TopEnd).padding(end = 12.dp))
         }
@@ -90,7 +93,7 @@ fun SignInScreen() {
         Column(Modifier.padding(horizontal = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Your pet, alive on your phone", style = opaw(40.sp, FontWeight.Black).copy(lineHeight = 42.sp), color = colors.ink)
             Text(
-                "Take a few photos and we turn them into an avatar that reacts to every walk, meal and cuddle you log.",
+                "A few photos become a pet that walks, plays and reacts to every meal and walk you log.",
                 style = opaw(16.sp, FontWeight.Medium).copy(lineHeight = 22.sp),
                 color = colors.muted,
             )

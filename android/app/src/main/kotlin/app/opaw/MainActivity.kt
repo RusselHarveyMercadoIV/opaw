@@ -5,6 +5,7 @@ import android.os.Bundle
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
@@ -38,6 +39,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -49,7 +51,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.opaw.services.CrashLog
 import app.opaw.ui.MainTabs
 import app.opaw.ui.SignInScreen
+import app.opaw.ui.onboarding.LookingForPets
 import app.opaw.ui.onboarding.OnboardingFlow
+import app.opaw.ui.onboarding.WelcomeBackScreen
 import app.opaw.ui.theme.Opaw
 import app.opaw.ui.theme.OpawTheme
 
@@ -90,7 +94,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class Root { SIGN_IN, ONBOARDING, TABS }
+private enum class Root { SIGN_IN, ONBOARDING, WELCOME_BACK, TABS }
 
 /**
  * Google sign-in first (there's no anonymous mode), then onboarding until there's a dog, then
@@ -106,17 +110,23 @@ private fun RootView(app: OpawApplication) {
         val skippedSetup = skipped ?: return@Box
         // No pets here but signed in (a reinstall, a new phone): look for the account's pets first.
         val needsRestore = app.pack.isSignedIn && current.isEmpty() && !skippedSetup && !app.household.hasChecked
-        LaunchedEffect(needsRestore) { if (needsRestore) app.household.restore() }
-        if (needsRestore) {
-            Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                CircularProgressIndicator(color = Opaw.colors.ink)
-                Text("Looking for your pets…", style = opaw(16.sp, FontWeight.ExtraBold), color = Opaw.colors.ink, modifier = Modifier.padding(top = 16.dp))
+        // Pets found on the account are welcomed back (10b) before Home.
+        var restored by rememberSaveable { mutableStateOf(false) }
+        var welcomed by rememberSaveable { mutableStateOf(false) }
+        LaunchedEffect(needsRestore) {
+            if (needsRestore) {
+                app.household.restore()
+                restored = true
             }
+        }
+        if (needsRestore) {
+            LookingForPets(Modifier.fillMaxSize().safeDrawingPadding())
             return@Box
         }
         val root = when {
             !app.pack.isSignedIn -> Root.SIGN_IN
             current.isEmpty() && !skippedSetup -> Root.ONBOARDING
+            restored && !welcomed -> Root.WELCOME_BACK
             else -> Root.TABS
         }
         AnimatedContent(
@@ -129,6 +139,7 @@ private fun RootView(app: OpawApplication) {
             when (screen) {
                 Root.SIGN_IN -> SignInScreen()
                 Root.ONBOARDING -> OnboardingFlow(app)
+                Root.WELCOME_BACK -> WelcomeBackScreen(app, current, Modifier.fillMaxSize().safeDrawingPadding()) { welcomed = true }
                 Root.TABS -> MainTabs()
             }
         }

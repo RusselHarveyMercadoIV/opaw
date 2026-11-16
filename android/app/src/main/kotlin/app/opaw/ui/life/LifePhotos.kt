@@ -267,7 +267,8 @@ fun LifePhotosGrid(
                     style = opaw(16.sp, FontWeight.Medium).copy(lineHeight = 22.sp), color = colors.muted,
                 )
             }
-            Column(Modifier.padding(horizontal = 20.dp).padding(top = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Box(Modifier.padding(horizontal = 20.dp).padding(top = 20.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 for (row in LifeAngle.entries.chunked(2)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         for (angle in row) {
@@ -282,6 +283,24 @@ fun LifePhotosGrid(
                         if (row.size == 1) Spacer(Modifier.weight(1f))
                     }
                 }
+            }
+            // The count sits where the four photos meet (10c).
+            val taken = photos.shots.size
+            val total = LifeAngle.entries.size
+            Column(
+                Modifier
+                    .align(Alignment.Center)
+                    .size(76.dp)
+                    .background(colors.cream, CircleShape)
+                    .padding(6.dp)
+                    .shadow(10.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.18f), spotColor = Color.Black.copy(alpha = 0.18f))
+                    .background(Ink, CircleShape),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Text("$taken of $total", style = opaw(15.sp, FontWeight.Black), color = Color.White)
+                Text(if (taken >= 3) "All good" else "3 is best", style = opaw(10.sp, FontWeight.Bold), color = Color(0xFFBBBBBB))
+            }
             }
             Row(
                 Modifier.padding(horizontal = 20.dp).padding(top = 14.dp).fillMaxWidth().background(colors.chip, CircleShape).padding(horizontal = 14.dp, vertical = 10.dp),
