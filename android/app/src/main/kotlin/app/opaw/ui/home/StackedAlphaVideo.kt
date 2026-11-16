@@ -278,6 +278,7 @@ fun PetAvatar(
     val app = rememberApp()
     // A 3D pet from "Bring to life" comes first, then motion clips, then the living photo.
     val model = app.petModels.file(dog.id, mood)
+    val motion = app.petModels.motion(dog.id, app.petModels.clipName(mood))
     val clip = if (model == null && dog.avatarStatus == AvatarStatus.READY) AvatarClipStore.playableFile(context, dog.id, mood.clipName) else null
     val shown: File? = model ?: clip
     Crossfade(shown, modifier, label = "avatar") { file ->
@@ -285,7 +286,7 @@ fun PetAvatar(
         val fade = Modifier.graphicsLayer { alpha = if (faded) 0.6f else 1f }
         when {
             file != null && file.extension == "glb" ->
-                PetModel3D(file, Modifier.fillMaxSize().then(fade).then(tap), interactive = interactive, breathe = file.nameWithoutExtension == "rest")
+                PetModel3D(file, Modifier.fillMaxSize().then(fade).then(tap), interactive = interactive, breathe = motion == null && file.nameWithoutExtension == "rest", motion = motion)
             file != null -> StackedAlphaVideo(file, Modifier.fillMaxSize().then(fade).then(tap))
             else -> LivingPhoto(image, mood, Modifier.fillMaxSize(), sticker = sticker, faded = faded, onTap = onTap)
         }

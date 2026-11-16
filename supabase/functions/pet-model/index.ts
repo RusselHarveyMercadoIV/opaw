@@ -1,20 +1,29 @@
-// "Bring to life": turns a pet's cutouts into a rigged, animated 3D model.
+// "Bring to life": turns a pet's photos into a rigged 3D model.
 //
-// Tripo builds new pets: photos to 3D, a riggability check, a four-legged skeleton and a walk
-// clip. Meshy is kept as a fallback (PET_MODEL_PROVIDER=meshy, or no TRIPO_API_KEY); its rigging
-// only takes two-legged characters, so most dogs stay still there. Each row remembers which
-// service it started on and finishes there.
+// Tripo builds new pets in steps, each paid only once the one before it is good:
+//   cleaning   a 2D reference sheet of the pet drawn from all the photos: standing, head straight,
+//              even light, front and left side by side (about 5 credits). Owners' photos never
+//              agree (sitting, looking at the camera, different light), and a 3D model built from
+//              them copies that: two faces, washed-out fur, a seated pet that can't be rigged.
+//   reviewing  waits for the owner to say the sheet looks like their pet. The app splits the
+//              sheet into front and side and uploads them ("approve"), or asks for another
+//              ("redraw"). A bad result costs 5 credits here instead of 60 later.
+//   modeling   the 3D model from the two clean views (30), then a free riggability check
+//   rigging    a four-legged skeleton (25). The app animates walk, run and idle itself, so there's
+//              no per-pet charge for motion clips.
+// Meshy is kept as a fallback (PET_MODEL_PROVIDER=meshy, or no TRIPO_API_KEY). Each row remembers
+// which service it started on and finishes there.
 //
 // The app calls this function with the signed-in user's token:
 //   { "action": "start", "dog_id": "...", "input_paths": ["<uid>/<file>.png", ...],
-//     "angles": ["front", "side", "back"], "height_m": 0.5 }
-// One to four photos of the same pet. "angles" names each photo; older builds leave it out and
-// send front, side, back in that order (or a single "input_path").
+//     "angles": ["front", "left", "right", "back"], "height_m": 0.5, "review": true }
+// Builds without "review" skip the sheet and model the photos directly.
 //   { "action": "status", "id": "<pet_models row id>" }
-//   { "action": "retry", "id": "<pet_models row id>" } picks a job whose motion step failed back up.
-// Each status call advances the job one step. The GLBs (rest pose, walk, run) are copied into the
-// private pet-models bucket as soon as they're made, because the services' links expire (Tripo's
-// after five minutes).
+//   { "action": "approve", "id": "...", "views": { "front": "<uid>/...", "left": "<uid>/..." } }
+//   { "action": "redraw", "id": "..." } draws the sheet again (up to MAX_DRAWS in all).
+//   { "action": "retry", "id": "..." } picks a job whose skeleton step failed back up.
+// Each status call advances the job one step. Files are copied into the private pet-models
+// bucket as soon as they're made, because Tripo's links expire after five minutes.
 //
 // Secrets: TRIPO_API_KEY and/or MESHY_API_KEY. Optional: PET_MODEL_PROVIDER, PET_MODEL_DAILY_LIMIT.
 // SUPABASE_URL, SUPABASE_ANON_KEY and SUPABASE_SERVICE_ROLE_KEY are provided by Supabase.
@@ -33,13 +42,18 @@ const DAILY_LIMIT = Number(Deno.env.get("PET_MODEL_DAILY_LIMIT") ?? "3");
 const TRIPO_MODEL = "v3.1-20260211";
 const TRIPO_RIG_BIPED = "v3.0-20260909";
 const TRIPO_RIG_CREATURE = "v2.5-20260210";
-// The walk clip for each skeleton Tripo can give back. Four-legged rigs only have a walk so far.
-const TRIPO_WALK: Record<string, string> = {
-  quadruped: "preset:quadruped:walk",
-  biped: "preset:walk",
-  hexapod: "preset:hexapod:walk",
-  octopod: "preset:octopod:walk",
-};
+// The reference sheet: Tripo's image model, at its smallest allowed two-to-one size.
+const TRIPO_SHEET_MODEL = "seedream_v5";
+const TRIPO_SHEET_SIZE = "3072x1536";
+const MAX_DRAWS = 3;
+const SHEET_PROMPT =
+  "Character reference sheet of the exact pet in the reference images (the same animal photographed from different sides). " +
+  "Two views side by side on one plain pure white background, the same animal at the same scale. " +
+  "LEFT HALF: the animal seen straight from the front, standing on all four legs, head level and facing the camera. " +
+  "RIGHT HALF: the animal seen exactly from its left side in profile, standing on all four legs, nose pointing to the left edge, " +
+  "head facing straight ahead in line with the body (not looking at the camera), tail relaxed and fully visible. " +
+  "Keep the pet's true body length, leg length, build, coat colours and markings exactly as in the photos. " +
+  "Even soft studio light, no shadows, no text, no ground, the whole animal in frame in both views.";
 
 const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
@@ -49,8 +63,9 @@ type Row = {
   dog_id: string;
   input_path: string;
   provider: "tripo" | "meshy";
-  stage: "modeling" | "rigging" | "saving" | "done" | "failed";
+  stage: "cleaning" | "reviewing" | "modeling" | "rigging" | "saving" | "done" | "failed";
   progress: number;
+  sheet_task: string | null;
   model_task: string | null;
   check_task: string | null;
   rig_task: string | null;
@@ -66,7 +81,12 @@ function reply(body: unknown, status = 200) {
 }
 
 function view(row: Row) {
-  return { id: row.id, stage: row.stage, progress: row.progress, outputs: row.stage === "done" ? row.outputs : {}, error: row.error };
+  return {
+    id: row.id, stage: row.stage, progress: row.progress, outputs: row.stage === "done" ? row.outputs : {}, error: row.error,
+    // The reference sheet to show the owner, a path in the pet-models bucket.
+    sheet: row.stage === "reviewing" ? row.outputs.sheet ?? null : null,
+    draws_left: Math.max(0, MAX_DRAWS - Number(row.outputs.draws ?? "0")),
+  };
 }
 
 async function update(row: Row, changes: Partial<Row>): Promise<Row> {
@@ -77,16 +97,22 @@ async function update(row: Row, changes: Partial<Row>): Promise<Row> {
   return data as Row;
 }
 
-async function copyToStorage(url: string, path: string) {
+async function copyToStorage(url: string, path: string, contentType = "model/gltf-binary") {
   const file = await fetch(url);
   if (!file.ok) throw new Error(`Couldn't download the model (${file.status}).`);
   const { error } = await admin.storage.from("pet-models")
-    .upload(path, await file.arrayBuffer(), { contentType: "model/gltf-binary", upsert: true });
+    .upload(path, await file.arrayBuffer(), { contentType, upsert: true });
   if (error) throw error;
 }
 
-function clipPath(row: Row, name: string) {
-  return `${row.owner_id}/${row.dog_id}/${row.id}/${name}.glb`;
+function clipPath(row: Row, name: string, extension = "glb") {
+  return `${row.owner_id}/${row.dog_id}/${row.id}/${name}.${extension}`;
+}
+
+async function signed(bucket: string, path: string): Promise<string> {
+  const result = await admin.storage.from(bucket).createSignedUrl(path, 3600);
+  if (result.error) throw new Error("Couldn't read the photo.");
+  return result.data.signedUrl;
 }
 
 /** Ends the job with the clips saved so far. */
@@ -137,6 +163,15 @@ const tripoFailed = (task: Record<string, any>) => ["failed", "cancelled", "bann
  * second head where the tail should be, so those jobs use the front photo alone.
  */
 async function tripoModel(row: Row): Promise<string> {
+  const common0 = { model: TRIPO_MODEL, texture: true, pbr: false, face_limit: 15000 };
+  // The owner approved a reference sheet: model its clean front and left views.
+  if (row.outputs.views) {
+    const views: Record<string, string> = JSON.parse(row.outputs.views);
+    const inputs = [];
+    for (const view of ["front", "left"]) if (views[view]) inputs.push({ [view]: await signed("avatar-inputs", views[view]) });
+    const task = await tripo("POST", "/generation/multiview-to-model", { inputs, ...common0 });
+    return task.task_id;
+  }
   const urls = await signedInputs(row);
   const angles: string[] = JSON.parse(row.outputs.angles ?? "[]");
   const common = { model: TRIPO_MODEL, texture: true, pbr: false, face_limit: 15000 };
@@ -160,6 +195,27 @@ async function tripoKeepStill(row: Row): Promise<Row> {
 }
 
 async function advanceTripo(row: Row): Promise<Row> {
+  if (row.stage === "cleaning" && !row.sheet_task) {
+    const [first, ...rest] = await signedInputs(row);
+    const sheet = await tripo("POST", "/generation/image-to-image", {
+      model: TRIPO_SHEET_MODEL, input: first, inputs: rest, prompt: SHEET_PROMPT, size: TRIPO_SHEET_SIZE, output_format: "jpeg",
+    });
+    return update(row, { sheet_task: sheet.task_id, progress: 2, outputs: { ...row.outputs, draws: String(Number(row.outputs.draws ?? "0") + 1) } });
+  }
+
+  if (row.stage === "cleaning") {
+    const task = await tripoTask(row.sheet_task!);
+    if (tripoFailed(task)) return update(row, { stage: "failed", error: task.error_message || "Tripo couldn't draw this pet." });
+    if (task.status !== "success") return update(row, { progress: 2 + Math.round((task.progress ?? 0) * 0.08) });
+    // Its link lasts five minutes: keep a copy for the owner to look at.
+    const path = clipPath(row, `sheet-${row.outputs.draws ?? "1"}`, "jpg");
+    await copyToStorage(task.output.generated_image_url, path, "image/jpeg");
+    return update(row, { stage: "reviewing", progress: 10, outputs: { ...row.outputs, sheet: path } });
+  }
+
+  // Waiting for the owner.
+  if (row.stage === "reviewing") return row;
+
   // Queued because Tripo was busy when the job started.
   if (row.stage === "modeling" && !row.model_task) {
     return update(row, { model_task: await tripoModel(row), progress: 1 });
@@ -195,17 +251,10 @@ async function advanceTripo(row: Row): Promise<Row> {
     // No skeleton, but the model itself is fine: keep it still rather than lose it.
     if (tripoFailed(rig)) return tripoKeepStill(row);
     if (rig.status !== "success") return update(row, { progress: 62 + Math.round((rig.progress ?? 0) * 0.18) });
-    // The rigged model is the rest pose. Save it now: its link only lasts five minutes.
+    // The rigged model is the rest pose, and the app animates it. Save it now: its link only
+    // lasts five minutes.
     await copyToStorage(rig.output.model_url, clipPath(row, "rest"));
-    const preset = TRIPO_WALK[row.outputs.rig_type ?? ""];
-    if (!preset) return finish(row, { rest: clipPath(row, "rest") });
-    const anim = await tripo("POST", "/animations/retarget", {
-      input: row.rig_task,
-      animation: preset,
-      out_format: "glb",
-      animate_in_place: true,
-    });
-    return update(row, { progress: 80, anim_task: anim.task_id, outputs: { ...row.outputs, rest_saved: "1" } });
+    return finish(row, { rest: clipPath(row, "rest") });
   }
 
   if (row.stage === "rigging" && row.anim_task) {
@@ -344,8 +393,10 @@ async function start(user: string, body: Record<string, unknown>) {
   // The row comes first, so a job that can't start right away (the service's queue is full)
   // waits its turn: each status call tries to start it again.
   const provider = PROVIDER === "tripo" && TRIPO_KEY ? "tripo" : "meshy";
+  // Builds that can show the reference sheet start by drawing one; older ones model the photos.
+  const stage = provider === "tripo" && body.review === true ? "cleaning" : "modeling";
   const { data, error } = await admin.from("pet_models").insert({
-    owner_id: user, dog_id: dogId, input_path: paths[0], provider, stage: "modeling",
+    owner_id: user, dog_id: dogId, input_path: paths[0], provider, stage,
     outputs: {
       height_m: String(height),
       source: paths.length > 1 ? "multi" : "single",
@@ -390,6 +441,31 @@ Deno.serve(async (request) => {
       }
       // Back to the end of modeling: the next status call sees the finished model and rigs it again.
       return reply(view(await update(row, { stage: "modeling", error: null, check_task: null, rig_task: null, anim_task: null })));
+    }
+    if (body.action === "approve" || body.action === "redraw") {
+      const { data } = await admin.from("pet_models").select().eq("id", String(body.id ?? "")).eq("owner_id", user).maybeSingle();
+      let row = data as Row | null;
+      if (!row || row.stage !== "reviewing") return reply({ error: "There's nothing to review." }, 409);
+      if (body.action === "redraw") {
+        if (Number(row.outputs.draws ?? "0") >= MAX_DRAWS) return reply({ error: "That's as many tries as we can do. Try new photos." }, 409);
+        row = await update(row, { stage: "cleaning", sheet_task: null, progress: 1 });
+      } else {
+        const given = (body.views ?? {}) as Record<string, unknown>;
+        const views: Record<string, string> = {};
+        for (const view of ["front", "left"]) {
+          const path = String(given[view] ?? "");
+          if (path.startsWith(`${user}/`)) views[view] = path;
+        }
+        if (!views.front || !views.left) return reply({ error: "Missing the front or side view." }, 400);
+        row = await update(row, { stage: "modeling", model_task: null, progress: 12, outputs: { ...row.outputs, views: JSON.stringify(views) } });
+      }
+      try {
+        row = await advance(row);
+      } catch (error) {
+        const message = String((error as Error).message ?? error);
+        if (isFinal(message)) row = await update(row, { stage: "failed", error: message });
+      }
+      return reply(view(row));
     }
     if (body.action === "status") {
       const { data } = await admin.from("pet_models").select().eq("id", String(body.id ?? "")).eq("owner_id", user).maybeSingle();

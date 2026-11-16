@@ -83,6 +83,9 @@ data class PetModelJob(
     val progress: Int = 0,
     val outputs: Map<String, String> = emptyMap(),
     val error: String? = null,
+    /** While reviewing: the reference sheet's path in the pet-models bucket. */
+    val sheet: String? = null,
+    @SerialName("draws_left") val drawsLeft: Int = 0,
 )
 
 @Serializable
@@ -452,8 +455,32 @@ class PackService(private val context: Context) {
             put("height_m", heightMeters)
             // Which view each photo is, so a skipped side shot doesn't turn the back into the side.
             if (angles.size == paths.size) put("angles", JsonArray(angles.map { JsonPrimitive(it) }))
+            // This build shows the reference sheet for approval before the 3D model is paid for.
+            put("review", true)
         })
     }
+
+    /** Sends the approved sheet's front and side views and has the server build the 3D model from them. */
+    suspend fun approvePetModel(id: String, dogId: String, front: android.graphics.Bitmap, left: android.graphics.Bitmap): PetModelJob {
+        val owner = ensureFreshSession()
+        val stamp = Instant.now().epochSecond
+        val paths = mapOf("front" to front, "left" to left).mapValues { (view, image) ->
+            val path = "${owner.lowercase()}/${dogId.lowercase()}-$stamp-clean-$view.png"
+            val bytes = withContext(Dispatchers.Default) {
+                java.io.ByteArrayOutputStream().also { image.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
+            }
+            upload("avatar-inputs", path, bytes, "image/png")
+            path
+        }
+        return petModelCall(buildJsonObject {
+            put("action", "approve")
+            put("id", id)
+            put("views", buildJsonObject { paths.forEach { (view, path) -> put(view, path) } })
+        })
+    }
+
+    /** Draws the reference sheet again from the same photos. */
+    suspend fun redrawPetModel(id: String): PetModelJob = petModelCall(buildJsonObject { put("action", "redraw"); put("id", id) })
 
     /** Picks a failed job back up when its 3D model was already built; throws if it has to start over. */
     suspend fun petModelRetry(id: String): PetModelJob = petModelCall(buildJsonObject { put("action", "retry"); put("id", id) })

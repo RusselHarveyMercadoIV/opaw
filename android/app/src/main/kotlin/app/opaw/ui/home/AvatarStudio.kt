@@ -112,6 +112,13 @@ fun AvatarStudioScreen(dogId: String) {
             }
             Text("3D pet", style = opaw(13.sp, FontWeight.Bold), color = colors.muted, modifier = Modifier.padding(top = 8.dp))
             when {
+                model.isReviewing -> Column(
+                    Modifier.fillMaxWidth().pressable { navigator.push(Route.Life(dog.id)) }.background(colors.surface, RoundedCornerShape(20.dp)).padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text("Does this look like ${dog.name}?", style = opaw(15.sp, FontWeight.Bold), color = colors.ink)
+                    Text("We drew ${dog.name} standing. Tap to check it before the 3D model is made.", style = opaw(13.sp, FontWeight.Medium), color = colors.muted)
+                }
                 model.isWorking -> Column(
                     Modifier.fillMaxWidth().pressable { navigator.push(Route.Life(dog.id)) }.background(colors.surface, RoundedCornerShape(20.dp)).padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),

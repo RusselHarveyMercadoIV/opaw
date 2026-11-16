@@ -142,6 +142,8 @@ fun LifeProgressScreen(
         wasReady = state.isReady
     }
 
+    if (state.isReviewing) return LifeReview(dogId, name, modifier, onLeave, onRetake)
+
     Column(modifier) {
         Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 10.dp)) {
             RoundIcon(DesignIcon.BACK, onClick = onLeave)
@@ -215,6 +217,64 @@ fun LifeProgressScreen(
                 else -> BlackPillButton(leaveTitle, onClick = onLeave)
             }
             if (state.isWorking) Text("You can leave this screen. It keeps going.", style = opaw(13.sp, FontWeight.Medium), color = colors.muted)
+        }
+    }
+}
+
+/**
+ * The reference sheet, for the owner to check before the 3D model is made: the pet drawn standing,
+ * from the front and from the side. Saying yes builds it in 3D; trying again redraws only this
+ * picture, which costs a fraction of a whole model.
+ */
+@Composable
+private fun LifeReview(dogId: String, name: String, modifier: Modifier, onLeave: () -> Unit, onRetake: (() -> Unit)?) {
+    val app = rememberApp()
+    val colors = Opaw.colors
+    val haptics = rememberHaptics()
+    val state = app.petModels.state(dogId)
+    val sheet by produceState<Bitmap?>(null, dogId, state.progress) {
+        value = withContext(Dispatchers.IO) { runCatching { BitmapFactory.decodeFile(app.petModels.sheetFile(dogId).path) }.getOrNull() }
+    }
+    Column(modifier) {
+        Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 10.dp)) {
+            RoundIcon(DesignIcon.BACK, onClick = onLeave)
+            Text("Quick check", style = opaw(14.sp, FontWeight.ExtraBold), color = colors.muted, modifier = Modifier.align(Alignment.Center))
+        }
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                "Does this look like $name?",
+                style = opaw(30.sp, FontWeight.Black).copy(lineHeight = 34.sp), color = colors.ink, textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 24.dp).padding(top = 18.dp),
+            )
+            Text(
+                "We drew $name standing, from the front and the side. The 3D model is built from this, so check the coat, markings and shape.",
+                style = opaw(15.sp, FontWeight.Medium).copy(lineHeight = 20.sp), color = colors.muted, textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 28.dp).padding(top = 8.dp),
+            )
+            Box(
+                Modifier.padding(horizontal = 20.dp).padding(top = 20.dp).fillMaxWidth().height(220.dp).whiteCard(26.dp).clip(RoundedCornerShape(26.dp)),
+                contentAlignment = Alignment.Center,
+            ) {
+                val image = sheet
+                if (image != null) {
+                    Image(remember(image) { image.asImageBitmap() }, "$name from the front and the side", Modifier.fillMaxSize().padding(10.dp), contentScale = ContentScale.Fit)
+                } else {
+                    androidx.compose.material3.CircularProgressIndicator(Modifier.size(28.dp), color = colors.ink, strokeWidth = 3.dp)
+                }
+            }
+            if (state.error != null) {
+                Text(state.error, style = opaw(14.sp, FontWeight.Bold), color = colors.alert, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 28.dp).padding(top = 12.dp))
+            }
+        }
+        Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            BlackPillButton("Yes, that's $name", enabled = sheet != null) { haptics.medium(); app.petModels.approve(dogId) }
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (onRetake != null) BlackPillButton("New photos", Modifier.weight(1f), inverted = true, onClick = onRetake)
+                BlackPillButton(
+                    if (state.drawsLeft > 0) "Draw again" else "No tries left",
+                    Modifier.weight(1f), inverted = true, enabled = state.drawsLeft > 0,
+                ) { haptics.select(); app.petModels.redraw(dogId) }
+            }
         }
     }
 }
@@ -316,6 +376,7 @@ fun LifeToast(name: String, state: PetModelState, image: Bitmap?, modifier: Modi
                 when {
                     state.isReady -> "$name is ready"
                     state.isFailed -> "$name couldn't come to life"
+                    state.isReviewing -> "Does this look like $name?"
                     else -> "Bringing $name to life"
                 },
                 style = opaw(16.sp, FontWeight.ExtraBold), color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -362,7 +423,8 @@ fun LifeRevealScreen(
         }
         Box(Modifier.fillMaxWidth().weight(1f).padding(horizontal = 20.dp).padding(top = 8.dp), contentAlignment = Alignment.Center) {
             app.petModels.clip(dogId, clip)?.let { file ->
-                PetModel3D(file, Modifier.fillMaxSize(), interactive = true, breathe = file.nameWithoutExtension == "rest")
+                val motion = app.petModels.motion(dogId, clip)
+                PetModel3D(file, Modifier.fillMaxSize(), interactive = true, breathe = motion == null && file.nameWithoutExtension == "rest", motion = motion)
             }
         }
         Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {

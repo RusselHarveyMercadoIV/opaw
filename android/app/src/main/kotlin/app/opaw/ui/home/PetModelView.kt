@@ -30,17 +30,18 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * The 3D pet from "Bring to life": a Meshy GLB drawn with Filament on a transparent background,
- * playing its animation on a loop. The rest pose has no animation, so it breathes instead.
- * With [interactive], one finger spins the pet around.
+ * The 3D pet from "Bring to life": a GLB drawn with Filament on a transparent background, playing
+ * its own animation on a loop if it has one. A pet Tripo rigged comes without clips, and
+ * [motion] ("walk", "run" or "idle") is played on its skeleton by the app instead. A still model
+ * breathes. With [interactive], one finger spins the pet around.
  */
 @Composable
-fun PetModel3D(file: File, modifier: Modifier = Modifier, interactive: Boolean = false, breathe: Boolean = false) {
+fun PetModel3D(file: File, modifier: Modifier = Modifier, interactive: Boolean = false, breathe: Boolean = false, motion: String? = null) {
     val transition = rememberInfiniteTransition(label = "breathe")
     val breath by transition.animateFloat(0f, 1f, infiniteRepeatable(tween(1800, easing = LinearEasing), RepeatMode.Reverse), label = "breath")
     AndroidView(
         factory = { PetModelLayout(it) },
-        update = { it.show(file, interactive) },
+        update = { it.show(file, interactive, motion) },
         modifier = modifier.graphicsLayer {
             if (breathe) {
                 transformOrigin = TransformOrigin(0.5f, 1f)
@@ -67,9 +68,17 @@ private class PetModelLayout(context: Context) : FrameLayout(context), Choreogra
     private var fill: IndirectLight? = null
     private var framed = false
     private var lampsOn = true
+    private var player: PetMotion? = null
+    private var style: PetMotion.Style? = null
 
-    fun show(file: File, interactive: Boolean) {
+    fun show(file: File, interactive: Boolean, motion: String? = null) {
         this.file = file
+        style = when (motion) {
+            "walk" -> PetMotion.Style.WALK
+            "run" -> PetMotion.Style.RUN
+            "idle" -> PetMotion.Style.IDLE
+            else -> null
+        }
         if (this.interactive != interactive) {
             this.interactive = interactive
             framed = false
@@ -146,6 +155,7 @@ private class PetModelLayout(context: Context) : FrameLayout(context), Choreogra
             modelViewer.transformToUnitCube()
         }
         fit = PetModelMeasure.measure(bytes)
+        player = modelViewer.asset?.let { PetMotion.create(context, bytes, it) }
         framed = false
         runCatching {
             lamps(modelViewer, on = fit?.selfLit != true)
@@ -211,10 +221,17 @@ private class PetModelLayout(context: Context) : FrameLayout(context), Choreogra
         val seconds = (frameTimeNanos - startNanos) / 1_000_000_000f
         if (!framed) runCatching { frame(modelViewer) }
         modelViewer.animator?.let { animator ->
+            val moving = style
+            val skeleton = player
             if (animator.animationCount > 0) {
                 val duration = animator.getAnimationDuration(0).coerceAtLeast(0.01f)
                 animator.applyAnimation(0, seconds % duration)
                 animator.updateBoneMatrices()
+            } else if (moving != null && skeleton != null) {
+                runCatching {
+                    skeleton.apply(seconds, moving, modelViewer.engine.transformManager)
+                    animator.updateBoneMatrices()
+                }
             }
         }
         modelViewer.render(frameTimeNanos)
