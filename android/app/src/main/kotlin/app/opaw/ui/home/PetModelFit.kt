@@ -6,13 +6,14 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.atan2
 import kotlin.math.sqrt
 
 /**
  * Where a 3D pet really is and how big, measured with its skeleton applied.
  * [selfLit] means the texture is the model's own glow (how Meshy exports), so it needs no lamps.
  */
-internal class PetModelFit(val center: FloatArray, val size: FloatArray, val selfLit: Boolean)
+internal class PetModelFit(val center: FloatArray, val size: FloatArray, val selfLit: Boolean, val facing: Float = 0f)
 
 /**
  * Measures a GLB the way it's drawn. Filament sizes a model from its raw vertex box and ignores
@@ -180,6 +181,8 @@ internal object PetModelMeasure {
             val meshes = json.getJSONArray("meshes")
             val skins = json.optJSONArray("skins")
             val moments = if (channels.isEmpty() || duration <= 0f) 1 else SAMPLES
+            // The first moment's vertices, to find where the head is.
+            val first = ArrayList<FloatArray>()
             for (moment in 0 until moments) {
                 val world = pose(channels, duration * moment / moments)
                 for (index in 0 until nodes.length()) {
@@ -224,6 +227,7 @@ internal object PetModelMeasure {
                                 py = m[1] * x + m[5] * y + m[9] * z + m[13]
                                 pz = m[2] * x + m[6] * y + m[10] * z + m[14]
                             }
+                            if (moment == 0) first += floatArrayOf(px, py, pz)
                             low[0] = min(low[0], px); high[0] = max(high[0], px)
                             low[1] = min(low[1], py); high[1] = max(high[1], py)
                             low[2] = min(low[2], pz); high[2] = max(high[2], pz)
@@ -232,11 +236,37 @@ internal object PetModelMeasure {
                 }
             }
             require(high[0] >= low[0]) { "No vertices." }
+            val center = FloatArray(3) { (low[it] + high[it]) / 2f }
             return PetModelFit(
-                center = FloatArray(3) { (low[it] + high[it]) / 2f },
+                center = center,
                 size = FloatArray(3) { high[it] - low[it] },
                 selfLit = selfLit(),
+                facing = facing(first, center, low[1], high[1], max(high[0] - low[0], high[2] - low[2])),
             )
+        }
+
+        /**
+         * Which way the pet's head points, as a turn around the vertical from +Z (towards the
+         * camera) to +X. The ears and head are the highest part of a standing pet, so it's the
+         * direction from the middle of the pet to its highest points. Tripo builds pets from a
+         * front and side photo with the nose along X; older models face the camera.
+         */
+        private fun facing(points: List<FloatArray>, center: FloatArray, bottom: Float, top: Float, length: Float): Float {
+            val line = top - 0.15f * (top - bottom)
+            var x = 0f
+            var z = 0f
+            var count = 0
+            for (p in points) if (p[1] >= line) {
+                x += p[0] - center[0]
+                z += p[2] - center[2]
+                count++
+            }
+            if (count == 0) return 0f
+            x /= count
+            z /= count
+            // Head right over the middle: no clear direction, leave it as it is.
+            if (sqrt(x * x + z * z) < 0.08f * length) return 0f
+            return atan2(x, z)
         }
 
         /** One matrix per joint: where the joint is now, times where it was when the skin was bound. */

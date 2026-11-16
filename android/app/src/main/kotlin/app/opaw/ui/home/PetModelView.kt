@@ -26,8 +26,11 @@ import com.google.android.filament.utils.Utils
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import kotlin.math.abs
+import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.sin
 
 /**
  * The 3D pet from "Bring to life": a GLB drawn with Filament on a transparent background, playing
@@ -195,21 +198,33 @@ private class PetModelLayout(context: Context) : FrameLayout(context), Choreogra
         framed = true
         val (wide, tall, deep) = measured.size
         if (max(wide, max(tall, deep)) <= 0f) return
+        // Turn the pet so its head points a little to one side of the camera: a three-quarter
+        // view shows both the face and the body's length.
+        val turn = TURN - measured.facing
+        val c = cos(turn)
+        val s = sin(turn)
+        val turnedWide = abs(c) * wide + abs(s) * deep
+        val turnedDeep = abs(s) * wide + abs(c) * deep
         // A long lens keeps the nose from ballooning toward the camera.
         modelViewer.cameraFocalLength = FOCAL_LENGTH
         val seenTall = CAMERA_DISTANCE * SENSOR_HEIGHT / FOCAL_LENGTH
         val seenWide = seenTall * viewport.width / viewport.height
         // Spinning the pet swings its length across the view, so leave room for that too.
-        val across = if (interactive) max(wide, deep) else wide
-        val scale = FILL * min(seenTall / max(tall, deep), seenWide / max(across, 1e-9f))
+        val across = if (interactive) max(turnedWide, turnedDeep) else turnedWide
+        // The near end looks a little bigger than it is, so give depth some weight too.
+        val scale = FILL * min(seenTall / max(tall, NEAR * turnedDeep), seenWide / max(across, 1e-9f))
+        // Scale, then turn around the pet's middle, then place it in front of the camera.
+        val (cx, cy, cz) = measured.center
+        val tx = c * cx + s * cz
+        val tz = -s * cx + c * cz
         val transforms = modelViewer.engine.transformManager
         transforms.setTransform(
             transforms.getInstance(asset.root),
             floatArrayOf(
-                scale, 0f, 0f, 0f,
+                scale * c, 0f, -scale * s, 0f,
                 0f, scale, 0f, 0f,
-                0f, 0f, scale, 0f,
-                -scale * measured.center[0], -scale * measured.center[1], TARGET_Z - scale * measured.center[2], 1f,
+                scale * s, 0f, scale * c, 0f,
+                -scale * tx, -scale * cy, TARGET_Z - scale * tz, 1f,
             ),
         )
     }
@@ -244,6 +259,9 @@ private class PetModelLayout(context: Context) : FrameLayout(context), Choreogra
         private const val SENSOR_HEIGHT = 24f
         private const val FOCAL_LENGTH = 70f
         private const val FILL = 0.88f
+        /** Where the head ends up: 35° from facing the camera, towards the viewer's right. */
+        private const val TURN = 0.61f
+        private const val NEAR = 0.6f
 
         private var initialized = false
 
