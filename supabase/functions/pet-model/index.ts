@@ -36,7 +36,8 @@ const MESHY_KEY = Deno.env.get("MESHY_API_KEY") ?? "";
 const TRIPO = Deno.env.get("TRIPO_API_BASE") ?? "https://openapi.tripo3d.ai/v3";
 const TRIPO_KEY = Deno.env.get("TRIPO_API_KEY") ?? "";
 const PROVIDER = (Deno.env.get("PET_MODEL_PROVIDER") ?? (TRIPO_KEY ? "tripo" : "meshy")).toLowerCase();
-const DAILY_LIMIT = Number(Deno.env.get("PET_MODEL_DAILY_LIMIT") ?? "3");
+// No daily cap unless PET_MODEL_DAILY_LIMIT is set to a number above 0.
+const DAILY_LIMIT = Number(Deno.env.get("PET_MODEL_DAILY_LIMIT") ?? "0");
 
 // Tripo models, pinned so a new release can't change results (or prices) underneath us.
 const TRIPO_MODEL = "v3.1-20260211";
@@ -385,11 +386,13 @@ async function start(user: string, body: Record<string, unknown>) {
     return reply({ error: "Missing dog or photo." }, 400);
   }
 
-  // Each generation spends credits, so cap how many one account can start per day.
-  const since = new Date(Date.now() - 86_400_000).toISOString();
-  const { count } = await admin.from("pet_models").select("id", { count: "exact", head: true })
-    .eq("owner_id", user).gte("created_at", since);
-  if ((count ?? 0) >= DAILY_LIMIT) return reply({ error: "You've brought enough pets to life for today. Try again tomorrow." }, 429);
+  // Each generation spends credits; a daily cap per account can be turned on with PET_MODEL_DAILY_LIMIT.
+  if (DAILY_LIMIT > 0) {
+    const since = new Date(Date.now() - 86_400_000).toISOString();
+    const { count } = await admin.from("pet_models").select("id", { count: "exact", head: true })
+      .eq("owner_id", user).gte("created_at", since);
+    if ((count ?? 0) >= DAILY_LIMIT) return reply({ error: "You've brought enough pets to life for today. Try again tomorrow." }, 429);
+  }
 
   // The row comes first, so a job that can't start right away (the service's queue is full)
   // waits its turn: each status call tries to start it again.
