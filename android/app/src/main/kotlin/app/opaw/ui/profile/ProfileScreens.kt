@@ -50,6 +50,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.opaw.core.Badge
 import app.opaw.core.DogSize
 import app.opaw.core.EnergyLevel
+import app.opaw.core.Temperament
 import app.opaw.core.OpawFormat
 import app.opaw.core.StreakCalculator
 import app.opaw.data.DogData
@@ -384,7 +385,7 @@ internal fun EditDogScreen(data: DogData, onDone: () -> Unit) {
                 // How their 3D self plays on Home.
                 Text("Temperament", style = opaw(14.sp, FontWeight.Bold), color = colors.muted, modifier = Modifier.padding(top = 12.dp, bottom = 8.dp))
                 Row(Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    app.opaw.core.Temperament.entries.forEach { ChoiceChip(it.title, it == dog.temperament) { dog = dog.copy(temperamentRaw = it.raw) } }
+                    Temperament.entries.forEach { ChoiceChip(it.title, it == dog.temperament) { dog = dog.copy(temperamentRaw = it.raw) } }
                 }
                 Text(dog.temperament.blurb, style = opaw(13.sp, FontWeight.Medium), color = colors.muted, modifier = Modifier.padding(top = 6.dp, bottom = 14.dp))
             }

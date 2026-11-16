@@ -27,6 +27,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import app.opaw.core.AvatarMood
+import app.opaw.core.Temperament
 import app.opaw.data.AvatarStatus
 import app.opaw.data.Dog
 import app.opaw.ui.rememberApp
@@ -290,7 +291,7 @@ fun PetAvatar(
                     file, Modifier.fillMaxSize().then(fade).then(tap), interactive = interactive,
                     breathe = motion == null && file.nameWithoutExtension == "rest", motion = motion,
                     // On Home it roams, playing as its temperament; a sleepy pet takes it easy.
-                    temperament = if (interactive) null else if (mood == app.opaw.core.AvatarMood.SLEEPY) app.opaw.core.Temperament.CALM else dog.temperament,
+                    temperament = if (interactive) null else if (mood == AvatarMood.SLEEPY) Temperament.CALM else dog.temperament,
                 )
             file != null -> StackedAlphaVideo(file, Modifier.fillMaxSize().then(fade).then(tap))
             else -> LivingPhoto(image, mood, Modifier.fillMaxSize(), sticker = sticker, faded = faded, onTap = onTap)
