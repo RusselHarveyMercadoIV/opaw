@@ -20,6 +20,8 @@ struct ProfileView: View {
     @Environment(DataReset.self) private var reset
     @State private var pane: SettingsPane = .subscription
     @Environment(\.duoOpen) private var duoOpen
+    @AppStorage(Feedback.soundsKey) private var soundsOn = true
+    @AppStorage(Feedback.hapticsKey) private var hapticsOn = true
 
     /// What the right pane shows on the open display (6o).
     enum SettingsPane { case subscription, household, units, history }
@@ -131,6 +133,11 @@ struct ProfileView: View {
                     }
                     .padding(.top, 14)
                     paneCard {
+                        paneToggle(.speaker, "Sounds", isOn: $soundsOn, divider: false)
+                        paneToggle(.vibrate, "Haptics", isOn: $hapticsOn, divider: true)
+                    }
+                    .padding(.top, 12)
+                    paneCard {
                         paneAction(.heart, "Friends nearby", divider: false) { showNearby = true }
                         paneAction(.grid, "Home Screen widgets", divider: true, locked: !premium.isPremium) {
                             if premium.isPremium { showWidgetHelp = true } else { showPaywall = true }
@@ -218,6 +225,14 @@ struct ProfileView: View {
         .buttonStyle(.plain)
     }
 
+    /// A Sounds or Haptics switch (7c); it never opens a pane.
+    private func paneToggle(_ icon: DesignIcon, _ title: String, isOn: Binding<Bool>, divider: Bool) -> some View {
+        paneRowLabel(icon, title, selected: false, divider: divider) {
+            DesignToggle(isOn: isOn)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
     private func paneRowLabel<Trailing: View>(_ icon: DesignIcon, _ title: String, selected: Bool, divider: Bool, @ViewBuilder trailing: () -> Trailing) -> some View {
         HStack(spacing: 14) {
             Icon(icon, size: 16, cutoutColor: selected ? Color(hex: 0x111111) : Color.opawChip)
@@ -263,6 +278,10 @@ struct ProfileView: View {
                             }
                             linkRow(.ruler, "Units") { UnitsView() }
                             actionRow(.heart, "Friends nearby") { showNearby = true }
+                        }
+                        card {
+                            toggleRow(.speaker, "Sounds", isOn: $soundsOn, first: true)
+                            toggleRow(.vibrate, "Haptics", isOn: $hapticsOn)
                         }
                         card {
                             premiumRow(.grid, "Home Screen widgets", first: true) { showWidgetHelp = true }
@@ -402,6 +421,14 @@ struct ProfileView: View {
             }
         }
         .buttonStyle(.plain)
+    }
+
+    /// A Sounds or Haptics switch (7c).
+    private func toggleRow(_ icon: DesignIcon, _ title: String, isOn: Binding<Bool>, first: Bool = false) -> some View {
+        rowLabel(icon, title, first: first) {
+            DesignToggle(isOn: isOn)
+        }
+        .accessibilityElement(children: .combine)
     }
 
     private func actionRow(_ icon: DesignIcon, _ title: String, first: Bool = false, action: @escaping () -> Void) -> some View {
@@ -588,6 +615,7 @@ struct EditDogView: View {
 }
 
 struct AddDogSheet: View {
+    var source: PhotoSource?
     @Environment(\.dismiss) private var dismiss
     @State private var draft = DogDraft()
     @State private var showPhoto = false
@@ -605,7 +633,7 @@ struct AddDogSheet: View {
                 }
             }
             .navigationDestination(isPresented: $showPhoto) {
-                AvatarCaptureStep(draft: draft, onSaved: { dismiss() })
+                AvatarCaptureStep(draft: draft, source: source, onSaved: { dismiss() })
             }
         }
     }

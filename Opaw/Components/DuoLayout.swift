@@ -220,27 +220,20 @@ struct TabRail: View {
 
     @ViewBuilder
     private func item(_ tab: AppTab) -> some View {
-        if selection == tab {
-            VStack(spacing: 4) {
-                SymbolIcon(symbol: tab.symbol, size: 20, cutoutColor: Color.opawInk)
-                Text(tab.title)
-                    .font(.opaw(11, .heavy))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-            }
-            .foregroundStyle(Color.opawOnInk)
-            .frame(width: 60)
-            .padding(.top, 12)
-            .padding(.bottom, 10)
-            .background(Color.opawInk, in: Capsule())
-            .shadow(color: .black.opacity(0.22), radius: 14, y: 14)
-        } else {
-            SymbolIcon(symbol: tab.symbol, size: 20, cutoutColor: Color.opawSurface)
-                .foregroundStyle(Color.opawInk)
-                .frame(width: 60, height: 60)
-                .background(Color.opawSurface, in: Circle())
-                .shadow(color: .black.opacity(0.08), radius: 13, y: 10)
+        let selected = selection == tab
+        VStack(spacing: 4) {
+            SymbolIcon(symbol: tab.symbol, size: 22, cutoutColor: selected ? Color.opawInk : Color.opawSurface)
+            Text(tab.title)
+                .font(.opaw(11, .heavy))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
         }
+        .foregroundStyle(selected ? Color.opawOnInk : Color.opawInk)
+        .frame(width: 60)
+        .padding(.top, 12)
+        .padding(.bottom, 10)
+        .background(selected ? Color.opawInk : Color.opawSurface, in: Capsule())
+        .shadow(color: .black.opacity(selected ? 0.22 : 0.08), radius: selected ? 14 : 13, y: selected ? 14 : 10)
     }
 }
 

@@ -52,23 +52,29 @@ struct MemoriesView: View {
     private var feed: some View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
+                    // Same header as Care: pet chip, centred title, round action.
                     HStack {
+                        Menu {
+                            ForEach(dogs) { item in
+                                Button(item.name) { activeDogID = item.id.uuidString }
+                            }
+                        } label: {
+                            PetChip(dog: dog)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         Text("Memories")
-                            .font(.opaw(36, .black))
+                            .font(.opaw(22, .black))
                             .foregroundStyle(Color.opawInk)
-                        Spacer()
                         Button { showAdd = true } label: {
-                            Icon(.camera, size: 22)
-                                .foregroundStyle(.white)
-                                .frame(width: 54, height: 54)
-                                .background(Color(hex: 0x111111), in: Circle())
+                            RoundIcon(symbol: "camera.fill")
                         }
                         .buttonStyle(.pressable)
                         .disabled(dog == nil)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
                         .accessibilityLabel("Add memory")
                     }
-                    .padding(.horizontal, 24)
-                    .padding(.top, 12)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 10)
 
                     HStack(spacing: 8) {
                         ForEach(Filter.allCases, id: \.self) { option in
@@ -78,7 +84,7 @@ struct MemoriesView: View {
                             }
                         }
                     }
-                    .padding(.horizontal, 24)
+                    .padding(.horizontal, 20)
                     .padding(.top, 14)
 
                     if let dog {
@@ -656,6 +662,7 @@ struct AddMemorySheet: View {
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Environment(ToastCenter.self) private var toasts
     @State private var pickerItem: PhotosPickerItem?
     @State private var showCamera = false
     @State private var image: UIImage?
@@ -715,14 +722,24 @@ struct AddMemorySheet: View {
                 .ignoresSafeArea()
             }
         }
+        .toastHost(bottom: 24)
     }
 
     private func save() {
         let memory = Memory(date: date, caption: caption, photoData: image?.jpegData(compressionQuality: 0.85), dog: dog)
         modelContext.insert(memory)
-        BadgeService.refresh(dog)
-        try? modelContext.save()
+        let badges = BadgeService.refresh(dog)
+        do {
+            try modelContext.save()
+        } catch {
+            modelContext.delete(memory)
+            toasts.show(Notice(kind: .failed, title: "Couldn't save the memory", detail: "Your photo is still here", actionTitle: "Retry") { save() })
+            return
+        }
         Haptics.success()
         dismiss()
+        if let badge = badges.first {
+            toasts.show(.milestone(badge, dog: dog) { toasts.showChallenges = true })
+        }
     }
 }

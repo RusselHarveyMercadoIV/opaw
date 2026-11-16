@@ -7,6 +7,7 @@ struct OpawApp: App {
     @State private var pack = PackService()
     @State private var premium = PremiumStore()
     @State private var reset = DataReset()
+    @State private var toasts = ToastCenter()
 
     init() {
         OpawAppearance.apply()
@@ -19,6 +20,7 @@ struct OpawApp: App {
                 .environment(pack)
                 .environment(premium)
                 .environment(reset)
+                .environment(toasts)
                 .tint(.opawOrange)
         }
         .modelContainer(OpawStore.container)
@@ -51,25 +53,35 @@ struct MainTabView: View {
     @State private var tabBar = TabBarVisibility()
     @State private var reselect = TabReselect()
     @Environment(WalkRecorder.self) private var recorder
+    @Environment(ToastCenter.self) private var toasts
     @Environment(\.duoOpen) private var duoOpen
 
+    private var showsTabBar: Bool { recorder.state == .idle && tabBar.hiddenCount == 0 }
+
     var body: some View {
-        if duoOpen {
-            tabs
-                .safeAreaPadding(.leading, Duo.railInset)
-                .overlay(alignment: .leading) {
-                    TabRail(selection: $selection, reselect: reselect)
-                }
-        } else {
-            tabs
-                .overlay(alignment: .bottom) {
-                    if recorder.state == .idle && tabBar.hiddenCount == 0 {
-                        FloatingTabBar(selection: $selection)
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
+        Group {
+            if duoOpen {
+                tabs
+                    .safeAreaPadding(.leading, Duo.railInset)
+                    .overlay(alignment: .leading) {
+                        TabRail(selection: $selection, reselect: reselect)
                     }
-                }
-                .animation(.spring(response: 0.4, dampingFraction: 0.85), value: recorder.state == .idle && tabBar.hiddenCount == 0)
+                    .toastHost(bottom: 24)
+            } else {
+                tabs
+                    .overlay(alignment: .bottom) {
+                        if showsTabBar {
+                            FloatingTabBar(selection: $selection)
+                                .transition(.move(edge: .bottom).combined(with: .opacity))
+                        }
+                    }
+                    // Toasts sit 12 points above the bottom buttons.
+                    .toastHost(bottom: showsTabBar ? 76 : 24)
+                    .animation(.spring(response: 0.4, dampingFraction: 0.85), value: showsTabBar)
+            }
         }
+        .background { ToastWatcher() }
+        .sheet(isPresented: Bindable(toasts).showChallenges) { ChallengesView() }
     }
 
     private var tabs: some View {
@@ -114,7 +126,8 @@ enum AppTab: Hashable, CaseIterable {
     }
 }
 
-/// The floating bottom bar: the current tab is a black pill with its name, the others are white circles.
+/// The floating bottom bar: the current tab is a black pill with its name, the others are white circles
+/// with a small name under the icon.
 struct FloatingTabBar: View {
     @Binding var selection: AppTab
     @Namespace private var pill
@@ -158,11 +171,17 @@ struct FloatingTabBar: View {
             }
             .shadow(color: .black.opacity(0.22), radius: 14, y: 14)
         } else {
-            SymbolIcon(symbol: tab.symbol, size: 24, cutoutColor: Color.opawSurface)
-                .foregroundStyle(Color.opawInk)
-                .frame(width: 64, height: 64)
-                .background(Color.opawSurface, in: Circle())
-                .shadow(color: .black.opacity(0.08), radius: 13, y: 10)
+            VStack(spacing: 2) {
+                SymbolIcon(symbol: tab.symbol, size: 20, cutoutColor: Color.opawSurface)
+                Text(tab.title)
+                    .font(.opaw(10, .heavy))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .foregroundStyle(Color.opawInk)
+            .frame(width: 64, height: 64)
+            .background(Color.opawSurface, in: Circle())
+            .shadow(color: .black.opacity(0.08), radius: 13, y: 10)
         }
     }
 }

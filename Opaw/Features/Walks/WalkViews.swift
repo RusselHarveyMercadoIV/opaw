@@ -260,7 +260,7 @@ private struct ActivityView: View {
                     let sticker = (dog?.cutoutData ?? dog?.photoData).flatMap(UIImage.init(data:))
                     PetSticker.save(sticker?.thumbnailPNG(maxSide: 160))
                     recorder.start(dogName: dog?.name ?? "your dog")
-                    Haptics.success()
+                    Haptics.medium()
                 } else if recorder.isDenied, let url = URL(string: UIApplication.openSettingsURLString) {
                     UIApplication.shared.open(url)
                 } else {
@@ -393,10 +393,30 @@ private struct LiveWalkView: View {
             }
         }
         .confirmationDialog("Finish this walk?", isPresented: $confirmStop, titleVisibility: .visible) {
-            Button("Finish and save") {
-                if let result = recorder.finish() { onFinish(result) }
-            }
+            Button("Finish and save", action: finish)
             Button("Discard walk", role: .destructive) { recorder.cancel() }
+        } message: {
+            Text("You can also hold Finish to save straight away.")
+        }
+    }
+
+    /// Pause is a light tap; resuming is a medium one, like starting.
+    private func togglePause() {
+        if recorder.state == .paused {
+            recorder.resume()
+            Haptics.medium()
+        } else {
+            recorder.pause()
+            Haptics.tap()
+        }
+    }
+
+    private func finish() {
+        if let result = recorder.finish() {
+            Haptics.success()
+            onFinish(result)
+        } else {
+            Haptics.error()
         }
     }
 
@@ -501,8 +521,7 @@ private struct LiveWalkView: View {
                     Spacer(minLength: 16)
                     HStack(spacing: 12) {
                         Button {
-                            if recorder.state == .paused { recorder.resume() } else { recorder.pause() }
-                            Haptics.tap()
+                            togglePause()
                         } label: {
                             SymbolIcon(symbol: recorder.state == .paused ? "play.fill" : "pause.fill", size: 22)
                                 .foregroundStyle(Color.opawInk)
@@ -512,10 +531,7 @@ private struct LiveWalkView: View {
                         }
                         .buttonStyle(.pressable)
                         .accessibilityLabel(recorder.state == .paused ? "Resume" : "Pause")
-                        Button { confirmStop = true } label: {
-                            Text("Finish walk")
-                        }
-                        .buttonStyle(BlackPillButtonStyle(height: 62))
+                        HoldToFinishButton(height: 62, onTap: { confirmStop = true }, onFinish: finish)
                     }
                 }
                 .padding(.top, 10)
@@ -592,7 +608,7 @@ private struct LiveWalkView: View {
                         .resizable()
                         .scaledToFit()
                 } else {
-                    Image(systemName: "dog.fill")
+                    Image(GhostPet.corgi.rawValue)
                         .resizable()
                         .scaledToFit()
                         .foregroundStyle(Color(hex: 0x111111))
@@ -628,8 +644,7 @@ private struct LiveWalkView: View {
                 .padding(.top, 22)
                 HStack(spacing: 12) {
                     Button {
-                        if recorder.state == .paused { recorder.resume() } else { recorder.pause() }
-                        Haptics.tap()
+                        togglePause()
                     } label: {
                         SymbolIcon(symbol: recorder.state == .paused ? "play.fill" : "pause.fill", size: 22)
                             .foregroundStyle(Color(hex: 0x111111))
@@ -638,15 +653,7 @@ private struct LiveWalkView: View {
                     }
                     .buttonStyle(.pressable)
                     .accessibilityLabel(recorder.state == .paused ? "Resume" : "Pause")
-                    Button { confirmStop = true } label: {
-                        Text("Finish walk")
-                            .font(.opaw(18, .bold))
-                            .foregroundStyle(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 64)
-                            .background(Color(hex: 0x111111), in: Capsule())
-                    }
-                    .buttonStyle(.pressable)
+                    HoldToFinishButton(height: 64, onTap: { confirmStop = true }, onFinish: finish)
                 }
                 .padding(.top, 26)
                 Spacer(minLength: 0)
@@ -700,6 +707,7 @@ private struct WalkSummaryView: View {
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Environment(ToastCenter.self) private var toasts
     @State private var saved: Walk?
     @State private var isRecord = false
 
@@ -715,6 +723,8 @@ private struct WalkSummaryView: View {
             extraKm: saved == nil && Self.savedStarts[result.startedAt] == nil ? WalkCalculator.stats(for: result.points).distanceMeters / 1000 : 0,
             onBack: { dismiss() }
         )
+        // The summary covers the tab view on the phone, so it shows toasts itself.
+        .toastHost(bottom: 24)
         .onAppear(perform: save)
     }
 
@@ -741,11 +751,21 @@ private struct WalkSummaryView: View {
                 modelContext.insert(CareEvent(kind: kind, date: pin.date, note: "On a walk", dog: dog))
             }
         }
-        BadgeService.refresh(dog)
-        try? modelContext.save()
+        let badges = BadgeService.refresh(dog)
+        do {
+            try modelContext.save()
+        } catch {
+            // Keep the walk in memory so Retry can save it again.
+            modelContext.rollback()
+            toasts.show(Notice(kind: .failed, title: "Couldn't save the walk", detail: "It's still on this phone", actionTitle: "Retry") { save() })
+            return
+        }
         saved = walk
         Self.savedStarts[result.startedAt] = isRecord
         Haptics.success()
+        if let badge = badges.first {
+            toasts.show(.milestone(badge, dog: dog) { dismiss(); toasts.showChallenges = true })
+        }
     }
 }
 
@@ -973,7 +993,7 @@ private struct WalkStoryView: View {
                     .sticker(edge: 5, blur: 7, y: 10)
                     .loopMotion(.bob, duration: 1.2)
                     .padding(.trailing, 18)
-                    .offset(y: -62)
+                    .offset(y: -92)
             }
         }
     }
@@ -989,12 +1009,31 @@ private struct WalkStoryView: View {
             HStack(spacing: 0) {
                 cell(OpawFormat.pace(minutesPerKm: stats.paceMinutesPerKm), label: "Pace /\(OpawFormat.distanceUnit)")
                 Rectangle().fill(Color.opawHairline).frame(width: 1)
-                cell("\(peeCount) · \(poopCount)", label: "Pee · poop")
+                toiletCell
             }
         }
         .fixedSize(horizontal: false, vertical: true)
         .padding(.vertical, 6)
         .whiteCard()
+    }
+
+    /// "2 pee · 1 poop" with the words drawn small and gray, over "Toilet stops".
+    private var toiletCell: some View {
+        let small = { (text: String) in Text(text).font(.opaw(14, .black)).foregroundColor(Color.opawMuted) }
+        return VStack(alignment: .leading, spacing: 0) {
+            (Text("\(peeCount) ") + small("pee") + Text(" · \(poopCount) ") + small("poop"))
+                .font(.opaw(duoOpen ? 28 : 26, .black))
+                .foregroundStyle(Color.opawInk)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+            Text("Toilet stops")
+                .font(.opaw(13, .semibold))
+                .foregroundStyle(Color.opawMuted)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 20)
+        .padding(.vertical, duoOpen ? 14 : 12)
+        .accessibilityElement(children: .combine)
     }
 
     /// A value such as "2.41 km" with the unit drawn small and gray.
@@ -1071,5 +1110,81 @@ struct RouteMap: View {
 extension GeoPoint {
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+    }
+}
+
+/// Finish walk (7e): hold for about a second while the fill sweeps across, with a tick as it goes.
+/// Letting go early slides the fill back. A plain tap asks first, with the option to discard.
+private struct HoldToFinishButton: View {
+    var height: CGFloat = 62
+    let onTap: () -> Void
+    let onFinish: () -> Void
+
+    private static let duration: Double = 0.9
+    @State private var pressedAt: Date?
+    @State private var progress: Double = 0
+    @State private var ticks = 0
+    @State private var done = false
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            Capsule().fill(Color(hex: 0x111111))
+            GeometryReader { proxy in
+                Capsule()
+                    .fill(Color.white.opacity(0.22))
+                    .frame(width: max(height, proxy.size.width * progress))
+                    .opacity(progress > 0 ? 1 : 0)
+            }
+            Text(pressedAt == nil ? "Hold to finish" : "Keep holding")
+                .font(.opaw(17, .heavy))
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .contentTransition(.opacity)
+        }
+        .frame(height: height)
+        .clipShape(Capsule())
+        .shadow(color: .black.opacity(0.18), radius: 14, y: 14)
+        .scaleEffect(pressedAt == nil ? 1 : 0.97)
+        .animation(.easeOut(duration: 0.12), value: pressedAt == nil)
+        .contentShape(Capsule())
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in
+                    guard pressedAt == nil, !done else { return }
+                    pressedAt = Date()
+                    ticks = 0
+                }
+                .onEnded { _ in
+                    guard let start = pressedAt else { return }
+                    pressedAt = nil
+                    if !done {
+                        if Date().timeIntervalSince(start) < 0.2 { onTap() }
+                        withAnimation(.easeIn(duration: 0.2)) { progress = 0 }
+                    }
+                }
+        )
+        .task(id: pressedAt) {
+            guard let start = pressedAt else { return }
+            while !Task.isCancelled, pressedAt == start {
+                let value = min(1, Date().timeIntervalSince(start) / Self.duration)
+                progress = value
+                let step = Int(value * 6)
+                if step > ticks, value < 1 {
+                    ticks = step
+                    Haptics.tick(progress: value)
+                }
+                if value >= 1 {
+                    done = true
+                    pressedAt = nil
+                    onFinish()
+                    return
+                }
+                try? await Task.sleep(for: .milliseconds(16))
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Finish walk")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { onTap() }
     }
 }

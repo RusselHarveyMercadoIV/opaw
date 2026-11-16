@@ -345,7 +345,8 @@ struct PaywallView: View {
     }
 }
 
-/// One-time offer (5c): shown once after the paywall is closed, with a ten-minute timer.
+/// One-time offer (5c): shown once after the paywall is closed. On the phone it lasts until midnight;
+/// the open-display card (6p) still shows a ten-minute timer.
 struct OneTimeOfferView: View {
     let petImage: UIImage?
     /// Called with true when the offer was bought.
@@ -384,13 +385,13 @@ struct OneTimeOfferView: View {
                     .padding(.top, 10)
                 Text("\(offerMonthly)/month, renews at \(regularPrice)")
                     .font(.opaw(14, .semibold))
-                    .foregroundStyle(Color(hex: 0x999999))
+                    .foregroundStyle(Color(hex: 0x666666))
                 Spacer(minLength: 16)
                 VStack(spacing: 12) {
                     claimButton
                     Button("No thanks") { onDone(false) }
                         .font(.opaw(15, .bold))
-                        .foregroundStyle(Color(hex: 0x999999))
+                        .foregroundStyle(Color(hex: 0x666666))
                 }
             }
             .padding(.horizontal, 28)
@@ -446,13 +447,10 @@ struct OneTimeOfferView: View {
             offerBadge
                 .padding(.top, 20)
 
-            countdown(box: CGSize(width: 64, height: 72), digits: 38, colon: 32)
-                .padding(.top, 18)
-
-            Text("Ends when the timer runs out")
-                .font(.opaw(13, .semibold))
-                .foregroundStyle(Color(hex: 0x999999))
-                .padding(.top, 8)
+            Text("Today only. Ends at midnight.")
+                .font(.opaw(14, .semibold))
+                .foregroundStyle(Color(hex: 0x666666))
+                .padding(.top, 14)
 
             Text("50% off your first year")
                 .font(.opaw(34, .black))
@@ -466,7 +464,7 @@ struct OneTimeOfferView: View {
 
             Text("\(offerMonthly)/month, renews at \(regularPrice)")
                 .font(.opaw(14, .semibold))
-                .foregroundStyle(Color(hex: 0x999999))
+                .foregroundStyle(Color(hex: 0x666666))
 
             Spacer(minLength: 20)
 
@@ -475,13 +473,13 @@ struct OneTimeOfferView: View {
 
             Button("No thanks") { onDone(false) }
                 .font(.opaw(15, .bold))
-                .foregroundStyle(Color(hex: 0x999999))
+                .foregroundStyle(Color(hex: 0x666666))
                 .frame(height: 44)
                 .padding(.top, 2)
                 .padding(.bottom, 4)
         }
         .frame(maxWidth: .infinity)
-        .frame(height: 560)
+        .frame(height: 440)
         .background(
             UnevenRoundedRectangle(topLeadingRadius: 40, topTrailingRadius: 40, style: .continuous)
                 .fill(Color.white)
@@ -522,9 +520,9 @@ struct OneTimeOfferView: View {
             Text(regularPrice)
                 .font(.opaw(20, .bold))
                 .strikethrough()
-                .foregroundStyle(Color(hex: 0xAAAAAA))
+                .foregroundStyle(Color(hex: 0x666666))
             (Text(offerPrice).font(.opaw(30, .black)).foregroundColor(Color(hex: 0x111111))
-                + Text("/year").font(.opaw(16, .black)).foregroundColor(Color(hex: 0x999999)))
+                + Text("/year").font(.opaw(16, .black)).foregroundColor(Color(hex: 0x666666)))
         }
     }
 

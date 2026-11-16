@@ -22,7 +22,7 @@ struct SpeechBubble: View {
     }
 }
 
-/// The pet's cut-out photo with the white sticker edge, or a soft placeholder before there is one.
+/// The pet's cut-out photo with the white sticker edge, or a faint pet shadow before there is one.
 struct StickerPet: View {
     let image: UIImage?
     var edge: CGFloat = 5
@@ -37,10 +37,8 @@ struct StickerPet: View {
                     .scaledToFit()
                     .sticker(edge: edge, blur: edge * 2.8, y: edge * 2)
             } else {
-                Image(systemName: "pawprint.fill")
-                    .resizable()
-                    .scaledToFit()
-                    .padding(28)
+                GhostPuppy()
+                    .padding(12)
                     .foregroundStyle(Color(hex: 0x111111).opacity(0.09))
             }
         }
@@ -88,8 +86,8 @@ struct DesignToggle: View {
 
     var body: some View {
         Button {
-            Haptics.select()
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { isOn.toggle() }
+            Haptics.tap()
+            withAnimation(.spring(response: 0.38, dampingFraction: 0.8)) { isOn.toggle() }
         } label: {
             Capsule()
                 .fill(isOn ? Color(hex: 0x111111) : Color(hex: 0xDCDCDF))

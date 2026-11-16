@@ -45,8 +45,8 @@ extension Color {
     /// Chips and inputs inside a card.
     static let opawChip = Color(uiColor: .opaw(light: 0xF1F1F2, dark: 0x2C2C2E))
 
-    /// Secondary text.
-    static let opawMuted = Color(uiColor: .opaw(light: 0x999999, dark: 0x8E8E93))
+    /// Secondary text: captions, times and labels. Dark enough to read on white.
+    static let opawMuted = Color(uiColor: .opaw(light: 0x666666, dark: 0x8E8E93))
 
     /// Row dividers inside cards.
     static let opawHairline = Color(uiColor: .opaw(light: 0xEEEEEE, dark: 0x2C2C2E))
@@ -54,9 +54,10 @@ extension Color {
     /// Only for things that need attention: overdue meds, warnings.
     static let opawAlert = Color(hex: 0xEC3013)
 
-    /// Quieter text steps used by the design: #AAA, #777, #BBB.
-    static let opawFaint = Color(uiColor: .opaw(light: 0xAAAAAA, dark: 0x7C7C80))
-    static let opawSoftText = Color(uiColor: .opaw(light: 0x777777, dark: 0xA1A1A6))
+    /// Text on light grounds is #666 everywhere; these names stay for the places that used the
+    /// old lighter steps. `opawGhost` (#BBB) is only for days you can't pick yet and decoration.
+    static let opawFaint = Color(uiColor: .opaw(light: 0x666666, dark: 0x7C7C80))
+    static let opawSoftText = Color(uiColor: .opaw(light: 0x666666, dark: 0xA1A1A6))
     static let opawGhost = Color(uiColor: .opaw(light: 0xBBBBBB, dark: 0x5C5C60))
 
     /// Empty bar and track fills.
@@ -219,12 +220,15 @@ struct OpawSecondaryButtonStyle: ButtonStyle {
     }
 }
 
-/// Gives any tappable view a gentle press-down.
+/// Press (7d): buttons, tiles and rows scale to 0.94 in 120 ms, ease-out. With Reduce Motion they fade.
 struct PressableStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed ? 0.95 : 1)
-            .animation(.spring(response: 0.25, dampingFraction: 0.65), value: configuration.isPressed)
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.94 : 1)
+            .opacity(configuration.isPressed && reduceMotion ? 0.7 : 1)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }
 
@@ -346,7 +350,7 @@ struct StatColumn: View {
     }
 }
 
-/// A filter pill on the ground: black when selected, white with a soft shadow otherwise.
+/// A filter pill on the ground: black when selected, white with a soft shadow otherwise. At least 44 tall.
 struct FilterPill: View {
     let title: String
     let isSelected: Bool
@@ -360,6 +364,7 @@ struct FilterPill: View {
                 .foregroundStyle(isSelected ? Color.opawOnInk : Color.opawInk)
                 .padding(.horizontal, 18)
                 .padding(.vertical, verticalPadding)
+                .frame(minHeight: 44)
                 .background(isSelected ? Color.opawInk : Color.opawSurface, in: Capsule())
                 .shadow(color: .black.opacity(isSelected ? 0 : 0.05), radius: 8, y: 6)
         }
@@ -534,21 +539,69 @@ struct DogThumbnail: View {
     }
 }
 
+/// One haptic per action (7c), each with its matching sound. Every haptic confirms something you did or
+/// warns about something that needs you; nothing buzzes while scrolling or while the pet moves.
+/// Haptics and sounds each have a switch in Settings, and both follow the system settings.
 enum Haptics {
+    /// Log saved, walk saved.
     static func success() {
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        fire(.success) { UINotificationFeedbackGenerator().notificationOccurred(.success) }
     }
 
+    /// Tap a Care button, flip a switch, pause a walk.
     static func tap() {
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        fire(.light) { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
     }
 
+    /// Change day, swipe between pets.
     static func select() {
-        UISelectionFeedbackGenerator().selectionChanged()
+        fire(.selection) { UISelectionFeedbackGenerator().selectionChanged() }
     }
 
+    /// Undo, pull to refresh letting go.
     static func soft() {
-        UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+        fire(.soft) { UIImpactFeedbackGenerator(style: .soft).impactOccurred() }
+    }
+
+    /// Hold a log until the popup opens, start or resume a walk.
+    static func medium() {
+        fire(.medium) { UIImpactFeedbackGenerator(style: .medium).impactOccurred() }
+    }
+
+    /// Confirm delete.
+    static func rigid() {
+        fire(.rigid) { UIImpactFeedbackGenerator(style: .rigid).impactOccurred() }
+    }
+
+    /// One tick while holding to finish a walk; `progress` 0…1 makes each tick a little stronger and higher.
+    static func tick(progress: Double = 0) {
+        let p = min(1, max(0, progress))
+        fire(.tick(step: p)) { UIImpactFeedbackGenerator(style: .rigid).impactOccurred(intensity: 0.4 + 0.5 * p) }
+    }
+
+    /// Meds due, or already logged.
+    static func warning() {
+        fire(.warning) { UINotificationFeedbackGenerator().notificationOccurred(.warning) }
+    }
+
+    /// Save failed.
+    static func error() {
+        fire(.error) { UINotificationFeedbackGenerator().notificationOccurred(.error) }
+    }
+
+    /// Badge or streak unlocked: a heavy thump, then success.
+    static func milestone() {
+        fire(.milestone) {
+            UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) {
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+            }
+        }
+    }
+
+    private static func fire(_ cue: Sounds.Cue, haptic: () -> Void) {
+        if Feedback.hapticsOn { haptic() }
+        Sounds.shared.play(cue)
     }
 }
 

@@ -66,8 +66,8 @@ struct HomeView: View {
             }
             .sheet(item: $sheet) { sheet in
                 switch sheet {
-                case .addDog: AddDogSheet()
-                case .petLimit: PetLimitSheet(dog: currentDog ?? dogs.first) { showPaywall = true }
+                case .addDogCamera: AddDogSheet(source: .camera)
+                case .addDogLibrary: AddDogSheet(source: .library)
                 }
             }
             .adaptiveSheet(isPresented: $showSettings, wide: duoOpen) { ProfileView() }
@@ -81,7 +81,11 @@ struct HomeView: View {
                 PetPage(dog: dog, dots: dots, compact: compact) { path.append(HomeRoute.today(dog.id)) }
                     .tag(dog.id.uuidString)
             }
-            AddPetPage(dots: dots, locked: !premium.isPremium && !dogs.isEmpty, compact: compact) { sheet = premium.isPremium || dogs.isEmpty ? .addDog : .petLimit }
+            AddPetPage(dots: dots, locked: !premium.isPremium && !dogs.isEmpty, compact: compact) { source in
+                sheet = source == .camera ? .addDogCamera : .addDogLibrary
+            } onPremium: {
+                showPaywall = true
+            }
                 .tag(Self.addPage)
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
@@ -198,7 +202,7 @@ struct HomeView: View {
 }
 
 enum HomeSheet: String, Identifiable {
-    case addDog, petLimit
+    case addDogCamera, addDogLibrary
     var id: String { rawValue }
 }
 
@@ -344,8 +348,8 @@ private struct PetPage: View {
                         dots
                         chipRow
                         Text("\u{201C}\(report.line)\u{201D}")
-                            .font(.opaw(17, .medium))
-                            .foregroundStyle(Color.opawSoftText)
+                            .font(.opaw(17, .bold))
+                            .foregroundStyle(Color.opawInk)
                             .lineSpacing(4)
                             .multilineTextAlignment(.center)
                             .contentTransition(.opacity)
@@ -456,92 +460,140 @@ private struct AddPetPage: View {
     let dots: AnyView
     var locked = false
     var compact = false
-    let onAdd: () -> Void
+    let onAdd: (PhotoSource) -> Void
+    let onPremium: () -> Void
 
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
-                ZStack(alignment: .top) {
+                ZStack(alignment: .bottomTrailing) {
+                    RoundedRectangle(cornerRadius: 48, style: .continuous)
+                        .strokeBorder(Color(hex: 0xCFCFD3), style: StrokeStyle(lineWidth: 2.5, dash: [8, 6]))
+                        .padding(.horizontal, 78)
                     GhostCycle()
                         .frame(width: 190, height: 210)
-                        .padding(.top, 70)
-                    Button(action: onAdd) {
-                        Icon(.plus, size: 34, weight: 2.8)
-                            .foregroundStyle(.white)
-                            .frame(width: 88, height: 88)
-                            .background(Color(hex: 0x111111), in: Circle())
-                            .shadow(color: .black.opacity(0.25), radius: 18, y: 18)
-                            .overlay(alignment: .topTrailing) {
-                                if locked {
-                                    Icon(.lock, size: 16)
-                                        .foregroundStyle(.white)
-                                        .frame(width: 34, height: 34)
-                                        .background(Color(hex: 0x111111), in: Circle())
-                                        .overlay(Circle().strokeBorder(Color.opawCream, lineWidth: 3))
-                                        .offset(x: 6, y: -6)
-                                }
-                            }
-                    }
-                    .buttonStyle(.pressable)
-                    .padding(.top, 150)
-                    .accessibilityLabel("Add a new pet")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                        .padding(.top, 40)
+                    Icon(locked ? .lock : .camera, size: 24, weight: locked ? 2.6 : 2.4)
+                        .foregroundStyle(.white)
+                        .frame(width: 56, height: 56)
+                        .background(Color(hex: 0x111111), in: Circle())
+                        .shadow(color: .black.opacity(0.22), radius: 12, y: 12)
+                        .padding(.trailing, 66)
+                        .accessibilityHidden(true)
                 }
-                .frame(maxWidth: .infinity)
-                .frame(height: 340, alignment: .top)
+                .frame(height: 290)
 
                 VStack(spacing: 10) {
-                    Text("Add a new pet")
+                    Text("Add a pet")
                         .font(.opaw(compact ? 34 : 40, .black))
                         .foregroundStyle(Color.opawInk)
                     dots
-                    Text("Snap a photo of another dog, cat or bunny and they'll come to life too.")
-                        .font(.opaw(17, .medium))
-                        .foregroundStyle(Color.opawSoftText)
+                    Text(locked
+                         ? "Free covers one pet. Premium adds as many as you like, each with their own avatar."
+                         : "Take one photo of a dog, cat or bunny and they come to life next to your pet.")
+                        .font(.opaw(16, .medium))
+                        .foregroundStyle(Color.opawMuted)
                         .lineSpacing(4)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(.horizontal, compact ? 20 : 40)
+                .padding(.horizontal, compact ? 20 : 36)
                 .padding(.top, 14)
+
+                VStack(spacing: 10) {
+                    if locked {
+                        Button("Try Premium free for 7 days", action: onPremium)
+                            .buttonStyle(BlackPillButtonStyle(height: 60))
+                        Button("See what Premium adds", action: onPremium)
+                            .buttonStyle(BlackPillButtonStyle(height: 60, inverted: true))
+                    } else {
+                        Button { onAdd(.camera) } label: {
+                            HStack(spacing: 10) {
+                                Icon(.camera, size: 20, weight: 2.4)
+                                Text("Take a photo")
+                            }
+                        }
+                        .buttonStyle(BlackPillButtonStyle(height: 60))
+                        Button("Choose from library") { onAdd(.library) }
+                            .buttonStyle(BlackPillButtonStyle(height: 60, inverted: true))
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 18)
             }
-            .padding(.top, compact ? 40 : 72)
+            .padding(.top, compact ? 76 : 92)
             .padding(.bottom, compact ? 24 : 120)
         }
         .scrollIndicators(.hidden)
     }
 }
 
-/// Three faint silhouettes (dog, cat, bunny) taking turns to appear, every 9 seconds.
+/// A pet's shadow, standing in before there is a photo.
+enum GhostPet: String, CaseIterable {
+    case retriever = "GhostRetriever"
+    case cat = "GhostCat"
+    case bunny = "GhostBunny"
+    case corgi = "GhostCorgi"
+    case fluffyCat = "GhostFluffyCat"
+    case lopBunny = "GhostLopBunny"
+
+    /// How tall it stands in its slot, so a bunny looks small beside a retriever. The biggest stops
+    /// short of the top to stay clear of the speech bubble on the welcome screen.
+    var height: CGFloat {
+        switch self {
+        case .retriever: 0.9
+        case .cat: 0.7
+        case .bunny: 0.56
+        case .corgi: 0.58
+        case .fluffyCat: 0.72
+        case .lopBunny: 0.48
+        }
+    }
+}
+
+/// Faint pet shadows taking turns to appear, each at its own size on the same ground line.
 struct GhostCycle: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private static let pets = GhostPet.allCases
+    /// Seconds each shadow gets before the next one starts to appear.
+    private static let turn = 3.0
 
     var body: some View {
         TimelineView(.animation(paused: reduceMotion)) { context in
             let time = context.date.timeIntervalSinceReferenceDate
-            ZStack {
-                ForEach(0..<3, id: \.self) { index in
-                    let state = Self.state(at: time - Double(index) * 3)
-                    GhostShape(kind: index)
-                        .fill(Color(hex: 0x111111).opacity(0.09))
-                        .opacity(reduceMotion ? (index == 0 ? 1 : 0) : state.opacity)
-                        .scaleEffect(reduceMotion ? 1 : state.scale)
+            GeometryReader { proxy in
+                ZStack {
+                    ForEach(Array(Self.pets.enumerated()), id: \.offset) { index, pet in
+                        let state = Self.state(at: time - Double(index) * Self.turn)
+                        Image(pet.rawValue)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: proxy.size.width, height: proxy.size.height * pet.height, alignment: .bottom)
+                            .frame(width: proxy.size.width, height: proxy.size.height, alignment: .bottom)
+                            .foregroundStyle(Color(hex: 0x111111).opacity(0.09))
+                            .opacity(reduceMotion ? (index == 0 ? 1 : 0) : state.opacity)
+                            .scaleEffect(reduceMotion ? 1 : state.scale)
+                    }
                 }
             }
         }
         .accessibilityHidden(true)
     }
 
-    /// The design's ghost-cycle keyframes: fade in by 6%, hold to 28%, fade out by 34%.
+    /// The design's ghost-cycle keyframes: fade in over 0.54 s, hold to 2.52 s, fade out by 3.06 s.
     static func state(at time: Double) -> (opacity: Double, scale: Double) {
-        let t = (time.truncatingRemainder(dividingBy: 9) + 9).truncatingRemainder(dividingBy: 9) / 9
+        let period = turn * Double(pets.count)
+        let t = (time.truncatingRemainder(dividingBy: period) + period).truncatingRemainder(dividingBy: period)
         switch t {
-        case ..<0.06:
-            let p = t / 0.06
+        case ..<0.54:
+            let p = t / 0.54
             return (p, 0.94 + 0.06 * p)
-        case ..<0.28:
+        case ..<2.52:
             return (1, 1)
-        case ..<0.34:
-            let p = (t - 0.28) / 0.06
+        case ..<3.06:
+            let p = (t - 2.52) / 0.54
             return (1 - p, 1 + 0.03 * p)
         default:
             return (0, 1.03)
@@ -549,51 +601,13 @@ struct GhostCycle: View {
     }
 }
 
-/// Silhouettes drawn in a 200×220 box: 0 dog, 1 cat, 2 bunny.
-private struct GhostShape: Shape {
-    let kind: Int
-
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        func ellipse(_ cx: CGFloat, _ cy: CGFloat, _ rx: CGFloat, _ ry: CGFloat, rotate degrees: CGFloat = 0) {
-            let oval = Path(ellipseIn: CGRect(x: -rx, y: -ry, width: rx * 2, height: ry * 2))
-            let transform = CGAffineTransform(rotationAngle: degrees * .pi / 180).concatenating(CGAffineTransform(translationX: cx, y: cy))
-            path.addPath(oval, transform: transform)
-        }
-        func pill(_ x: CGFloat, _ y: CGFloat, _ w: CGFloat, _ h: CGFloat) {
-            path.addRoundedRect(in: CGRect(x: x, y: y, width: w, height: h), cornerSize: CGSize(width: w / 2, height: w / 2))
-        }
-        switch kind {
-        case 0:
-            ellipse(100, 165, 56, 50)
-            ellipse(100, 78, 40, 40)
-            ellipse(64, 70, 13, 30, rotate: 22)
-            ellipse(136, 70, 13, 30, rotate: -22)
-            ellipse(100, 100, 20, 15)
-            pill(70, 180, 20, 36)
-            pill(110, 180, 20, 36)
-        case 1:
-            ellipse(100, 160, 46, 56)
-            ellipse(100, 82, 36, 36)
-            path.addLines([CGPoint(x: 68, y: 66), CGPoint(x: 74, y: 28), CGPoint(x: 96, y: 52)])
-            path.closeSubpath()
-            path.addLines([CGPoint(x: 132, y: 66), CGPoint(x: 126, y: 28), CGPoint(x: 104, y: 52)])
-            path.closeSubpath()
-            var tail = Path()
-            tail.move(to: CGPoint(x: 144, y: 196))
-            tail.addCurve(to: CGPoint(x: 164, y: 134), control1: CGPoint(x: 174, y: 190), control2: CGPoint(x: 180, y: 156))
-            path.addPath(tail.strokedPath(StrokeStyle(lineWidth: 14, lineCap: .round)))
-            pill(76, 184, 18, 32)
-            pill(106, 184, 18, 32)
-        default:
-            ellipse(100, 168, 50, 46)
-            ellipse(100, 104, 32, 32)
-            ellipse(84, 48, 11, 38, rotate: -8)
-            ellipse(116, 48, 11, 38, rotate: 8)
-            ellipse(150, 186, 14, 14)
-        }
-        let scale = min(rect.width / 200, rect.height / 220)
-        return path.applying(CGAffineTransform(scaleX: scale, y: scale).concatenating(CGAffineTransform(translationX: rect.minX, y: rect.minY)))
+/// One pet's shadow filling its frame, for a pet that has no photo yet. Tint it with `foregroundStyle`.
+struct GhostPuppy: View {
+    var body: some View {
+        Image("GhostPuppy")
+            .resizable()
+            .scaledToFit()
+            .accessibilityHidden(true)
     }
 }
 

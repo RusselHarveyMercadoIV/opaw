@@ -16,9 +16,7 @@ struct AvatarView: View {
             } else if let data = dog.cutoutData ?? dog.photoData, let image = UIImage(data: data) {
                 LivingPhotoView(image: image, mood: mood)
             } else {
-                Image(systemName: "dog.fill")
-                    .resizable()
-                    .scaledToFit()
+                GhostPuppy()
                     .padding(40)
                     .foregroundStyle(Color.opawOrange.opacity(0.7))
             }

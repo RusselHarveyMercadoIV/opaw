@@ -3,6 +3,11 @@ import PhotosUI
 import SwiftData
 import SwiftUI
 
+/// Where Add a pet starts: the camera or the photo library.
+enum PhotoSource {
+    case camera, library
+}
+
 /// Takes or picks a photo, lifts the dog off the background and guesses the breed, all on device.
 ///
 /// In onboarding it hands the result back with `onComplete`. When adding another dog from Profile
@@ -10,6 +15,8 @@ import SwiftUI
 struct AvatarCaptureStep: View {
     let draft: DogDraft
     var eyebrow: String?
+    /// Opens the camera or the photo library as soon as the step appears.
+    var source: PhotoSource?
     var initial = CaptureResult()
     var onComplete: ((CaptureResult) -> Void)?
     var onSaved: () -> Void = {}
@@ -21,6 +28,7 @@ struct AvatarCaptureStep: View {
     @State private var isProcessing = false
     @State private var message: String?
     @State private var didLoadInitial = false
+    @State private var showLibrary = false
 
     private var hasCamera: Bool { UIImagePickerController.isSourceTypeAvailable(.camera) }
 
@@ -105,7 +113,14 @@ struct AvatarCaptureStep: View {
             guard !didLoadInitial else { return }
             didLoadInitial = true
             result = initial
+            guard result.original == nil else { return }
+            switch source {
+            case .camera?: if hasCamera { showCamera = true } else { showLibrary = true }
+            case .library?: showLibrary = true
+            case nil: break
+            }
         }
+        .photosPicker(isPresented: $showLibrary, selection: $pickerItem, matching: .images)
         .onChange(of: pickerItem) { _, item in
             guard let item else { return }
             Task {

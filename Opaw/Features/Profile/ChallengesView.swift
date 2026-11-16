@@ -8,6 +8,7 @@ struct ChallengesView: View {
     @AppStorage(OpawDefaults.activeDogKey, store: OpawDefaults.shared) private var activeDogID = ""
 
     @Environment(\.duoOpen) private var duoOpen
+    @Environment(\.dismiss) private var dismiss
 
     private var dog: Dog? {
         dogs.first { $0.id.uuidString == activeDogID } ?? dogs.first
@@ -71,11 +72,6 @@ struct ChallengesView: View {
     private var phoneBody: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                Text("Challenges")
-                    .font(.opaw(36, .black))
-                    .foregroundStyle(Color.opawInk)
-                    .padding(.horizontal, 24)
-                    .padding(.top, 12)
                 if let dog {
                     monthCard(dog: dog)
                         .padding(.horizontal, 20)
@@ -86,10 +82,20 @@ struct ChallengesView: View {
                     badges(dog: dog)
                 }
             }
-            .padding(.top, 20)
             .padding(.bottom, 40)
         }
         .scrollIndicators(.hidden)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            ScreenHeader(title: "Challenges") {
+                Button { dismiss() } label: { RoundIcon(symbol: "chevron.left") }
+                    .buttonStyle(.pressable)
+                    .accessibilityLabel("Back")
+            } trailing: {
+                Color.clear.frame(width: 54, height: 54)
+            }
+            .padding(.top, 10)
+            .background(Color.opawCream)
+        }
         .opawBackground()
         .presentationCornerRadius(40)
     }

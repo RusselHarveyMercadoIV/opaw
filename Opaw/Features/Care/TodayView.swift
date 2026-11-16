@@ -1,8 +1,10 @@
 import OpawKit
 import SwiftData
 import SwiftUI
+import WidgetKit
 
-/// Today (2b): the week strip, six tiles to log with one tap, the day's log with points, and the reaction toast.
+/// Day summary (2b): the week strip, six read-only tiles, and the day's log with points. Logging is on
+/// Care; hold a log here to delete it.
 struct TodayView: View {
     let dog: Dog
     /// On the open display Home shows Today in its right pane (6a), with these buttons beside the title.
@@ -20,14 +22,10 @@ struct TodayView: View {
 
     private var embedded: Bool { embeddedActions != nil }
 
-    @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @State private var day = Calendar.current.startOfDay(for: Date())
-    @State private var highlight: CareKind?
-    @State private var toast: CareToast?
-    @State private var pendingLog: PendingLog?
-    @State private var showPoop = false
-    @State private var celebration: Badge?
+    @State private var pendingDelete: PendingDelete?
+    @Environment(ToastCenter.self) private var toasts
 
     private var calendar: Calendar {
         var calendar = Calendar.current
@@ -48,44 +46,40 @@ struct TodayView: View {
     }
 
     private var content: some View {
-        ZStack {
-            TimelineView(.periodic(from: .now, by: 60)) { context in
-                ScrollView {
-                    VStack(spacing: 0) {
-                        weekStrip(now: context.date)
+        TimelineView(.periodic(from: .now, by: 60)) { context in
+            ScrollView {
+                VStack(spacing: 0) {
+                    weekStrip(now: context.date)
+                        .padding(.horizontal, 20)
+                        .padding(.top, embedded ? 14 : 18)
+                    if toasts.isOffline {
+                        offlineChip
                             .padding(.horizontal, 20)
-                            .padding(.top, embedded ? 14 : 18)
-                        tiles(now: context.date)
-                            .padding(.horizontal, 20)
-                            .padding(.top, embedded ? 14 : 16)
-                        logCard
-                            .padding(.horizontal, 20)
-                            .padding(.top, embedded ? 14 : 16)
+                            .padding(.top, 14)
+                            .transition(.offset(y: 24).combined(with: .opacity))
                     }
-                    .padding(.bottom, embedded ? 24 : 120)
+                    tiles(now: context.date)
+                        .padding(.horizontal, 20)
+                        .padding(.top, embedded ? 14 : 16)
+                    logHeader
+                        .padding(.horizontal, 26)
+                        .padding(.top, 22)
+                    logCard
+                        .padding(.horizontal, 20)
+                        .padding(.top, 10)
                 }
-                .scrollIndicators(.hidden)
-                .padding(.horizontal, embedded ? -20 : 0)
-                .safeAreaInset(edge: .top, spacing: 0) {
-                    if embedded { embeddedHeader } else { header }
-                }
+                .padding(.bottom, embedded ? 24 : 40)
             }
-            .background { if !embedded { Color.opawCream.ignoresSafeArea() } }
-            .careToast($toast)
-            .repeatLogConfirmation($pendingLog)
-
-            if showPoop {
-                PoopLogOverlay(dog: dog) { event in
-                    if let event { record(event) }
-                    withAnimation(.spring(response: 0.45, dampingFraction: 0.9)) { showPoop = false }
-                }
-                .transition(.opacity)
-                .zIndex(2)
+            .scrollIndicators(.hidden)
+            .refreshable { await refresh() }
+            .animation(.easeOut(duration: 0.32), value: toasts.isOffline)
+            .padding(.horizontal, embedded ? -20 : 0)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if embedded { embeddedHeader } else { header }
             }
         }
-        .alert(item: $celebration) { badge in
-            Alert(title: Text("New badge: \(badge.title)"), message: Text(badge.detail), dismissButton: .default(Text("Woof!")))
-        }
+        .background { if !embedded { Color.opawCream.ignoresSafeArea() } }
+        .deleteLogConfirmation($pendingDelete)
     }
 
     private var header: some View {
@@ -187,43 +181,37 @@ struct TodayView: View {
     }
 
     private func tile(_ kind: CareKind, value: String, suffix: String? = nil, label: String, alert: Bool = false) -> some View {
-        let dark = highlight == kind && isToday
-        return Button {
-            tap(kind)
-        } label: {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(alignment: .firstTextBaseline, spacing: 0) {
-                    Text(value)
-                        .font(.opaw(28, .black))
-                        .contentTransition(.numericText())
-                    if let suffix {
-                        Text(suffix)
-                            .font(.opaw(16, .black))
-                            .foregroundStyle(dark ? Color.white.opacity(0.6) : Color.opawGhost)
-                    }
-                }
-                .foregroundStyle(dark ? Color.white : (alert ? Color.opawAlert : Color.opawInk))
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
-                Text(dark ? "\(label) ✓" : label)
-                    .font(.opaw(15, .bold))
-                    .foregroundStyle(dark ? Color.white : Color.opawInk)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.top, 16)
-            .padding(.horizontal, 14)
-            .padding(.bottom, 14)
-            .background(dark ? Color(hex: 0x111111) : Color.opawSurface, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
-            .overlay {
-                if alert && !dark {
-                    RoundedRectangle(cornerRadius: 26, style: .continuous).strokeBorder(Color.opawAlert, lineWidth: 2)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 0) {
+                Text(value)
+                    .font(.opaw(28, .black))
+                    .countTransition(value)
+                if let suffix {
+                    Text(suffix)
+                        .font(.opaw(16, .black))
+                        .foregroundStyle(Color.opawMuted)
                 }
             }
-            .shadow(color: .black.opacity(dark ? 0.2 : (alert ? 0 : 0.05)), radius: 13, y: dark ? 12 : 10)
+            .foregroundStyle(alert ? Color.opawAlert : Color.opawInk)
+            .lineLimit(1)
+            .minimumScaleFactor(0.6)
+            Text(label)
+                .font(.opaw(15, .bold))
+                .foregroundStyle(Color.opawInk)
         }
-        .buttonStyle(.pressable)
-        .disabled(!isToday)
-        .accessibilityLabel("\(label): \(value)\(suffix ?? ""). Tap to log.")
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, 16)
+        .padding(.horizontal, 14)
+        .padding(.bottom, 14)
+        .background(Color.opawSurface, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .overlay {
+            if alert {
+                RoundedRectangle(cornerRadius: 26, style: .continuous).strokeBorder(Color.opawAlert, lineWidth: 2)
+            }
+        }
+        .shadow(color: .black.opacity(alert ? 0 : 0.05), radius: 13, y: 10)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(label): \(value)\(suffix ?? "")")
     }
 
     // MARK: Log
@@ -249,11 +237,20 @@ struct TodayView: View {
         let rows = entries
         return VStack(spacing: 0) {
             if rows.isEmpty {
-                Text(isToday ? "Nothing logged yet. Tap a tile to log it." : "Nothing was logged this day.")
-                    .font(.opaw(15, .semibold))
-                    .foregroundStyle(Color.opawMuted)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 13)
+                VStack(spacing: 4) {
+                    Text(isToday ? "Nothing logged yet" : "Nothing logged this day")
+                        .font(.opaw(17, .black))
+                        .foregroundStyle(Color.opawInk)
+                    if isToday {
+                        Text("Log on Care when \(dog.name) eats, pees or poops and it shows up here.")
+                            .font(.opaw(14, .medium))
+                            .foregroundStyle(Color.opawMuted)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 22)
             }
             ForEach(Array(rows.enumerated()), id: \.element.id) { index, entry in
                 HStack(spacing: 0) {
@@ -275,15 +272,10 @@ struct TodayView: View {
                     if index < rows.count - 1 { Rectangle().fill(Color.opawHairline).frame(height: 1) }
                 }
                 .contentShape(Rectangle())
-                .contextMenu {
-                    if entry.isCareLog {
-                        Button(role: .destructive) {
-                            CareRecorder.delete(eventID: entry.id, in: modelContext)
-                        } label: {
-                            Label("Delete log", systemImage: "trash")
-                        }
-                    }
-                }
+                .holdToDelete(
+                    entry.isCareLog ? PendingDelete(id: entry.id, time: entry.date.formatted(date: .omitted, time: .shortened), text: entry.text, points: entry.points) : nil,
+                    into: $pendingDelete
+                )
             }
         }
         .padding(.horizontal, 22)
@@ -291,26 +283,44 @@ struct TodayView: View {
         .whiteCard()
     }
 
-    // MARK: Actions
-
-    private func tap(_ kind: CareKind) {
-        if kind == .poop {
-            Haptics.tap()
-            withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) { showPoop = true }
-        } else if let message = CareRecorder.repeatWarning(kind: kind, title: kind.title, dog: dog) {
-            Haptics.soft()
-            pendingLog = PendingLog(message: message) { record(CareEvent(kind: kind, dog: dog)) }
-        } else {
-            record(CareEvent(kind: kind, dog: dog))
+    /// Shown while the phone is offline (7f). Logging keeps working; everything stays on this phone.
+    private var offlineChip: some View {
+        HStack(spacing: 10) {
+            Icon(.cloudOff, size: 18)
+            Text("Offline")
+                .font(.opaw(14, .bold))
+            Text("Logs stay on this phone")
+                .font(.opaw(14, .medium))
+                .foregroundStyle(Color.opawMuted)
+            Spacer(minLength: 0)
         }
+        .foregroundStyle(Color.opawInk)
+        .padding(.horizontal, 16)
+        .frame(height: 44)
+        .background(Color.opawSurface, in: Capsule())
+        .shadow(color: .black.opacity(0.05), radius: 8, y: 6)
+        .accessibilityElement(children: .combine)
     }
 
-    private func record(_ event: CareEvent) {
-        let result = CareRecorder.log(event, dog: dog, in: modelContext)
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-            highlight = event.kind == .brush ? .brush : event.kind
-            toast = result.toast
+    /// Pull to refresh: re-reads badges and the widgets, with a soft haptic as it lets go.
+    private func refresh() async {
+        Haptics.soft()
+        BadgeService.refresh(dog)
+        WidgetCenter.shared.reloadAllTimelines()
+        try? await Task.sleep(for: .milliseconds(600))
+    }
+
+    private var logHeader: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text("History")
+                .font(.opaw(17, .black))
+                .foregroundStyle(Color.opawInk)
+            Spacer()
+            if !entries.isEmpty {
+                Text("Hold a log to delete it")
+                    .font(.opaw(13, .semibold))
+                    .foregroundStyle(Color.opawMuted)
+            }
         }
-        if let badge = result.badge { celebration = badge }
     }
 }

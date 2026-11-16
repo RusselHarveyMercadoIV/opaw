@@ -15,8 +15,8 @@ struct CareView: View {
     @State private var showEditTracks = false
     @State private var amountTrack: CareTrack?
     @State private var pendingLog: PendingLog?
-    @State private var toast: CareToast?
-    @State private var celebration: Badge?
+    @State private var pendingDelete: PendingDelete?
+    @Environment(ToastCenter.self) private var toasts
     @State private var showScheduleDuo = false
     @Environment(\.duoOpen) private var duoOpen
     @Environment(TabReselect.self) private var reselect: TabReselect?
@@ -54,8 +54,8 @@ struct CareView: View {
                 }
             }
             .opawBackground()
-            .careToast($toast, bottom: 110)
             .repeatLogConfirmation($pendingLog)
+            .deleteLogConfirmation($pendingDelete)
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(isPresented: $showScheduleDuo) {
                 if let dog { ScheduleHistoryDuo(dog: dog) }
@@ -78,13 +78,6 @@ struct CareView: View {
                     }
                 }
             }
-            .alert(item: $celebration) { badge in
-                Alert(
-                    title: Text("New badge: \(badge.title)"),
-                    message: Text(badge.detail),
-                    dismissButton: .default(Text("Woof!"))
-                )
-            }
         }
     }
 
@@ -106,14 +99,25 @@ struct CareView: View {
                     Text("Care")
                         .font(.opaw(22, .black))
                         .foregroundStyle(Color.opawInk)
-                    NavigationLink {
-                        ScheduleView(dog: dog)
-                    } label: {
-                        RoundIcon(symbol: "calendar.badge.clock")
+                    HStack(spacing: 10) {
+                        Button { showEditTracks = true } label: {
+                            Icon(.pencil, size: 20)
+                                .foregroundStyle(Color.opawInk)
+                                .frame(width: 54, height: 54)
+                                .background(Color.opawSurface, in: Circle())
+                                .floatingShadow()
+                        }
+                        .buttonStyle(.pressable)
+                        .accessibilityLabel("Edit tracks")
+                        NavigationLink {
+                            ScheduleView(dog: dog)
+                        } label: {
+                            RoundIcon(symbol: "calendar.badge.clock")
+                        }
+                        .buttonStyle(.pressable)
+                        .accessibilityLabel("Schedule and reminders")
                     }
-                    .buttonStyle(.pressable)
                     .frame(maxWidth: .infinity, alignment: .trailing)
-                    .accessibilityLabel("Schedule and reminders")
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 10)
@@ -184,7 +188,7 @@ struct CareView: View {
         let events = dog.events(on: now).sorted { $0.date > $1.date }
         return VStack(spacing: 0) {
             if events.isEmpty {
-                Text("Nothing yet. Tap a circle above to log.")
+                Text("Nothing logged yet. Tap a circle above when \(dog.name) eats, pees or poops.")
                     .font(.opaw(15, .semibold))
                     .foregroundStyle(Color.opawMuted)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -208,7 +212,7 @@ struct CareView: View {
                     if index > 0 { Rectangle().fill(Color.opawHairline).frame(height: 1) }
                 }
                 .contentShape(Rectangle())
-                .contextMenu { deleteButton(event.id) }
+                .holdToDelete(pendingDelete(event), into: $pendingDelete)
             }
         }
         .padding(.horizontal, 20)
@@ -235,7 +239,8 @@ struct CareView: View {
                     Text(streak == 1 ? "1-day streak" : "\(streak)-day streak")
                         .font(.opaw(compact ? 20 : 22, .black))
                         .foregroundStyle(Color.opawInk)
-                    Text(compact ? "Log 3 things a day" : "Log 3 things a day to keep it going")
+                        .countTransition(streak)
+                    Text("Log 3 things a day")
                         .font(.opaw(compact ? 13 : 14, .medium))
                         .foregroundStyle(Color.opawMuted)
                         .fixedSize(horizontal: false, vertical: true)
@@ -267,13 +272,16 @@ struct CareView: View {
                     kindCircle(track.kind, dog: dog, now: now, alert: due.contains(track.kind), compact: compact, size: size)
                 }
             }
-            Button {
-                showEditTracks = true
-            } label: {
-                circle(symbol: "pencil", label: "Edit", badge: nil, alert: false, size: size)
+            // On the phone, Edit sits in the header (3a); the open display keeps it in the grid.
+            if compact {
+                Button {
+                    showEditTracks = true
+                } label: {
+                    circle(symbol: "pencil", label: "Edit", badge: nil, alert: false, size: size)
+                }
+                .buttonStyle(.pressable)
+                .accessibilityLabel("Edit tracks")
             }
-            .buttonStyle(.pressable)
-            .accessibilityLabel("Edit tracks")
         }
     }
 
@@ -339,6 +347,7 @@ struct CareView: View {
                             .background(Color.opawCream, in: Capsule())
                             .offset(x: 4, y: -4)
                             .contentTransition(.numericText())
+                            .popOnChange(badge)
                     }
                 }
             Text(label)
@@ -368,7 +377,7 @@ struct CareView: View {
             .padding(.top, 12)
             .padding(.bottom, 8)
             if events.isEmpty {
-                Text("Nothing yet. Tap a circle above to log.")
+                Text("Nothing logged yet. Tap a circle above when \(dog.name) eats, pees or poops.")
                     .font(.opaw(15, .semibold))
                     .foregroundStyle(Color.opawMuted)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -391,7 +400,7 @@ struct CareView: View {
                 .padding(.vertical, 10)
                 .overlay(alignment: .top) { Rectangle().fill(Color.opawHairline).frame(height: 1) }
                 .contentShape(Rectangle())
-                .contextMenu { deleteButton(event.id) }
+                .holdToDelete(pendingDelete(event), into: $pendingDelete)
             }
         }
         .padding(.horizontal, 20)
@@ -399,13 +408,9 @@ struct CareView: View {
         .whiteCard()
     }
 
-    /// Long-press a log to remove it.
-    private func deleteButton(_ eventID: UUID) -> some View {
-        Button(role: .destructive) {
-            CareRecorder.delete(eventID: eventID, in: modelContext)
-        } label: {
-            Label("Delete log", systemImage: "trash")
-        }
+    /// Hold a log to delete it.
+    private func pendingDelete(_ event: CareEvent) -> PendingDelete {
+        PendingDelete(id: event.id, time: event.date.formatted(date: .omitted, time: .shortened), text: caringLine(event), points: event.kind.points)
     }
 
     private func caringLine(_ event: CareEvent) -> String {
@@ -450,7 +455,7 @@ struct CareView: View {
     /// Logs straight away, or first asks "Log another?" when it looks like a repeat or more than planned.
     private func confirmIfRepeat(kind: CareKind, trackID: UUID? = nil, title: String, dog: Dog, perform: @escaping () -> Void) {
         if let message = CareRecorder.repeatWarning(kind: kind, trackID: trackID, title: title, dog: dog) {
-            Haptics.soft()
+            Haptics.warning()
             pendingLog = PendingLog(message: message, perform: perform)
         } else {
             perform()
@@ -489,9 +494,8 @@ struct CareView: View {
     }
 
     private func record(_ event: CareEvent, dog: Dog) {
-        let result = CareRecorder.log(event, dog: dog, in: modelContext)
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) { toast = result.toast }
-        if let badge = result.badge { celebration = badge }
+        let toast = CareRecorder.log(event, dog: dog, in: modelContext, toasts: toasts)
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) { toasts.show(toast) }
     }
 }
 
@@ -543,8 +547,7 @@ struct PoopLogOverlay: View {
                 .sticker(edge: 5, blur: 7, y: 10)
                 .loopMotion(.breathe, duration: 2.6)
         } else {
-            Image(systemName: "dog.fill")
-                .font(.system(size: 80))
+            GhostPuppy()
                 .foregroundStyle(.white)
         }
     }
@@ -690,7 +693,7 @@ struct PoopLogForm: View {
     private func label(_ text: String) -> some View {
         Text(text)
             .font(.opaw(14, .bold))
-            .foregroundStyle(Color(hex: 0x999999))
+            .foregroundStyle(Color(hex: 0x666666))
     }
 
     private func swatch(_ option: PoopColor, size: CGFloat) -> some View {
@@ -711,7 +714,7 @@ struct PoopLogForm: View {
                     .frame(width: size, height: size)
                 Text(option.title)
                     .font(.opaw(12, .semibold))
-                    .foregroundStyle(selected ? Color(hex: 0x111111) : Color(hex: 0x999999))
+                    .foregroundStyle(selected ? Color(hex: 0x111111) : Color(hex: 0x666666))
                     .lineLimit(1)
                     .fixedSize()
             }
@@ -722,13 +725,13 @@ struct PoopLogForm: View {
     }
 }
 
-/// Wrapping chips: black when selected, light gray otherwise.
+/// Hard to Runny as one row of equal steps: black when selected, light gray otherwise.
 private struct FlowChips: View {
     let items: [PoopConsistency]
     @Binding var selection: PoopConsistency
 
     var body: some View {
-        WrapLayout(spacing: 6) {
+        HStack(spacing: 6) {
             ForEach(items) { option in
                 let selected = option == selection
                 Button {
@@ -738,8 +741,9 @@ private struct FlowChips: View {
                     Text(option.title)
                         .font(.opaw(14, .bold))
                         .foregroundStyle(selected ? Color.white : Color(hex: 0x555555))
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .frame(maxWidth: .infinity, minHeight: 44)
                         .background(selected ? Color(hex: 0x111111) : Color(hex: 0xF1F1F2), in: Capsule())
                 }
                 .buttonStyle(.pressable)

@@ -50,7 +50,7 @@ struct TrackGrid: View {
                 .shadow(color: .black.opacity(0.06), radius: 12, y: 10)
                 Text(option.title)
                     .font(.opaw(13, .bold))
-                    .foregroundStyle(on ? Color.opawInk : Color.opawMuted)
+                    .foregroundStyle(Color.opawInk)
                     .lineLimit(1)
             }
         }

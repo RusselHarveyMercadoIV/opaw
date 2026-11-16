@@ -343,10 +343,7 @@ struct FamilyTreeView: View {
         return siblings.count % 2 == 0 ? .brother : .sister
     }
 
-    private var inviteTitle: String {
-        if let sibling = siblings.first { return "Invite \(sibling.name)'s family" }
-        return "Invite \(dog.name)'s family"
-    }
+    private let inviteTitle = "Invite family"
 
     private var inviteMessage: String {
         "\(dog.name) is on Opaw, a little app where our pets come to life. Join \(dog.name)'s family tree!"

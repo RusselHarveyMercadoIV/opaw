@@ -8,6 +8,10 @@ enum DesignIcon: String, CaseIterable {
     case meal, water, pee, poop, meds, bath, brush, nails, weight, vet
     case close, chevronDown, refresh, link, location, lock, chart, users, cloud, help, grid, ruler, clock, pets, settings, wave
     case pencil, schedule, undo
+    /// Toast icons (7b).
+    case trash, cloudOff, alert
+    /// Settings > Sounds and Haptics (7c).
+    case speaker, vibrate
     /// Icons a custom track can use (3i).
     case bone, heartLine, star, moon, sun, book, ball
 
@@ -42,6 +46,7 @@ enum DesignIcon: String, CaseIterable {
         case .refresh, .link, .location, .chart, .users, .cloud, .help, .grid, .ruler, .pets, .settings, .wave: return 2.4
         case .sparkle: return 2.2
         case .pencil, .bone, .heartLine, .star, .moon, .sun, .book, .ball: return 2.3
+        case .trash, .cloudOff, .speaker, .vibrate: return 2.4
         default: return 2.6
         }
     }
@@ -113,6 +118,12 @@ enum DesignIcon: String, CaseIterable {
             return [.path("M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"), .circle(12, 12, 3)]
         case .pencil:
             return [.path("M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"), .path("m15 5 4 4")]
+        case .trash: return [.path("M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3")]
+        case .cloudOff:
+            return [.path("m3 3 18 18"), .path("M6.5 6.6A6.5 6.5 0 0 0 8 19.5h9.5c.5 0 1-.1 1.4-.2"), .path("M21.3 16.5A4.5 4.5 0 0 0 17.5 10.5h-1.3A6.5 6.5 0 0 0 10.2 6.2")]
+        case .speaker: return [.path("M11 5 6 9H2v6h4l5 4V5z"), .path("M15.54 8.46a5 5 0 0 1 0 7.07"), .path("M19.07 4.93a10 10 0 0 1 0 14.14")]
+        case .vibrate: return [.path("m2 8 2 2-2 2 2 2-2 2"), .path("m22 8-2 2 2 2-2 2 2 2"), .rect(8, 5, 8, 14, 1.5)]
+        case .alert: return [.circle(12, 12, 9), .path("M12 7.5v5.5M12 16.5v.01")]
         case .undo: return [.path("M9 14 4 9l5-5"), .path("M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11")]
         case .schedule:
             return [.path("M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5"), .path("M16 2v4M8 2v4M3 10h5"), .circle(16, 16, 6), .path("M16 14v2.2l1.6 1")]

@@ -11,6 +11,7 @@ struct ScheduleView: View {
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Environment(ToastCenter.self) private var toasts
     @State private var showAdd = false
 
     var body: some View {
@@ -145,8 +146,8 @@ struct ScheduleView: View {
                     Text("Log")
                         .font(.opaw(13, .heavy))
                         .foregroundStyle(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
+                        .padding(.horizontal, 16)
+                        .frame(height: 44)
                         .background(Color.opawAlert, in: Capsule())
                 }
                 .buttonStyle(.pressable)
@@ -240,7 +241,7 @@ struct ScheduleView: View {
             event.trackID = reminder.trackID
             event.trackName = reminder.title
         }
-        _ = CareRecorder.log(event, dog: dog, in: modelContext)
+        toasts.show(CareRecorder.log(event, dog: dog, in: modelContext, toasts: toasts))
     }
 
     private func reschedule() {

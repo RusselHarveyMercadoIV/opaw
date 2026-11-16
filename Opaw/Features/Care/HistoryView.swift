@@ -56,9 +56,13 @@ struct HistoryView: View {
                     poopCard
                         .padding(.horizontal, 20)
                         .padding(.top, 12)
+                    // On the phone the share button follows the charts instead of floating.
+                    shareButton
+                        .padding(.horizontal, 20)
+                        .padding(.top, 16)
                 }
             }
-            .padding(.bottom, inPane ? 90 : 120)
+            .padding(.bottom, inPane ? 90 : 40)
         }
         .scrollIndicators(.hidden)
         .padding(.horizontal, inPane ? -20 : 0)
@@ -84,24 +88,29 @@ struct HistoryView: View {
         }
         .opawBackground()
         .overlay(alignment: .bottom) {
-            ShareLink(item: vetSummary) {
-                HStack(spacing: 10) {
-                    Icon(.document, size: 20)
-                    Text("Share vet summary")
-                        .font(.opaw(17, .heavy))
-                }
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .frame(height: 62)
-                .background(Color(hex: 0x111111), in: Capsule())
-                .shadow(color: .black.opacity(inPane ? 0.18 : 0), radius: 14, y: 14)
+            if inPane {
+                shareButton
+                    .padding(.bottom, 4)
             }
-            .buttonStyle(.pressable)
-            .padding(.horizontal, inPane ? 0 : 20)
-            .padding(.bottom, 4)
         }
         .toolbar(.hidden, for: .navigationBar)
         .hidesFloatingTabBar()
+    }
+
+    private var shareButton: some View {
+        ShareLink(item: vetSummary) {
+            HStack(spacing: 10) {
+                Icon(.document, size: 20)
+                Text("Share vet summary")
+                    .font(.opaw(17, .heavy))
+            }
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity)
+            .frame(height: 62)
+            .background(Color(hex: 0x111111), in: Capsule())
+            .shadow(color: .black.opacity(inPane ? 0.18 : 0), radius: 14, y: 14)
+        }
+        .buttonStyle(.pressable)
     }
 
     // MARK: Summary

@@ -102,6 +102,8 @@ private struct PackHomeView: View {
     @State private var following: Set<UUID> = []
     @State private var selected: PackDog?
     @State private var status: String?
+    @State private var isLoading = true
+    @Environment(ToastCenter.self) private var toasts
     @State private var profile: PackDog?
     @State private var reporting: PackDog?
     @State private var confirmDelete = false
@@ -131,6 +133,8 @@ private struct PackHomeView: View {
             }
         }
         .toolbar(.hidden, for: .navigationBar)
+        // Nearby opens as a sheet over the tab view, so it shows toasts itself.
+        .toastHost(bottom: 24)
         .task {
             location.warmUp()
             await load()
@@ -217,6 +221,11 @@ private struct PackHomeView: View {
                     .padding(.horizontal, 14)
                     .padding(.bottom, 8)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else if isLoading {
+                loadingCard
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 8)
+                    .transition(.opacity)
             } else if let status {
                 Text(status)
                     .font(.opaw(15, .semibold))
@@ -229,10 +238,16 @@ private struct PackHomeView: View {
             }
         }
         .overlay(alignment: .top) {
+            // Back button, then the filters where a title would go.
             HStack(spacing: 8) {
-                FilterPill(title: "Within 1 km", isSelected: filter == .nearby, verticalPadding: 11) { filter = .nearby }
-                FilterPill(title: "Out walking", isSelected: filter == .walking, verticalPadding: 11) { filter = .walking }
-                Spacer()
+                if isPresented {
+                    Button { dismiss() } label: { RoundIcon(symbol: "chevron.left") }
+                        .buttonStyle(.pressable)
+                        .accessibilityLabel("Back")
+                }
+                FilterPill(title: "Within 1 km", isSelected: filter == .nearby) { filter = .nearby }
+                FilterPill(title: "Out walking", isSelected: filter == .walking) { filter = .walking }
+                Spacer(minLength: 0)
                 settingsMenu
             }
             .padding(.horizontal, 20)
@@ -413,6 +428,33 @@ private struct PackHomeView: View {
         .accessibilityLabel("Pack settings")
     }
 
+    /// The pet card's shape in shimmering grey while pets nearby load (7f).
+    private var loadingCard: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(spacing: 14) {
+                Circle().fill(Color(hex: 0xECECEE)).frame(width: 66, height: 66)
+                VStack(alignment: .leading, spacing: 8) {
+                    SkeletonBar(width: 120, height: 22)
+                    SkeletonBar(width: 170, height: 14)
+                }
+            }
+            HStack(spacing: 0) {
+                ForEach(0..<3, id: \.self) { _ in
+                    VStack(spacing: 6) {
+                        SkeletonBar(width: 52, height: 18)
+                        SkeletonBar(width: 70, height: 12)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+            }
+            SkeletonBar(height: 54)
+        }
+        .padding(20)
+        .background(Color.white, in: RoundedRectangle(cornerRadius: 36, style: .continuous))
+        .accessibilityElement()
+        .accessibilityLabel("Loading pets nearby")
+    }
+
     private func card(_ dog: PackDog) -> some View {
         let today = Calendar.current.startOfDay(for: Date())
         let theirWalks = posts.filter { $0.kind == "walk" && $0.dogID == dog.id }
@@ -478,13 +520,17 @@ private struct PackHomeView: View {
             if location.lastLocation != nil { await load() }
             return
         }
+        defer { withAnimation(.easeOut(duration: 0.32)) { isLoading = false } }
         do {
             dogs = try await pack.nearbyDogs(latitude: here.coordinate.latitude, longitude: here.coordinate.longitude)
             following = try await pack.followedDogIDs()
             posts = (try? await pack.feed(limit: 100)) ?? []
             status = dogs.isEmpty ? "No pets nearby yet. Invite your dog park friends!" : nil
         } catch {
-            status = error.localizedDescription
+            status = "Couldn't load pets nearby."
+            toasts.show(Notice(kind: .failed, title: "Couldn't load pets nearby", detail: toasts.isOffline ? "You're offline" : "Check your connection", actionTitle: "Retry") {
+                Task { await load() }
+            })
         }
     }
 
@@ -499,7 +545,9 @@ private struct PackHomeView: View {
             }
             Haptics.success()
         } catch {
-            status = error.localizedDescription
+            toasts.show(Notice(kind: .failed, title: "Couldn't put your pet on the map", detail: "Check your connection", actionTitle: "Retry") {
+                Task { await shareMyDogs() }
+            })
         }
     }
 
@@ -514,7 +562,9 @@ private struct PackHomeView: View {
             }
             try? modelContext.save()
         } catch {
-            status = error.localizedDescription
+            toasts.show(Notice(kind: .failed, title: follow ? "Couldn't wave at \(dog.name)" : "Couldn't update \(dog.name)", detail: "Check your connection", actionTitle: "Retry") {
+                Task { await wave(dog) }
+            })
         }
     }
 }
