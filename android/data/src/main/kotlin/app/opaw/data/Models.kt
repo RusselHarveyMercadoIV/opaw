@@ -11,6 +11,7 @@ import app.opaw.core.DogTraits
 import app.opaw.core.EnergyLevel
 import app.opaw.core.GeoPoint
 import app.opaw.core.PoopColor
+import app.opaw.core.Temperament
 import app.opaw.core.PoopConsistency
 import app.opaw.core.WalkStats
 import kotlinx.serialization.Serializable
@@ -77,6 +78,8 @@ data class Dog(
     val microchip: String = "",
     /** The vet clinic's name. */
     val vetClinic: String = "",
+    /** "playful", "calm", "curious", "shy" or "goofy"; empty until the owner picks one. */
+    val temperamentRaw: String = "",
 ) {
     /** Meal times as minutes after midnight, sorted. */
     val mealTimes: List<Int>
@@ -99,6 +102,8 @@ data class Dog(
 
     val size: DogSize get() = DogSize.fromRaw(sizeRaw) ?: DogSize.MEDIUM
     val energy: EnergyLevel get() = EnergyLevel.fromRaw(energyRaw) ?: EnergyLevel.MEDIUM
+    /** The owner's pick, else a guess from energy. */
+    val temperament: Temperament get() = Temperament.fromRaw(temperamentRaw) ?: Temperament.guess(energy)
     val avatarStatus: AvatarStatus get() = AvatarStatus.fromRaw(avatarStatusRaw)
     val earnedBadges: Set<Badge> get() = earnedBadgesRaw.mapNotNull(Badge::fromRaw).toSet()
     val ageYears: Double get() = age(birthDate)

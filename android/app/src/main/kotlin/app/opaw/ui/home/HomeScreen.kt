@@ -200,12 +200,15 @@ private fun PetPage(data: DogData, dots: @Composable () -> Unit, openStudio: () 
     val report = data.careReport(now)
     val mood = MoodEngine.mood(data.careSnapshot(now), now)
     val image = rememberPetImage(dog)
+    val app = rememberApp()
+    // A rigged 3D pet roams the whole width, so it gets no side margins or bobbing of its own.
+    val roams = app.petModels.file(dog.id, mood) != null && app.petModels.motion(dog.id, "rest") != null
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = 92.dp, bottom = 120.dp).statusBarsPadding(), horizontalAlignment = Alignment.CenterHorizontally) {
         // The stage: the avatar and the sound it makes.
-        Box(Modifier.fillMaxWidth().height(290.dp)) {
+        Box(Modifier.fillMaxWidth().height(if (roams) 320.dp else 290.dp)) {
             PetAvatar(
                 dog, image, mood,
-                Modifier.fillMaxSize().padding(horizontal = 78.dp).loopMotion(report.tier.motion),
+                if (roams) Modifier.fillMaxSize() else Modifier.fillMaxSize().padding(horizontal = 78.dp).loopMotion(report.tier.motion),
                 sticker = 7.dp,
                 faded = report.tier == CareTier.NEEDS_YOU,
                 onTap = openStudio,

@@ -10,7 +10,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [Dog::class, CareEvent::class, Walk::class, Memory::class, Reminder::class, CustomTrack::class],
-    version = 2,
+    version = 3,
 )
 @TypeConverters(Converters::class)
 abstract class OpawDatabase : RoomDatabase() {
@@ -31,12 +31,19 @@ abstract class OpawDatabase : RoomDatabase() {
             }
         }
 
+        /** Version 3 adds the pet's temperament. */
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE dogs ADD COLUMN temperamentRaw TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
         @Volatile private var instance: OpawDatabase? = null
 
         /** One database for the app, the widget and the walk service, like the iOS shared container. */
         fun get(context: Context): OpawDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(context.applicationContext, OpawDatabase::class.java, "opaw.db")
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build()
                 .also { instance = it }
         }

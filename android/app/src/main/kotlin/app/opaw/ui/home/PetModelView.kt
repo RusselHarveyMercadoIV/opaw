@@ -28,6 +28,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.abs
 import kotlin.math.cos
+import kotlin.math.exp
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
@@ -39,12 +40,20 @@ import kotlin.math.sin
  * breathes. With [interactive], one finger spins the pet around.
  */
 @Composable
-fun PetModel3D(file: File, modifier: Modifier = Modifier, interactive: Boolean = false, breathe: Boolean = false, motion: String? = null) {
+fun PetModel3D(
+    file: File,
+    modifier: Modifier = Modifier,
+    interactive: Boolean = false,
+    breathe: Boolean = false,
+    motion: String? = null,
+    /** A rigged pet with a temperament roams its stage instead of playing one motion in place. */
+    temperament: app.opaw.core.Temperament? = null,
+) {
     val transition = rememberInfiniteTransition(label = "breathe")
     val breath by transition.animateFloat(0f, 1f, infiniteRepeatable(tween(1800, easing = LinearEasing), RepeatMode.Reverse), label = "breath")
     AndroidView(
         factory = { PetModelLayout(it) },
-        update = { it.show(file, interactive, motion) },
+        update = { it.show(file, interactive, motion, temperament) },
         modifier = modifier.graphicsLayer {
             if (breathe) {
                 transformOrigin = TransformOrigin(0.5f, 1f)
@@ -73,9 +82,22 @@ private class PetModelLayout(context: Context) : FrameLayout(context), Choreogra
     private var lampsOn = true
     private var player: PetMotion? = null
     private var style: PetMotion.Style? = null
+    private var temperament: app.opaw.core.Temperament? = null
+    private var stage: PetStage? = null
+    private var aspect = 1f
+    private var lastNanos = 0L
+    private var phase = 0f
+    private var legSpeed = PetMotion.Style.IDLE.speed
+    private var legAmount = PetMotion.Style.IDLE.amount
+    private val shadow = StageShadow(context)
 
-    fun show(file: File, interactive: Boolean, motion: String? = null) {
+    fun show(file: File, interactive: Boolean, motion: String? = null, temperament: app.opaw.core.Temperament? = null) {
         this.file = file
+        if (this.temperament != temperament) {
+            this.temperament = temperament
+            stage = null
+            framed = false
+        }
         style = when (motion) {
             "walk" -> PetMotion.Style.WALK
             "run" -> PetMotion.Style.RUN
@@ -122,6 +144,7 @@ private class PetModelLayout(context: Context) : FrameLayout(context), Choreogra
         fit = null
         framed = false
         applyTouch(texture)
+        addView(shadow, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         addView(texture, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         load()
         startNanos = 0L
@@ -135,6 +158,7 @@ private class PetModelLayout(context: Context) : FrameLayout(context), Choreogra
         fill = null
         surface?.let { removeView(it) }
         surface = null
+        removeView(shadow)
         super.onDetachedFromWindow()
     }
 
@@ -159,6 +183,7 @@ private class PetModelLayout(context: Context) : FrameLayout(context), Choreogra
         }
         fit = PetModelMeasure.measure(bytes)
         player = modelViewer.asset?.let { PetMotion.create(context, bytes, it) }
+        stage = null
         framed = false
         runCatching {
             lamps(modelViewer, on = fit?.selfLit != true)
@@ -198,6 +223,14 @@ private class PetModelLayout(context: Context) : FrameLayout(context), Choreogra
         framed = true
         val (wide, tall, deep) = measured.size
         if (max(wide, max(tall, deep)) <= 0f) return
+        if (roams()) {
+            modelViewer.cameraFocalLength = FOCAL_LENGTH
+            aspect = viewport.width.toFloat() / viewport.height
+            val tan = SENSOR_HEIGHT / (2f * FOCAL_LENGTH)
+            if (stage == null) stage = temperament?.let { PetStage(it) }
+            stage?.halfWidth = { z -> (1f - z) * tan * aspect }
+            return
+        }
         // Turn the pet so its head points a little to one side of the camera: a three-quarter
         // view shows both the face and the body's length.
         val turn = TURN - measured.facing
@@ -235,6 +268,15 @@ private class PetModelLayout(context: Context) : FrameLayout(context), Choreogra
         if (startNanos == 0L) startNanos = frameTimeNanos
         val seconds = (frameTimeNanos - startNanos) / 1_000_000_000f
         if (!framed) runCatching { frame(modelViewer) }
+        val dt = if (lastNanos == 0L) 0f else (frameTimeNanos - lastNanos) / 1_000_000_000f
+        lastNanos = frameTimeNanos
+        val roaming = stage
+        if (roaming != null && framed) {
+            runCatching { roam(modelViewer, roaming, dt) }
+            modelViewer.render(frameTimeNanos)
+            return
+        }
+        shadow.hide()
         modelViewer.animator?.let { animator ->
             val moving = style
             val skeleton = player
@@ -250,6 +292,54 @@ private class PetModelLayout(context: Context) : FrameLayout(context), Choreogra
             }
         }
         modelViewer.render(frameTimeNanos)
+    }
+
+    /** A rigged pet with a temperament, on Home: it moves about its stage. */
+    private fun roams() = temperament != null && !interactive && style != null && player != null
+
+    /** Moves the pet on, places it on the stage, and plays its legs. */
+    private fun roam(modelViewer: ModelViewer, stage: PetStage, dt: Float) {
+        val measured = fit ?: return
+        val asset = modelViewer.asset ?: return
+        val skeleton = player ?: return
+        stage.step(dt)
+        // Ease the legs between standing, walking and running instead of snapping.
+        val ease = 1f - exp(-dt * 6f)
+        legSpeed += (stage.style.speed * stage.pace - legSpeed) * ease
+        legAmount += (stage.style.amount - legAmount) * ease
+        phase += dt * legSpeed
+        skeleton.pose(phase, legAmount, modelViewer.engine.transformManager)
+        modelViewer.animator?.updateBoneMatrices()
+
+        // About one stage unit long, standing on the floor, turned the way it's heading.
+        val (wide, tall, deep) = measured.size
+        val k = 1f / max(max(wide, deep), 1e-6f)
+        val turn = stage.heading - measured.facing
+        val c = cos(turn)
+        val s = sin(turn)
+        val across = k * (1f - 0.5f * stage.squash)
+        val up = k * (1f + stage.squash)
+        val (cx, cy, cz) = measured.center
+        val bottom = cy - tall / 2f
+        val transforms = modelViewer.engine.transformManager
+        transforms.setTransform(
+            transforms.getInstance(asset.root),
+            floatArrayOf(
+                across * c, 0f, -across * s, 0f,
+                0f, up, 0f, 0f,
+                across * s, 0f, across * c, 0f,
+                stage.x - across * (c * cx + s * cz), PetStage.FLOOR + stage.hop - up * bottom, stage.z - across * (-s * cx + c * cz), 1f,
+            ),
+        )
+
+        // Its shadow on the floor, smaller and lighter while it's in the air.
+        val tan = SENSOR_HEIGHT / (2f * FOCAL_LENGTH)
+        val depth = (1f - stage.z).coerceAtLeast(0.1f)
+        val px = (stage.x / (depth * tan * aspect) + 1f) / 2f * width
+        val py = (1f - PetStage.FLOOR / (depth * tan)) / 2f * height
+        val reach = (0.22f + 0.24f * abs(sin(stage.heading))) / (depth * tan * aspect) * width / 2f
+        val lift = (1f - 2.5f * stage.hop).coerceIn(0.4f, 1f)
+        shadow.show(px, py, reach * (0.8f + 0.2f * lift), reach * 0.3f * (0.8f + 0.2f * lift), 0.22f * lift)
     }
 
     companion object {
@@ -271,5 +361,42 @@ private class PetModelLayout(context: Context) : FrameLayout(context), Choreogra
                 initialized = true
             }
         }
+    }
+}
+
+/** A soft round shadow under the roaming pet, drawn behind the 3D view. */
+private class StageShadow(context: Context) : android.view.View(context) {
+    private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+    private var cx = 0f
+    private var cy = 0f
+    private var rx = 0f
+    private var ry = 0f
+    private var strength = 0f
+
+    fun show(x: Float, y: Float, radiusX: Float, radiusY: Float, strength: Float) {
+        cx = x; cy = y; rx = radiusX; ry = radiusY; this.strength = strength
+        invalidate()
+    }
+
+    fun hide() {
+        if (this.strength == 0f) return
+        this.strength = 0f
+        invalidate()
+    }
+
+    override fun onDraw(canvas: android.graphics.Canvas) {
+        if (strength <= 0f || rx <= 1f || ry <= 0.5f) return
+        val ink = (strength * 255).toInt().coerceIn(0, 255)
+        paint.shader = android.graphics.RadialGradient(
+            0f, 0f, rx,
+            intArrayOf(android.graphics.Color.argb(ink, 0, 0, 0), android.graphics.Color.argb(ink / 2, 0, 0, 0), android.graphics.Color.TRANSPARENT),
+            floatArrayOf(0f, 0.55f, 1f),
+            android.graphics.Shader.TileMode.CLAMP,
+        )
+        canvas.save()
+        canvas.translate(cx, cy)
+        canvas.scale(1f, ry / rx)
+        canvas.drawCircle(0f, 0f, rx, paint)
+        canvas.restore()
     }
 }

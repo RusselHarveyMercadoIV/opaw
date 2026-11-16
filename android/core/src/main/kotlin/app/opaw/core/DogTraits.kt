@@ -23,6 +23,26 @@ enum class EnergyLevel(val raw: String) {
     }
 }
 
+/** How a pet carries itself, which picks how its 3D self plays on Home. */
+enum class Temperament(val raw: String, val title: String, val blurb: String) {
+    PLAYFUL("playful", "Playful", "Spins, hops and zooms around"),
+    CALM("calm", "Calm", "Strolls, sniffs and watches"),
+    CURIOUS("curious", "Curious", "Explores and comes up close"),
+    SHY("shy", "Shy", "Keeps back and peeks at you"),
+    GOOFY("goofy", "Goofy", "Silly spins and wobbly hops");
+
+    companion object {
+        fun fromRaw(raw: String?): Temperament? = entries.firstOrNull { it.raw == raw }
+
+        /** Before the owner picks one: a guess from the pet's energy. */
+        fun guess(energy: EnergyLevel): Temperament = when (energy) {
+            EnergyLevel.LOW -> CALM
+            EnergyLevel.MEDIUM -> CURIOUS
+            EnergyLevel.HIGH -> PLAYFUL
+        }
+    }
+}
+
 enum class LifeStage { PUPPY, ADULT, SENIOR }
 
 /** The traits that personalize goals and tips for a dog. */

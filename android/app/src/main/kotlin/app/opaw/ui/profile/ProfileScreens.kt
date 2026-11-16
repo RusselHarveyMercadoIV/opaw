@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -377,9 +378,15 @@ internal fun EditDogScreen(data: DogData, onDone: () -> Unit) {
                 Text("Size", style = opaw(14.sp, FontWeight.Bold), color = colors.muted, modifier = Modifier.padding(top = 12.dp, bottom = 8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { DogSize.entries.forEach { ChoiceChip(it.title, it == dog.size) { dog = dog.copy(sizeRaw = it.raw) } } }
                 Text("Energy", style = opaw(14.sp, FontWeight.Bold), color = colors.muted, modifier = Modifier.padding(top = 12.dp, bottom = 8.dp))
-                Row(Modifier.padding(bottom = 14.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     EnergyLevel.entries.forEach { ChoiceChip(it.title, it == dog.energy) { dog = dog.copy(energyRaw = it.raw) } }
                 }
+                // How their 3D self plays on Home.
+                Text("Temperament", style = opaw(14.sp, FontWeight.Bold), color = colors.muted, modifier = Modifier.padding(top = 12.dp, bottom = 8.dp))
+                Row(Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    app.opaw.core.Temperament.entries.forEach { ChoiceChip(it.title, it == dog.temperament) { dog = dog.copy(temperamentRaw = it.raw) } }
+                }
+                Text(dog.temperament.blurb, style = opaw(13.sp, FontWeight.Medium), color = colors.muted, modifier = Modifier.padding(top = 6.dp, bottom = 14.dp))
             }
             Label("Goals")
             Column(Modifier.fillMaxWidth().background(colors.surface, RoundedCornerShape(20.dp)).padding(horizontal = 16.dp)) {

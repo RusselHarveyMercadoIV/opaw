@@ -36,8 +36,14 @@ internal class PetMotion private constructor(
     }
 
     /** Poses the pet for [seconds] into the motion. Call animator.updateBoneMatrices() after. */
-    fun apply(seconds: Float, style: Style, transforms: TransformManager) {
-        val t = (seconds * style.speed) % clip.duration
+    fun apply(seconds: Float, style: Style, transforms: TransformManager) = pose(seconds * style.speed, style.amount, transforms)
+
+    /**
+     * Poses the pet at [phase] seconds into the walk, with its turns scaled by [amount] (1 is the
+     * walk as recorded). Lets the stage ease between walking, running and standing.
+     */
+    fun pose(phase: Float, amount: Float, transforms: TransformManager) {
+        val t = ((phase % clip.duration) + clip.duration) % clip.duration
         // Between two keyframes: blend them, so the motion is smooth at any frame rate.
         var k = clip.times.indexOfLast { it <= t }.coerceAtLeast(0)
         if (k >= clip.times.size - 1) k = clip.times.size - 2
@@ -53,7 +59,7 @@ internal class PetMotion private constructor(
                 world[i] = mul(parentWorld, skeleton.restLocal[i])
                 continue
             }
-            val turn = scale(slerp(track[k], track[k + 1], f), style.amount)
+            val turn = scale(slerp(track[k], track[k + 1], f), amount)
             // From the dog's own axes into this pet's world, on top of its rest pose.
             val inWorld = mul(mul(skeleton.body, turn), inverse(skeleton.body))
             val now = mul(inWorld, skeleton.restWorld[i])

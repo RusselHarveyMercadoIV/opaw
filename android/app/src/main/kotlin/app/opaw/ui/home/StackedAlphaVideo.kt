@@ -286,7 +286,12 @@ fun PetAvatar(
         val fade = Modifier.graphicsLayer { alpha = if (faded) 0.6f else 1f }
         when {
             file != null && file.extension == "glb" ->
-                PetModel3D(file, Modifier.fillMaxSize().then(fade).then(tap), interactive = interactive, breathe = motion == null && file.nameWithoutExtension == "rest", motion = motion)
+                PetModel3D(
+                    file, Modifier.fillMaxSize().then(fade).then(tap), interactive = interactive,
+                    breathe = motion == null && file.nameWithoutExtension == "rest", motion = motion,
+                    // On Home it roams, playing as its temperament; a sleepy pet takes it easy.
+                    temperament = if (interactive) null else if (mood == app.opaw.core.AvatarMood.SLEEPY) app.opaw.core.Temperament.CALM else dog.temperament,
+                )
             file != null -> StackedAlphaVideo(file, Modifier.fillMaxSize().then(fade).then(tap))
             else -> LivingPhoto(image, mood, Modifier.fillMaxSize(), sticker = sticker, faded = faded, onTap = onTap)
         }
