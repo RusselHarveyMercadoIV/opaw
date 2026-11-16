@@ -95,17 +95,16 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 
 /**
- * The reference photos. The front and both sides go to the 3D model as its front, left and right
- * views (the sides carry the pet's real length and leg height), the back adds the tail, and the
- * face close-up keeps the eyes sharp on the reveal. A pet's left side is shot standing at their
- * left, which puts their nose on the left of the photo; the right side is the mirror of that.
+ * The reference photos, which go to the 3D model as its front, left, right and back views. The
+ * sides carry the pet's real length and leg height, and the front shows the face. A pet's left
+ * side is shot standing at their left, which puts their nose on the left of the photo; the right
+ * side is the mirror of that.
  */
 enum class LifeAngle(val label: String, val title: String, val tip: String, val hint: String) {
     FRONT("Front", "Front", "Face the camera, whole body in frame", "Facing you"),
     LEFT("Left", "Left side", "Their left side · nose to your left", "Nose to your left"),
     RIGHT("Right", "Right side", "Their right side · nose to your right", "Nose to your right"),
     BACK("Back", "Back", "From behind, tail in frame", "Tail in frame"),
-    FACE("Face", "Face", "Close up, eyes in focus", "Close up"),
 }
 
 /** One photo in a slot. [scan] is null while the photo is still being looked at. */
@@ -158,15 +157,13 @@ class LifePhotos(private val scope: CoroutineScope, private val folder: File? = 
 
     /**
      * Why a slot's photo can't be used, or null when it's fine. The front has to pass every check.
-     * From the side or behind a pet often isn't recognised as one, and a face close-up is meant to
-     * crop the body, so those slots skip the checks that would always fail.
+     * From the side or behind a pet often isn't recognised as one, so those slots skip that check.
      */
     fun problem(angle: LifeAngle): PhotoIssue? {
         val issues = shots[angle]?.scan?.issues ?: return null
         val ignored = when (angle) {
             LifeAngle.FRONT -> emptySet<PhotoIssue>()
             LifeAngle.LEFT, LifeAngle.RIGHT, LifeAngle.BACK -> setOf(PhotoIssue.NOT_A_PET)
-            LifeAngle.FACE -> setOf(PhotoIssue.NOT_A_PET, PhotoIssue.NO_PET, PhotoIssue.CUT_OFF, PhotoIssue.TOO_SMALL, PhotoIssue.CROWDED)
         }
         issues.firstOrNull { it !in ignored }?.let { return it }
         if ((angle == LifeAngle.LEFT || angle == LifeAngle.RIGHT) && sidesFaceSameWay) return PhotoIssue.SAME_WAY
@@ -199,10 +196,10 @@ class LifePhotos(private val scope: CoroutineScope, private val folder: File? = 
     /** The front and at least one side: the side is where the pet's length comes from. */
     val isReady: Boolean get() = isGood(LifeAngle.FRONT) && (isGood(LifeAngle.LEFT) || isGood(LifeAngle.RIGHT)) && !scanning
 
-    /** What to hand to the 3D job: the body shots as cut-outs to send, the face to keep for show. */
+    /** What to hand to the 3D job: every good photo, as a cut-out. */
     fun photos(): List<LifePhoto> = LifeAngle.entries.filter(::isGood).mapNotNull { angle ->
         val shot = shots[angle] ?: return@mapNotNull null
-        LifePhoto(shot.cutout ?: shot.photo, send = angle != LifeAngle.FACE, angle = angle.name.lowercase())
+        LifePhoto(shot.cutout ?: shot.photo, send = true, angle = angle.name.lowercase())
     }
 
     /** "2 of 5 · add a side" */
