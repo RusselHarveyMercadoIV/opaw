@@ -60,12 +60,14 @@ private enum class Root { SIGN_IN, ONBOARDING, TABS }
 @Composable
 private fun RootView(app: OpawApplication) {
     val dogs by app.database.dogs().observeAll().collectAsStateWithLifecycle(initialValue = null)
+    val skipped by app.settings.onboardingSkipped.collectAsStateWithLifecycle(initialValue = null)
     Box(Modifier.fillMaxSize().background(Opaw.colors.cream)) {
         // Wait for the first read so onboarding doesn't flash for returning users.
         val current = dogs ?: return@Box
+        val skippedSetup = skipped ?: return@Box
         val root = when {
             !app.pack.isSignedIn -> Root.SIGN_IN
-            current.isEmpty() -> Root.ONBOARDING
+            current.isEmpty() && !skippedSetup -> Root.ONBOARDING
             else -> Root.TABS
         }
         AnimatedContent(

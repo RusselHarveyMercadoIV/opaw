@@ -46,6 +46,7 @@ class OpawSettings(context: Context) {
         val hapticsOn = booleanPreferencesKey("hapticsOn")
         val household = stringPreferencesKey("householdMembers")
         val premiumOfferShown = booleanPreferencesKey("premiumOfferShown")
+        val onboardingSkipped = booleanPreferencesKey("onboardingSkipped")
         val scheduledReminders = stringSetPreferencesKey("scheduledReminders")
         fun newestBadge(dogId: String) = stringPreferencesKey("newestBadge.$dogId")
     }
@@ -68,6 +69,10 @@ class OpawSettings(context: Context) {
 
     val premiumOfferShown: Flow<Boolean> = store.data.map { it[Keys.premiumOfferShown] ?: false }
     suspend fun setPremiumOfferShown(shown: Boolean) = store.edit { it[Keys.premiumOfferShown] = shown }
+
+    /** The owner skipped adding a first pet during setup; the app opens on Home's "Add a pet" instead. */
+    val onboardingSkipped: Flow<Boolean> = store.data.map { it[Keys.onboardingSkipped] ?: false }.distinctUntilChanged()
+    suspend fun setOnboardingSkipped(skipped: Boolean) = store.edit { it[Keys.onboardingSkipped] = skipped }
 
     /** The dog currently shown on Home and targeted by quick logs. */
     val activeDogId: Flow<String?> = store.data.map { it[Keys.activeDog]?.takeIf(String::isNotEmpty) }.distinctUntilChanged()

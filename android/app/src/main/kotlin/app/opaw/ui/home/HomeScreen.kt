@@ -93,7 +93,14 @@ fun HomeScreen() {
     val all by app.repository.allDogData.collectAsStateWithLifecycle(emptyList())
     val activeId by app.settings.activeDogId.collectAsStateWithLifecycle(null)
     var addSource by remember { mutableStateOf<PhotoSource?>(null) }
-    if (all.isEmpty()) return
+    if (all.isEmpty()) {
+        // Setup was skipped: Home is just "Add a pet" until there is one.
+        Box(Modifier.fillMaxSize().background(Opaw.colors.cream)) {
+            AddPetPage({}, locked = false, onAdd = { addSource = it }) { navigator.push(Route.Paywall) }
+        }
+        addSource?.let { source -> AddDogSheet(source, onDismiss = { addSource = null }) }
+        return
+    }
 
     val pager = rememberPagerState(initialPage = all.indexOfFirst { it.dog.id == activeId }.coerceAtLeast(0)) { all.size + 1 }
     val addPage = all.size

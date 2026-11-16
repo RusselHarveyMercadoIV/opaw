@@ -247,7 +247,8 @@ fun OnboardingFlow(app: OpawApplication) {
                 Step.PHOTOS -> LifePhotosGrid(
                     photos, name, model, padded,
                     onOpen = { cameraAngle = it; go(Step.CAMERA) },
-                    header = { StepHeader(1, onBack = null) },
+                    // Not ready to add a pet yet: straight to the app, where Home offers "Add a pet".
+                    header = { StepHeader(1, onBack = null, onSkip = if (model.isStarted) null else ({ scope.launch { app.settings.setOnboardingSkipped(true) } })) },
                 ) {
                     when {
                         model.isReady -> BottomActions("Meet $name", secondary = "Continue setup", secondaryAction = { go(Step.DETAILS) }) { lifeScreen = LifeScreen.REVEAL }
@@ -349,7 +350,7 @@ private fun afterPaywall(app: OpawApplication, offerShown: Boolean, showOffer: (
 
 /** Back button, six progress bars and "n of 6". */
 @Composable
-internal fun StepHeader(index: Int, inset: Int = 20, onBack: (() -> Unit)?) {
+internal fun StepHeader(index: Int, inset: Int = 20, onBack: (() -> Unit)?, onSkip: (() -> Unit)? = null) {
     val colors = Opaw.colors
     Row(
         Modifier.fillMaxWidth().padding(horizontal = inset.dp).padding(top = 10.dp),
@@ -363,7 +364,12 @@ internal fun StepHeader(index: Int, inset: Int = 20, onBack: (() -> Unit)?) {
                 Box(Modifier.weight(1f).height(6.dp).background(fill, CircleShape))
             }
         }
-        Text("$index of 6", style = opaw(13.sp, FontWeight.Bold), color = colors.muted, textAlign = TextAlign.End, modifier = Modifier.width(44.dp))
+        if (onSkip != null) {
+            Text("Skip", style = opaw(15.sp, FontWeight.ExtraBold), color = colors.ink, textAlign = TextAlign.End,
+                modifier = Modifier.pressable(onClick = onSkip).padding(vertical = 8.dp, horizontal = 4.dp))
+        } else {
+            Text("$index of 6", style = opaw(13.sp, FontWeight.Bold), color = colors.muted, textAlign = TextAlign.End, modifier = Modifier.width(44.dp))
+        }
     }
 }
 
