@@ -96,6 +96,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import app.opaw.ui.profile.JoinCodeDialog
 import app.opaw.OpawApplication
+import app.opaw.core.Temperament
 import app.opaw.core.BreedCatalog
 import app.opaw.core.BreedInfo
 import app.opaw.core.CareKind
@@ -421,7 +422,7 @@ private fun BottomActions(
 
 // MARK: - 4c Details
 
-private enum class Field(val title: String) { SPECIES("Species"), BREED("Breed"), BIRTHDAY("Birthday"), WEIGHT("Weight"), SEX("Sex") }
+private enum class Field(val title: String) { SPECIES("Species"), BREED("Breed"), BIRTHDAY("Birthday"), WEIGHT("Weight"), SEX("Sex"), TEMPERAMENT("Temperament") }
 
 @Composable
 private fun DetailsStep(
@@ -496,6 +497,7 @@ private fun DetailsStep(
                 row(Field.BIRTHDAY, birthdayText(draft))
                 row(Field.WEIGHT, draft.weightKg?.let { OpawFormat.weight(it) } ?: "Add")
                 row(Field.SEX, sexText(draft))
+                row(Field.TEMPERAMENT, draft.temperament?.title ?: "Add")
             }
             Text(
                 "Breed and age set walk goals and food portions. Tap any detected field to change it.",
@@ -663,6 +665,25 @@ private fun FieldSheet(field: Field, draft: DogDraft, onDraft: (DogDraft) -> Uni
                         )
                     }
                     Text(OpawFormat.weightUnit, style = opaw(20.sp, FontWeight.ExtraBold), color = colors.muted)
+                }
+                // How their 3D self plays on Home; a guess from their energy is picked out until then.
+                Field.TEMPERAMENT -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val current = draft.temperament ?: Temperament.guess(draft.energy)
+                    for (option in Temperament.entries) {
+                        val selected = option == current
+                        Column(
+                            Modifier
+                                .fillMaxWidth()
+                                .height(64.dp)
+                                .pressable { haptics.select(); onDraft(draft.copy(temperament = option)) }
+                                .background(if (selected) Ink else colors.surface, RoundedCornerShape(18.dp))
+                                .padding(horizontal = 18.dp),
+                            verticalArrangement = Arrangement.Center,
+                        ) {
+                            Text(option.title, style = opaw(17.sp, FontWeight.ExtraBold), color = if (selected) Color.White else colors.ink)
+                            Text(option.blurb, style = opaw(13.sp, FontWeight.Medium), color = if (selected) Color.White.copy(alpha = 0.7f) else colors.muted)
+                        }
+                    }
                 }
                 Field.SEX -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     choice("Female", draft.sex == "female") { onDraft(draft.copy(sex = "female")) }

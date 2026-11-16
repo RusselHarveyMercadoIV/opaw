@@ -10,6 +10,7 @@ import app.opaw.core.BreedGuess
 import app.opaw.core.CareKind
 import app.opaw.core.DogSize
 import app.opaw.core.EnergyLevel
+import app.opaw.core.Temperament
 import app.opaw.data.Dog
 import app.opaw.data.Reminder
 import app.opaw.services.PhotoStore
@@ -40,6 +41,8 @@ data class DogDraft(
     val weightKg: Double? = null,
     val size: DogSize = DogSize.MEDIUM,
     val energy: EnergyLevel = EnergyLevel.MEDIUM,
+    /** How they carry themselves, which sets how their 3D self plays on Home. Null until picked. */
+    val temperament: Temperament? = null,
     val species: String = "dog",
     val sex: String = "",
     val isNeutered: Boolean = false,
@@ -63,6 +66,7 @@ data class DogDraft(
             sex = sex,
             isNeutered = isNeutered,
             trackedKindsRaw = trackedKinds,
+            temperamentRaw = temperament?.raw.orEmpty(),
         )
         if (mealTimes.isNotEmpty()) dog = dog.withMealTimes(mealTimes)
         return dog
