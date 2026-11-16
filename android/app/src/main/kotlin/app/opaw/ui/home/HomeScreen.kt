@@ -214,7 +214,7 @@ private fun PetPage(data: DogData, dots: @Composable () -> Unit, openStudio: () 
     // A rigged 3D pet roams the whole width, so it gets no side margins or bobbing of its own.
     val roams = app.petModels.file(dog.id, mood) != null && app.petModels.motion(dog.id, "rest") != null
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = 92.dp, bottom = 120.dp).statusBarsPadding(), horizontalAlignment = Alignment.CenterHorizontally) {
-        // The stage: the avatar and the sound it makes.
+        // The stage: the avatar.
         Box(Modifier.fillMaxWidth().height(if (roams) 320.dp else 290.dp)) {
             PetAvatar(
                 dog, image, mood,
@@ -223,7 +223,6 @@ private fun PetPage(data: DogData, dots: @Composable () -> Unit, openStudio: () 
                 faded = report.tier == CareTier.NEEDS_YOU,
                 onTap = openStudio,
             )
-            OutlinedText(report.tier.sound, Modifier.align(Alignment.TopEnd).padding(end = 52.dp, top = 90.dp).loopMotion(LoopMotion.TAG_POP))
         }
         Column(Modifier.padding(horizontal = 36.dp).padding(top = 14.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(dog.name, style = opaw(50.sp, FontWeight.Black).copy(letterSpacing = (-0.5).sp), color = colors.ink, maxLines = 1)
