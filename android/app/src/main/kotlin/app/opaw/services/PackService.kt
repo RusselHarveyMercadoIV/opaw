@@ -498,6 +498,9 @@ class PackService(private val context: Context) {
         })
     }
 
+    /** Approves the pet's picture as it is, to be made into its 3D model. */
+    suspend fun approvePetModel(id: String): PetModelJob = petModelCall(buildJsonObject { put("action", "approve"); put("id", id) })
+
     /** Draws the reference sheet again from the same photos. */
     suspend fun redrawPetModel(id: String): PetModelJob = petModelCall(buildJsonObject { put("action", "redraw"); put("id", id) })
 

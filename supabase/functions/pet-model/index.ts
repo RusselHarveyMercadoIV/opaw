@@ -46,6 +46,20 @@ const TRIPO_RIG_CREATURE = "v2.5-20260210";
 // The reference sheet: Tripo's image model, at its smallest allowed two-to-one size.
 const TRIPO_SHEET_MODEL = "seedream_v5";
 const TRIPO_SHEET_SIZE = "3072x1536";
+
+// The pet as one picture in the app's game-art style (cute, cel-shaded, but unmistakably this pet),
+// which the owner approves and which then becomes the 3D model. A clean, evenly lit, standing,
+// three-quarter view in simple shapes models far better than photos, and keeps the face's
+// markings. Drawn by Tripo's GPT-image model (10 credits).
+const TRIPO_PICTURE_MODEL = "chat_image_2";
+const PICTURE_PROMPT =
+  "Redraw this exact pet (the same individual animal shown in all reference photos) as a character in a cute anime " +
+  "action-RPG game art style: clean cel shading, soft two-tone shadows, painterly fur shapes, thin clean outline, " +
+  "polished 3D-game character look, slightly cute proportions with large expressive eyes. Keep its real identity exact: " +
+  "the same coat colours and markings, the same face pattern, eye colour, nose colour, ear shape and tail shape, and its " +
+  "real body proportions. Full body, standing calmly on all four legs, three-quarter front view, all four legs clearly " +
+  "visible and separated, mouth gently open in a happy smile, plain pure white background, no shadow, no ground, no " +
+  "collar, no text.";
 const MAX_DRAWS = 3;
 const SHEET_PROMPT =
   "Character reference sheet of the exact pet in the reference images (the same animal photographed from different sides). " +
@@ -164,9 +178,14 @@ const tripoFailed = (task: Record<string, any>) => ["failed", "cancelled", "bann
  * second head where the tail should be, so those jobs use the front photo alone.
  */
 async function tripoModel(row: Row): Promise<string> {
-  // The owner approved a reference sheet: model its clean front and left views. Detailed
-  // texture and more faces (+10 credits) keep the eyes, nose and fur markings sharp.
+  // Detailed texture and more faces (+10 credits) keep the eyes, nose and fur markings sharp.
   const common0 = { model: TRIPO_MODEL, texture: true, pbr: false, face_limit: 40000, texture_quality: "detailed" };
+  // The owner approved the picture: it becomes the model.
+  if (row.outputs.picture) {
+    const task = await tripo("POST", "/generation/image-to-model", { input: await signed("pet-models", row.outputs.picture), ...common0 });
+    return task.task_id;
+  }
+  // The owner approved a reference sheet: model its clean front and left views.
   if (row.outputs.views) {
     const views: Record<string, string> = JSON.parse(row.outputs.views);
     const inputs = [];
@@ -200,9 +219,12 @@ async function advanceTripo(row: Row): Promise<Row> {
   if (row.stage === "cleaning" && !row.sheet_task) {
     const [first, ...rest] = await signedInputs(row);
     const sheet = await tripo("POST", "/generation/image-to-image", {
-      model: TRIPO_SHEET_MODEL, input: first, inputs: rest, prompt: SHEET_PROMPT, size: TRIPO_SHEET_SIZE, output_format: "jpeg",
+      model: TRIPO_PICTURE_MODEL, input: first, inputs: rest, prompt: PICTURE_PROMPT, size: "1024x1024", output_format: "jpeg",
     });
-    return update(row, { sheet_task: sheet.task_id, progress: 2, outputs: { ...row.outputs, draws: String(Number(row.outputs.draws ?? "0") + 1) } });
+    return update(row, {
+      sheet_task: sheet.task_id, progress: 2,
+      outputs: { ...row.outputs, style: "picture", draws: String(Number(row.outputs.draws ?? "0") + 1) },
+    });
   }
 
   if (row.stage === "cleaning") {
@@ -454,14 +476,20 @@ Deno.serve(async (request) => {
         if (Number(row.outputs.draws ?? "0") >= MAX_DRAWS) return reply({ error: "That's as many tries as we can do. Try new photos." }, 409);
         row = await update(row, { stage: "cleaning", sheet_task: null, progress: 1 });
       } else {
+        // One picture: it becomes the model as it is.
+        if (row.outputs.style === "picture") {
+          row = await update(row, { stage: "modeling", model_task: null, progress: 12, outputs: { ...row.outputs, picture: row.outputs.sheet } });
+        }
         const given = (body.views ?? {}) as Record<string, unknown>;
         const views: Record<string, string> = {};
         for (const view of ["front", "left"]) {
           const path = String(given[view] ?? "");
           if (path.startsWith(`${user}/`)) views[view] = path;
         }
-        if (!views.front || !views.left) return reply({ error: "Missing the front or side view." }, 400);
-        row = await update(row, { stage: "modeling", model_task: null, progress: 12, outputs: { ...row.outputs, views: JSON.stringify(views) } });
+        if (row.stage === "reviewing") {
+          if (!views.front || !views.left) return reply({ error: "Missing the front or side view." }, 400);
+          row = await update(row, { stage: "modeling", model_task: null, progress: 12, outputs: { ...row.outputs, views: JSON.stringify(views) } });
+        }
       }
       try {
         row = await advance(row);

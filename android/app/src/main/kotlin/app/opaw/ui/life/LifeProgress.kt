@@ -222,9 +222,9 @@ fun LifeProgressScreen(
 }
 
 /**
- * The reference sheet, for the owner to check before the 3D model is made: the pet drawn standing,
- * from the front and from the side. Saying yes builds it in 3D; trying again redraws only this
- * picture, which costs a fraction of a whole model.
+ * The pet drawn in the app's game-art style, for the owner to check before the 3D model is made.
+ * Saying yes builds it in 3D from this picture; trying again redraws only the picture, which costs
+ * a fraction of a whole model.
  */
 @Composable
 private fun LifeReview(dogId: String, name: String, modifier: Modifier, onLeave: () -> Unit, onRetake: (() -> Unit)?) {
@@ -247,17 +247,17 @@ private fun LifeReview(dogId: String, name: String, modifier: Modifier, onLeave:
                 modifier = Modifier.padding(horizontal = 24.dp).padding(top = 18.dp),
             )
             Text(
-                "We drew $name standing, from the front and the side. The 3D model is built from this, so check the coat, markings and shape.",
+                "Here's $name as a game character. The 3D $name is built from this picture, so check the face, coat, markings and shape.",
                 style = opaw(15.sp, FontWeight.Medium).copy(lineHeight = 20.sp), color = colors.muted, textAlign = TextAlign.Center,
                 modifier = Modifier.padding(horizontal = 28.dp).padding(top = 8.dp),
             )
             Box(
-                Modifier.padding(horizontal = 20.dp).padding(top = 20.dp).fillMaxWidth().height(220.dp).whiteCard(26.dp).clip(RoundedCornerShape(26.dp)),
+                Modifier.padding(horizontal = 20.dp).padding(top = 20.dp).fillMaxWidth().height(340.dp).whiteCard(26.dp).clip(RoundedCornerShape(26.dp)),
                 contentAlignment = Alignment.Center,
             ) {
                 val image = sheet
                 if (image != null) {
-                    Image(remember(image) { image.asImageBitmap() }, "$name from the front and the side", Modifier.fillMaxSize().padding(10.dp), contentScale = ContentScale.Fit)
+                    Image(remember(image) { image.asImageBitmap() }, "$name, drawn as a game character", Modifier.fillMaxSize().padding(10.dp), contentScale = ContentScale.Fit)
                 } else {
                     androidx.compose.material3.CircularProgressIndicator(Modifier.size(28.dp), color = colors.ink, strokeWidth = 3.dp)
                 }

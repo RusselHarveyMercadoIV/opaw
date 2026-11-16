@@ -286,12 +286,19 @@ class PetModelService(private val context: Context, private val pack: PackServic
         if (!state.isReviewing) return
         save(dogId, state.copy(stage = "approving", progress = LifeStep.SHAPE.from + 6))
         launch(dogId) {
-            val views = withContext(Dispatchers.Default) {
-                val sheet = android.graphics.BitmapFactory.decodeFile(sheetFile(dogId).path) ?: throw IllegalStateException("The reference went missing. Try again.")
-                SheetSplit.split(sheet) ?: throw IllegalStateException("We couldn't read that reference. Draw it again.")
+            val sheet = withContext(Dispatchers.Default) {
+                android.graphics.BitmapFactory.decodeFile(sheetFile(dogId).path) ?: throw IllegalStateException("The reference went missing. Try again.")
             }
-            val (front, left) = views
-            val job = pack.approvePetModel(id, dogId, front, left)
+            // One square picture of the pet (the game-art style) becomes the model as it is; an
+            // older two-view sheet is split into its front and side first.
+            val job = if (sheet.width < sheet.height * 1.4f) {
+                pack.approvePetModel(id)
+            } else {
+                val (front, left) = withContext(Dispatchers.Default) {
+                    SheetSplit.split(sheet) ?: throw IllegalStateException("We couldn't read that reference. Draw it again.")
+                }
+                pack.approvePetModel(id, dogId, front, left)
+            }
             save(dogId, state(dogId).copy(jobId = job.id, stage = job.stage, progress = max(state(dogId).progress, overall(job.stage, job.progress))))
             follow(dogId)
         }
