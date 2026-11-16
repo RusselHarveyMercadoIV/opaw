@@ -215,7 +215,26 @@ class PackService(private val context: Context) {
 
     private fun enc(value: String) = URLEncoder.encode(value, "UTF-8")
 
-    // MARK: Account
+    // MARK: Household, for HouseholdSync
+
+    internal suspend fun householdRest(method: String, table: String, body: JsonElement? = null, query: String = "", prefer: String? = null): String =
+        rest(method, table, body, query, prefer)
+
+    internal suspend fun householdRpc(function: String, body: JsonElement): String {
+        ensureFreshSession()
+        return String(request("POST", "/rest/v1/rpc/$function", body.toString()))
+    }
+
+    internal suspend fun householdUpload(path: String, data: ByteArray, contentType: String) = upload("pet-photos", path, data, contentType)
+
+    internal suspend fun householdDownload(path: String): ByteArray {
+        ensureFreshSession()
+        return request("GET", "/storage/v1/object/authenticated/pet-photos/$path", readTimeoutMs = 60_000)
+    }
+
+    /** Where a household invite link points: the invite function, which opens the app. */
+    internal fun inviteLink(code: String) = "$base/functions/v1/invite?c=$code"
+
 
     /**
      * Exchanges a Google ID token for a Supabase session. [rawNonce] is the unhashed nonce whose

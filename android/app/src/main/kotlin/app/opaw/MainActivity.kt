@@ -1,6 +1,13 @@
 package app.opaw
 
+import android.content.Intent
 import android.os.Bundle
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import app.opaw.ui.profile.HouseholdJoinHost
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -42,12 +49,35 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val app = application as OpawApplication
+        takeInvite(intent)
+        // Shared pets: catch up with the household while the app is open.
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                while (true) {
+                    app.household.syncAll()
+                    delay(45_000)
+                }
+            }
+        }
         setContent {
             OpawTheme {
                 RootView(app)
+                HouseholdJoinHost(app)
                 if (BuildConfig.DEBUG) CrashReport(app)
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        takeInvite(intent)
+    }
+
+    /** An invite link (opaw://join?code=…) keeps its code until it can be joined. */
+    private fun takeInvite(intent: Intent?) {
+        val data = intent?.data ?: return
+        if (data.scheme != "opaw" || data.host != "join") return
+        data.getQueryParameter("code")?.let { (application as OpawApplication).household.offer(it) }
     }
 }
 

@@ -94,6 +94,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import app.opaw.ui.profile.JoinCodeDialog
 import app.opaw.OpawApplication
 import app.opaw.core.BreedCatalog
 import app.opaw.core.BreedInfo
@@ -169,6 +170,7 @@ fun OnboardingFlow(app: OpawApplication) {
     var saving by remember { mutableStateOf(false) }
     var showPaywall by remember { mutableStateOf(false) }
     var showOffer by remember { mutableStateOf(false) }
+    var showJoin by remember { mutableStateOf(false) }
     // The paywall was opened from "Bring to life" on the photos, not at the end of setup.
     var lifePaywall by remember { mutableStateOf(false) }
     val offerShown by app.settings.premiumOfferShown.collectAsStateWithLifecycle(true)
@@ -248,7 +250,14 @@ fun OnboardingFlow(app: OpawApplication) {
                     photos, name, model, padded,
                     onOpen = { cameraAngle = it; go(Step.CAMERA) },
                     // Not ready to add a pet yet: straight to the app, where Home offers "Add a pet".
-                    header = { StepHeader(1, onBack = null, onSkip = if (model.isStarted) null else ({ scope.launch { app.settings.setOnboardingSkipped(true) } })) },
+                    // Or join someone else's pet with an invite code.
+                    header = {
+                        StepHeader(
+                            1, onBack = null,
+                            onSkip = if (model.isStarted) null else ({ scope.launch { app.settings.setOnboardingSkipped(true) } }),
+                            onJoin = if (model.isStarted) null else ({ showJoin = true }),
+                        )
+                    },
                 ) {
                     when {
                         model.isReady -> BottomActions("Meet $name", secondary = "Continue setup", secondaryAction = { go(Step.DETAILS) }) { lifeScreen = LifeScreen.REVEAL }
@@ -265,7 +274,7 @@ fun OnboardingFlow(app: OpawApplication) {
                 Step.DETAILS -> DetailsStep(padded, draft, { draft = it }, capture, isProcessing, foundDog, onBack = { go(Step.PHOTOS) }) { go(Step.REVEAL) }
                 Step.REVEAL -> RevealStep(padded, name, capture, isProcessing, onBack = { go(Step.DETAILS) }, onRetake = if (model.isWorking) null else ({ go(Step.PHOTOS) })) { go(Step.TRACK) }
                 Step.TRACK -> TrackStep(padded, draft, { draft = it }, onBack = { go(Step.REVEAL) }) { go(Step.HOUSEHOLD) }
-                Step.HOUSEHOLD -> HouseholdStep(padded, name, app, onBack = { go(Step.TRACK) }) { go(Step.PERMISSIONS) }
+                Step.HOUSEHOLD -> HouseholdStep(padded, name, draft, onBack = { go(Step.TRACK) }) { go(Step.PERMISSIONS) }
                 Step.PERMISSIONS -> PermissionsStep(padded, name, capture.cutout ?: capture.original, onBack = { go(Step.HOUSEHOLD) }) {
                     if (app.premium.isPremium) finish() else showPaywall = true
                 }
@@ -309,6 +318,8 @@ fun OnboardingFlow(app: OpawApplication) {
         }
     }
 
+    if (showJoin) JoinCodeDialog(app) { showJoin = false }
+
     // Then the paywall (5a), the one-time offer (5c) once, and home.
     if (showPaywall && lifePaywall) {
         // From "Bring to life": back to the photos either way, and it starts after a purchase.
@@ -350,7 +361,7 @@ private fun afterPaywall(app: OpawApplication, offerShown: Boolean, showOffer: (
 
 /** Back button, six progress bars and "n of 6". */
 @Composable
-internal fun StepHeader(index: Int, inset: Int = 20, onBack: (() -> Unit)?, onSkip: (() -> Unit)? = null) {
+internal fun StepHeader(index: Int, inset: Int = 20, onBack: (() -> Unit)?, onSkip: (() -> Unit)? = null, onJoin: (() -> Unit)? = null) {
     val colors = Opaw.colors
     Row(
         Modifier.fillMaxWidth().padding(horizontal = inset.dp).padding(top = 10.dp),
@@ -363,6 +374,10 @@ internal fun StepHeader(index: Int, inset: Int = 20, onBack: (() -> Unit)?, onSk
                 val fill by androidx.compose.animation.animateColorAsState(if (bar <= index) Ink else Color(0xFFDCDCDF), tween(300), label = "bar")
                 Box(Modifier.weight(1f).height(6.dp).background(fill, CircleShape))
             }
+        }
+        if (onJoin != null) {
+            Text("Join", style = opaw(15.sp, FontWeight.ExtraBold), color = colors.ink, textAlign = TextAlign.End,
+                modifier = Modifier.pressable(onClick = onJoin).padding(vertical = 8.dp, horizontal = 4.dp))
         }
         if (onSkip != null) {
             Text("Skip", style = opaw(15.sp, FontWeight.ExtraBold), color = colors.ink, textAlign = TextAlign.End,
@@ -798,12 +813,13 @@ private fun TrackStep(modifier: Modifier, draft: DogDraft, onDraft: (DogDraft) -
 // MARK: - 4f Household
 
 @Composable
-private fun HouseholdStep(modifier: Modifier, name: String, app: OpawApplication, onBack: () -> Unit, onNext: () -> Unit) {
+private fun HouseholdStep(modifier: Modifier, name: String, draft: DogDraft, onBack: () -> Unit, onNext: () -> Unit) {
     Column(modifier) {
         StepHeader(5, onBack = onBack)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
             StepTitle("Who else looks after $name?", "Everyone logs to the same pet, so meals never get doubled.")
-            Box(Modifier.padding(horizontal = 20.dp).padding(top = 22.dp)) { HouseholdCards(name, app.settings) }
+            // The pet isn't saved yet: an invite shares it as set up so far, and the rest follows once it is.
+            Box(Modifier.padding(horizontal = 20.dp).padding(top = 22.dp)) { HouseholdCards(draft.id, name) { draft.makeDog() } }
         }
         BottomActions("Continue", secondary = "Skip for now", secondaryAction = onNext, action = onNext)
     }

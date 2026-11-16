@@ -30,6 +30,7 @@ class OpawApplication : Application() {
     val pack: PackService by lazy { PackService(this) }
     val premium: PremiumStore by lazy { PremiumStore(this) }
     val petModels: PetModelService by lazy { PetModelService(this, pack, scope) }
+    val household: app.opaw.services.HouseholdSync by lazy { app.opaw.services.HouseholdSync(this) }
 
     /** Work that should outlive a screen, such as saving after a toast's Undo. */
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -49,5 +50,7 @@ class OpawApplication : Application() {
         NotificationService.reschedule(this)
         premium // Connects to Google Play and checks for Premium.
         petModels.resume()
+        // A shared pet syncs shortly after anything is logged or changed here.
+        repository.onChange = { household.syncSoon() }
     }
 }

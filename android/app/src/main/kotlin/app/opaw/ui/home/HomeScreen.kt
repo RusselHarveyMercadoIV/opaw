@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.opaw.ui.profile.JoinCodeDialog
 import app.opaw.core.CareKind
 import app.opaw.core.CareTier
 import app.opaw.core.MoodEngine
@@ -93,12 +94,14 @@ fun HomeScreen() {
     val all by app.repository.allDogData.collectAsStateWithLifecycle(emptyList())
     val activeId by app.settings.activeDogId.collectAsStateWithLifecycle(null)
     var addSource by remember { mutableStateOf<PhotoSource?>(null) }
+    var showJoin by remember { mutableStateOf(false) }
     if (all.isEmpty()) {
         // Setup was skipped: Home is just "Add a pet" until there is one.
         Box(Modifier.fillMaxSize().background(Opaw.colors.cream)) {
-            AddPetPage({}, locked = false, onAdd = { addSource = it }) { navigator.push(Route.Paywall) }
+            AddPetPage({}, locked = false, onAdd = { addSource = it }, onJoin = { showJoin = true }) { navigator.push(Route.Paywall) }
         }
         addSource?.let { source -> AddDogSheet(source, onDismiss = { addSource = null }) }
+        if (showJoin) JoinCodeDialog(app) { showJoin = false }
         return
     }
 
@@ -276,7 +279,7 @@ fun OutlinedText(text: String, modifier: Modifier = Modifier, size: Int = 28) {
 // MARK: - Add a pet (2h)
 
 @Composable
-private fun AddPetPage(dots: @Composable () -> Unit, locked: Boolean, onAdd: (PhotoSource) -> Unit, onPremium: () -> Unit) {
+private fun AddPetPage(dots: @Composable () -> Unit, locked: Boolean, onAdd: (PhotoSource) -> Unit, onJoin: (() -> Unit)? = null, onPremium: () -> Unit) {
     val colors = Opaw.colors
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).statusBarsPadding().padding(top = 92.dp, bottom = 120.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(Modifier.fillMaxWidth().height(290.dp)) {
@@ -304,6 +307,11 @@ private fun AddPetPage(dots: @Composable () -> Unit, locked: Boolean, onAdd: (Ph
             } else {
                 BlackPillButton("Take a photo", height = 60.dp) { onAdd(PhotoSource.CAMERA) }
                 BlackPillButton("Choose from library", height = 60.dp, inverted = true) { onAdd(PhotoSource.LIBRARY) }
+            }
+            // Helping with someone else's pet instead.
+            if (onJoin != null) {
+                Text("Have an invite code?", style = opaw(15.sp, FontWeight.ExtraBold), color = colors.ink, textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().pressable(onClick = onJoin).padding(vertical = 12.dp))
             }
         }
     }

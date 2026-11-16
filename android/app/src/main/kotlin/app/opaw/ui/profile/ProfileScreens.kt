@@ -207,7 +207,7 @@ fun ProfileScreen(dogId: String) {
                 TextButton({
                     confirmSignOut = false
                     navigator.popToRoot()
-                    app.scope.launch { app.pack.signOut() }
+                    app.scope.launch { app.pack.signOut(); app.household.reset() }
                 }) { Text("Sign out", color = colors.alert, style = opaw(15.sp, FontWeight.ExtraBold)) }
             },
             dismissButton = { TextButton({ confirmSignOut = false }) { Text("Cancel", color = colors.ink) } },
@@ -548,7 +548,7 @@ fun HouseholdScreen(dogId: String) {
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).navigationBarsPadding().padding(horizontal = 20.dp).padding(top = 18.dp, bottom = 60.dp)) {
             Text("Everyone logs to the same pet, so meals never get doubled.", style = opaw(15.sp, FontWeight.Medium), color = colors.muted,
                 modifier = Modifier.padding(horizontal = 4.dp).padding(bottom = 14.dp))
-            HouseholdCards(data?.dog?.name ?: "your pet", app.settings)
+            HouseholdCards(dogId, data?.dog?.name ?: "your pet") { data?.dog }
         }
     }
 }
