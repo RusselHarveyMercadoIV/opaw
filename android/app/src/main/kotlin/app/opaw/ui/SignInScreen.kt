@@ -69,10 +69,12 @@ import java.security.SecureRandom
 
 /**
  * The welcome screen (10a), which is also Google sign-in: there is no guest mode, so the only
- * way on is "Continue with Google". Signing in goes straight to the photos step of onboarding.
+ * way on is "Continue with Google". Signing in again brings the account's pets back while the
+ * button stays busy ([restoring]), then goes straight to Home (11b). If the account can't be
+ * reached ([restoreFailed]) the screen stays, with a way to try again (11d).
  */
 @Composable
-fun SignInScreen() {
+fun SignInScreen(restoring: Boolean = false, restoreFailed: Boolean = false, onRetry: () -> Unit = {}) {
     val app = rememberApp()
     val context = LocalContext.current
     val haptics = rememberHaptics()
@@ -100,7 +102,10 @@ fun SignInScreen() {
         }
         Spacer(Modifier.height(24.dp))
         Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            val message = if (signing) null else error ?: if (!ready) "Sign-in isn't set up in this build yet (missing Supabase or Google client settings)." else null
+            val busy = signing || restoring
+            val message = if (busy) null else error
+                ?: (if (restoreFailed) "Couldn't reach your account. Your pets are safe. Check your connection and try again." else null)
+                ?: if (!ready) "Sign-in isn't set up in this build yet (missing Supabase or Google client settings)." else null
             AnimatedVisibility(message != null, enter = fadeIn() + slideInVertically { it / 3 }, exit = fadeOut()) {
                 Row(
                     Modifier.fillMaxWidth()
@@ -115,15 +120,20 @@ fun SignInScreen() {
             }
             GoogleButton(
                 label = when {
-                    signing -> "Signing in…"
+                    busy -> "Signing in…"
+                    restoreFailed -> "Try again"
                     error != null -> "Try again with Google"
                     else -> "Continue with Google"
                 },
-                signing = signing,
+                signing = busy,
                 enabled = ready,
             ) {
-                if (signing) return@GoogleButton
+                if (busy) return@GoogleButton
                 haptics.tap()
+                if (restoreFailed) {
+                    onRetry()
+                    return@GoogleButton
+                }
                 signing = true
                 error = null
                 scope.launch {

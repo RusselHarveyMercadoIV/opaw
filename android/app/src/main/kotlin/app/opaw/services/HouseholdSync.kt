@@ -212,11 +212,16 @@ class HouseholdSync(private val app: OpawApplication) {
 
     /**
      * Before setup on a fresh install: brings back the pets saved to this account, giving up after
-     * [timeoutMs] so a bad connection doesn't keep the app from opening.
+     * [timeoutMs]. Returns false when the account couldn't be reached, so the caller can offer a
+     * retry instead of starting setup as if the account had no pets.
      */
-    suspend fun restore(timeoutMs: Long = 20_000) {
+    suspend fun restore(timeoutMs: Long = 20_000): Boolean {
+        if (!pack.isConfigured) {
+            hasChecked = true
+            return true
+        }
         kotlinx.coroutines.withTimeoutOrNull(timeoutMs) { syncAll() }
-        hasChecked = true
+        return hasChecked
     }
 
     /**
@@ -224,18 +229,22 @@ class HouseholdSync(private val app: OpawApplication) {
      * invited), so its logs and walks come back after a reinstall or on a new phone.
      */
     private suspend fun backUp() {
+        // Older builds marked a pet "not mine" after any failed backup, and every first backup
+        // failed (a server policy bug), so own pets were never saved. Forget those marks once.
+        if (!prefs.getBoolean("notMineReset", false)) {
+            prefs.edit().remove("notMine").putBoolean("notMineReset", true).apply()
+        }
+        // Pets this phone helped with and was dropped from (see forget): not this user's to save.
         val skip = prefs.getStringSet("notMine", emptySet()).orEmpty()
         for (dog in app.database.dogs().all()) {
             if (roles[dog.id] != null || dog.id in skip) continue
-            try {
+            // A failure (offline, server error) is tried again on the next sync.
+            runCatching {
                 pack.householdRest("POST", "shared_pets", buildJsonObject {
                     put("id", dog.id)
                     put("profile", profileOf(dog))
                 }, prefer = "resolution=merge-duplicates")
                 setRole(dog.id, "owner")
-            } catch (error: PackException) {
-                // Someone else's pet this phone helped with before: it isn't this user's to save.
-                prefs.edit().putStringSet("notMine", skip + dog.id).apply()
             }
         }
     }

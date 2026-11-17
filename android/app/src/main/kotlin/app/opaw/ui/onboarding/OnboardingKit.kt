@@ -59,10 +59,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.opaw.OpawApplication
 import app.opaw.core.Temperament
-import app.opaw.data.Dog
 import app.opaw.ui.components.BlackPillButton
 import app.opaw.ui.components.DesignIcon
-import app.opaw.ui.components.GhostCycle
 import app.opaw.ui.components.Icon
 import app.opaw.ui.components.Ink
 import app.opaw.ui.components.LoopMotion
@@ -71,7 +69,6 @@ import app.opaw.ui.components.StickerPet
 import app.opaw.ui.components.loopMotion
 import app.opaw.ui.components.pressable
 import app.opaw.ui.components.rememberHaptics
-import app.opaw.ui.components.rememberPetImage
 import app.opaw.ui.theme.Opaw
 import app.opaw.ui.theme.opaw
 import app.opaw.ui.theme.whiteCard
@@ -387,89 +384,6 @@ internal fun JoinCodeScreen(app: OpawApplication, modifier: Modifier, onDone: ()
             }
             Text("Not now", style = opaw(15.sp, FontWeight.Bold), color = colors.ink, modifier = Modifier.pressable(onClick = onDone).padding(4.dp))
         }
-    }
-}
-
-/** While the account's pets are looked for after signing in on a new phone. */
-@Composable
-internal fun LookingForPets(modifier: Modifier) {
-    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        GhostCycle(Modifier.size(170.dp, 190.dp).loopMotion(LoopMotion.BOB, 3.2))
-        Text("Looking for your pets…", style = opaw(18.sp, FontWeight.Black), color = Opaw.colors.ink, modifier = Modifier.padding(top = 18.dp))
-        Text("Checking your Google account", style = opaw(14.sp, FontWeight.Medium), color = Opaw.colors.muted, modifier = Modifier.padding(top = 4.dp))
-    }
-}
-
-/**
- * Welcome back (10b): signed in on a new phone or after a reinstall, and the account already
- * had pets, so setup is skipped and they're shown coming back.
- */
-@Composable
-internal fun WelcomeBackScreen(app: OpawApplication, dogs: List<Dog>, modifier: Modifier, onDone: () -> Unit) {
-    val colors = Opaw.colors
-    Column(modifier) {
-        Column(Modifier.weight(1f).padding(top = 26.dp)) {
-            Row(
-                Modifier.padding(horizontal = 20.dp).background(Ink, CircleShape).padding(horizontal = 12.dp, vertical = 7.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(DesignIcon.CLOUD, size = 14.dp, tint = Color.White)
-                Text("Found on your account", style = opaw(13.sp, FontWeight.ExtraBold), color = Color.White)
-            }
-            Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Welcome back", style = opaw(34.sp, FontWeight.Black), color = colors.ink)
-                Text(
-                    "Your pets were saved to your Google account, so nothing was lost: logs, photos and their 3D selves.",
-                    style = opaw(16.sp, FontWeight.Medium).copy(lineHeight = 22.sp), color = colors.muted,
-                )
-            }
-            Column(Modifier.padding(horizontal = 20.dp).padding(top = 22.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                for (dog in dogs.take(4)) {
-                    val image = rememberPetImage(dog, 300)
-                    val has3D = app.petModels.clips(dog.id).isNotEmpty()
-                    Row(
-                        Modifier.fillMaxWidth().whiteCard(26.dp).padding(12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Box(Modifier.size(64.dp).clip(RoundedCornerShape(22.dp)).background(colors.chip), contentAlignment = Alignment.Center) {
-                            StickerPet(image, Modifier.fillMaxSize().padding(6.dp), edge = 2.dp, motion = LoopMotion.BREATHE)
-                        }
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text(dog.name.ifEmpty { "Your pet" }, style = opaw(18.sp, FontWeight.Black), color = colors.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(
-                                listOfNotNull(dog.breed.ifEmpty { null }, dog.birthDate?.let { ageText(Dog.age(it)) }).joinToString(" · ").ifEmpty { "Restored" },
-                                style = opaw(13.sp, FontWeight.SemiBold), color = colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                        if (has3D) {
-                            Row(
-                                Modifier.height(30.dp).background(Ink, CircleShape).padding(horizontal = 10.dp),
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Icon(DesignIcon.CHECK, size = 11.dp, tint = Color.White)
-                                Text("3D", style = opaw(12.sp, FontWeight.ExtraBold), color = Color.White)
-                            }
-                        }
-                    }
-                }
-                if (dogs.size > 4) Text("and ${dogs.size - 4} more", style = opaw(14.sp, FontWeight.Bold), color = colors.muted, modifier = Modifier.padding(start = 6.dp))
-            }
-        }
-        Box(Modifier.padding(horizontal = 20.dp).padding(bottom = 8.dp)) {
-            BlackPillButton(if (dogs.size == 1) "Go to ${dogs.first().name.ifEmpty { "your pet" }}" else "Go to your pets", onClick = onDone)
-        }
-    }
-}
-
-private fun ageText(years: Double): String {
-    val whole = years.toInt()
-    return when {
-        whole < 1 -> "puppy"
-        whole == 1 -> "1 yr"
-        else -> "$whole yrs"
     }
 }
 

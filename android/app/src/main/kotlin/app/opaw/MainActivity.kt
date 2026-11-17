@@ -5,8 +5,6 @@ import android.os.Bundle
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.font.FontWeight
@@ -22,6 +20,17 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.painterResource
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -51,9 +60,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.opaw.services.CrashLog
 import app.opaw.ui.MainTabs
 import app.opaw.ui.SignInScreen
-import app.opaw.ui.onboarding.LookingForPets
 import app.opaw.ui.onboarding.OnboardingFlow
-import app.opaw.ui.onboarding.WelcomeBackScreen
 import app.opaw.ui.theme.Opaw
 import app.opaw.ui.theme.OpawTheme
 
@@ -94,54 +101,90 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class Root { SIGN_IN, ONBOARDING, WELCOME_BACK, TABS }
+private enum class Root { OPENING, SIGN_IN, ONBOARDING, TABS }
 
 /**
  * Google sign-in first (there's no anonymous mode), then onboarding until there's a dog, then
- * the tabs. Signing out or deleting the account clears the session and lands back on sign-in.
+ * the tabs. Signing in again (a reinstall, a new phone) brings the account's pets back behind
+ * the busy sign-in button and goes straight to Home. Signing out or deleting the account clears
+ * the session and lands back on sign-in.
  */
 @Composable
 private fun RootView(app: OpawApplication) {
     val dogs by app.database.dogs().observeAll().collectAsStateWithLifecycle(initialValue = null)
     val skipped by app.settings.onboardingSkipped.collectAsStateWithLifecycle(initialValue = null)
-    Box(Modifier.fillMaxSize().background(Opaw.colors.cream)) {
-        // Wait for the first read so onboarding doesn't flash for returning users.
-        val current = dogs ?: return@Box
-        val skippedSetup = skipped ?: return@Box
-        // No pets here but signed in (a reinstall, a new phone): look for the account's pets first.
-        val needsRestore = app.pack.isSignedIn && current.isEmpty() && !skippedSetup && !app.household.hasChecked
-        // Pets found on the account are welcomed back (10b) before Home.
-        var restored by rememberSaveable { mutableStateOf(false) }
-        var welcomed by rememberSaveable { mutableStateOf(false) }
-        LaunchedEffect(needsRestore) {
-            if (needsRestore) {
-                app.household.restore()
-                restored = true
-            }
-        }
+    var signInShown by rememberSaveable { mutableStateOf(false) }
+    var restoreFailed by remember { mutableStateOf(false) }
+    var attempt by remember { mutableIntStateOf(0) }
+    // Wait for the first read so onboarding doesn't flash for returning users.
+    val current = dogs
+    val skippedSetup = skipped
+    if (current == null || skippedSetup == null) {
+        OpeningScreen()
+        return
+    }
+    // Signed in with no pets here: bring back the account's pets before choosing a screen.
+    val needsRestore = app.pack.isSignedIn && current.isEmpty() && !skippedSetup && !app.household.hasChecked
+    LaunchedEffect(needsRestore, attempt) {
         if (needsRestore) {
-            LookingForPets(Modifier.fillMaxSize().safeDrawingPadding())
-            return@Box
+            restoreFailed = false
+            restoreFailed = !app.household.restore()
         }
-        val root = when {
-            !app.pack.isSignedIn -> Root.SIGN_IN
-            current.isEmpty() && !skippedSetup -> Root.ONBOARDING
-            restored && !welcomed -> Root.WELCOME_BACK
-            else -> Root.TABS
+    }
+    val root = when {
+        !app.pack.isSignedIn -> Root.SIGN_IN
+        // Just signed in, or the account couldn't be reached: stay on sign-in (11b, 11d).
+        needsRestore -> if (signInShown || restoreFailed) Root.SIGN_IN else Root.OPENING
+        current.isEmpty() && !skippedSetup -> Root.ONBOARDING
+        else -> Root.TABS
+    }
+    LaunchedEffect(root) { if (root == Root.SIGN_IN) signInShown = true }
+    AnimatedContent(
+        targetState = root,
+        transitionSpec = {
+            (fadeIn(tween(600)) + scaleIn(tween(600), initialScale = 1.04f)) togetherWith fadeOut(tween(600))
+        },
+        modifier = Modifier.fillMaxSize().background(Opaw.colors.cream),
+        label = "root",
+    ) { screen ->
+        when (screen) {
+            Root.OPENING -> OpeningScreen()
+            Root.SIGN_IN -> SignInScreen(
+                restoring = needsRestore && !restoreFailed,
+                restoreFailed = needsRestore && restoreFailed,
+                onRetry = { attempt++ },
+            )
+            Root.ONBOARDING -> OnboardingFlow(app)
+            Root.TABS -> MainTabs()
         }
-        AnimatedContent(
-            targetState = root,
-            transitionSpec = {
-                (fadeIn(tween(600)) + scaleIn(tween(600), initialScale = 1.04f)) togetherWith fadeOut(tween(600))
+    }
+}
+
+/** The app opening (11a): the Opaw paw on cream, shown only if loading takes over 300 ms. */
+@Composable
+private fun OpeningScreen() {
+    val shown = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        delay(300)
+        shown.animateTo(1f, tween(420, easing = CubicBezierEasing(0.34f, 1.56f, 0.64f, 1f)))
+    }
+    Box(Modifier.fillMaxSize().background(Opaw.colors.cream), contentAlignment = Alignment.Center) {
+        Column(
+            Modifier.offset(y = (-20).dp).graphicsLayer {
+                alpha = shown.value.coerceIn(0f, 1f)
+                val scale = 0.86f + 0.14f * shown.value
+                scaleX = scale
+                scaleY = scale
             },
-            label = "root",
-        ) { screen ->
-            when (screen) {
-                Root.SIGN_IN -> SignInScreen()
-                Root.ONBOARDING -> OnboardingFlow(app)
-                Root.WELCOME_BACK -> WelcomeBackScreen(app, current, Modifier.fillMaxSize().safeDrawingPadding()) { welcomed = true }
-                Root.TABS -> MainTabs()
-            }
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Image(
+                painterResource(R.drawable.opaw_logo),
+                contentDescription = "Opaw",
+                modifier = Modifier.size(112.dp).shadow(18.dp, RoundedCornerShape(30.dp)).clip(RoundedCornerShape(30.dp)),
+            )
+            Text("Opaw", style = opaw(30.sp, FontWeight.Black), color = Opaw.colors.ink)
         }
     }
 }
