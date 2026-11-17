@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ios:
+    name: iOS build and OpawKit tests
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: OpawKit unit tests
+        run: swift test --package-path Packages/OpawKit
+
+      - name: Install XcodeGen
+        run: brew install xcodegen xcbeautify
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build app for the iOS Simulator
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project Opaw.xcodeproj \
+            -scheme Opaw \
+            -destination 'generic/platform=iOS Simulator' \
+            -skipPackagePluginValidation \
+            -skipMacroValidation \
+            CODE_SIGNING_ALLOWED=NO \
+            build | xcbeautify --renderer github-actions || \
+          (echo "::error::xcodebuild failed" && exit 1)
+
+  worker:
+    name: Avatar worker tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Install dependencies
+        run: pip install -r avatar-worker/requirements-dev.txt
+      - name: Run tests
+        run: python -m pytest avatar-worker/tests -q

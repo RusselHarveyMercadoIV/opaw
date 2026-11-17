@@ -1,0 +1,6 @@
+// Shared build settings. Secrets live in Secrets.xcconfig (not committed).
+// Copy Secrets.example.xcconfig to Secrets.xcconfig and fill in your values.
+SUPABASE_HOST =
+SUPABASE_ANON_KEY =
+DEVELOPMENT_TEAM =
+#include? "Secrets.xcconfig"

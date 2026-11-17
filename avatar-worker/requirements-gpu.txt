@@ -1,0 +1,10 @@
+# Extra dependencies for the realistic Wan 2.2 backend. Needs an NVIDIA GPU with 8 GB+ of memory
+# (24 GB recommended for 720p). Wan 2.2 support needs a recent diffusers build.
+-r requirements.txt
+torch>=2.4
+git+https://github.com/huggingface/diffusers
+transformers>=4.44
+accelerate>=0.33
+ftfy
+# Per-frame background removal (MIT licensed).
+rembg[gpu]>=2.0.57
