@@ -31,6 +31,8 @@ class OpawApplication : Application() {
     val premium: PremiumStore by lazy { PremiumStore(this) }
     val petModels: PetModelService by lazy { PetModelService(this, pack, scope) }
     val household: app.opaw.services.HouseholdSync by lazy { app.opaw.services.HouseholdSync(this) }
+    /** Paws and each pet's room (16a). */
+    val paws: app.opaw.services.PawsWallet by lazy { app.opaw.services.PawsWallet(this) }
 
     /** Work that should outlive a screen, such as saving after a toast's Undo. */
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)

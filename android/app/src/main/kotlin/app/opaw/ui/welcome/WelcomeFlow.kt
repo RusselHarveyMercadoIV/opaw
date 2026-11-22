@@ -56,6 +56,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
@@ -871,7 +872,7 @@ private fun loopClock(millis: Int): Float {
 }
 
 /** A chest's wobble: still, then a quick shake, as if something's inside. */
-private fun Modifier.wobble(): Modifier = androidx.compose.ui.composed {
+private fun Modifier.wobble(): Modifier = composed {
     val t = loopClock(2200)
     graphicsLayer {
         transformOrigin = TransformOrigin(0.5f, 1f)
@@ -880,7 +881,7 @@ private fun Modifier.wobble(): Modifier = androidx.compose.ui.composed {
 }
 
 /** A plant's slow sway. */
-private fun Modifier.sway(): Modifier = androidx.compose.ui.composed {
+private fun Modifier.sway(): Modifier = composed {
     val t = loopClock(3600)
     graphicsLayer { transformOrigin = TransformOrigin(0.5f, 1f); rotationZ = 5f * sin(t * 2 * PI.toFloat()) }
 }

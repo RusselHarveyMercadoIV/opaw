@@ -41,6 +41,12 @@ object CareRecorder {
         WidgetRefresher.refresh(context)
         val badges = refreshBadges(context, event.dogId)
         val after = repo.loadDogData(event.dogId) ?: before
+        // Care earns Paws (16a): +5 a log, and +20 once the day's reminders are all done.
+        var paws = app.paws.pawsFor(stamped.kind)
+        app.paws.earn(event.dogId, paws, stamped.id)
+        val now = Instant.now()
+        val due = after.reminders(now)
+        if (due.isNotEmpty() && after.doneReminderIds(now).size >= due.size) paws += app.paws.dayDone(event.dogId)
         if (badges.isNotEmpty()) {
             val badge = badges.first()
             // The reaction first, then the milestone replaces it.
@@ -60,6 +66,7 @@ object CareRecorder {
             before = before.careReport().score,
             after = after.careReport().score,
             eventId = stamped.id,
+            paws = paws,
         )
     }
 
@@ -89,6 +96,7 @@ object CareRecorder {
         val event = repo.event(eventId) ?: return null
         val before = repo.loadDogData(event.dogId) ?: return null
         repo.deleteEvent(event)
+        app.paws.refund(event.dogId, eventId)
         if (style == CareToast.Style.DELETED) app.toasts.haptics?.rigid() else app.toasts.haptics?.soft()
         WidgetRefresher.refresh(context)
         val after = repo.loadDogData(event.dogId) ?: before

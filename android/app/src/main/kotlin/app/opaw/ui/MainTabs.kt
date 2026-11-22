@@ -170,6 +170,7 @@ private fun RouteScreen(route: Route) {
         is Route.Studio -> AvatarStudioScreen(route.dogId)
         is Route.LifePhotos -> LifePhotosRoute(route.dogId)
         is Route.Life -> LifeRoute(route.dogId)
+        is Route.Decorate -> app.opaw.ui.home.RoomDecorateScreen(route.dogId)
         is Route.MemoryDetail -> MemoryDetailScreen(route.memoryId)
         is Route.Household -> HouseholdScreen(route.dogId)
         Route.Units -> UnitsScreen()

@@ -110,6 +110,7 @@ import app.opaw.ui.premium.OneTimeOffer
 import app.opaw.ui.premium.PaywallScreen
 import app.opaw.ui.care.MealTimesList
 import app.opaw.ui.care.TrackGrid
+import app.opaw.ui.care.TrackOption
 import app.opaw.ui.life.LifeAngle
 import app.opaw.ui.life.LifeCamera
 import app.opaw.ui.life.LifePhotos
@@ -195,7 +196,7 @@ fun OnboardingFlow(app: OpawApplication) {
         val kinds = buildList {
             if ("meals" in focus) add(CareKind.MEAL.raw)
             if ("water" in focus) addAll(listOf(CareKind.WATER.raw, CareKind.PEE.raw, CareKind.POOP.raw))
-            if ("walks" in focus) add(app.opaw.ui.care.TrackOption.WALK_KEY)
+            if ("walks" in focus) add(TrackOption.WALK_KEY)
             if ("meds" in focus) addAll(listOf(CareKind.MEDS.raw, CareKind.VET.raw))
             add(CareKind.WEIGHT.raw)
         }

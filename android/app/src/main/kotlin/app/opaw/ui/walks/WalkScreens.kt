@@ -596,6 +596,8 @@ private fun WalkSummary(result: WalkRecorder.FinishedWalk, data: DogData, activi
         try {
             app.repository.transaction {
                 app.repository.saveWalk(walk)
+                // A walk earns +1 Paw per 100 m (16a).
+                app.paws.earn(data.dog.id, (stats.distanceMeters / 100).toInt(), walk.id)
                 // Pins dropped on the walk count as care logs too.
                 val caretaker = app.settings.caretakerName.first()
                 for (pin in result.pins) {

@@ -167,7 +167,19 @@ fun CareToastView(toast: CareToast, onUndo: (() -> Unit)?) {
             Text(headline, style = opaw(16.sp, FontWeight.ExtraBold), color = ink, maxLines = 1)
             Text(detail, style = opaw(13.sp, FontWeight.Medium), color = if (dark) Color(0xFFAAAAAA) else Color(0xFF666666), maxLines = 1)
         }
-        if (dark) Text("+${toast.kind.points}", style = opaw(19.sp, FontWeight.Black), color = Color.White)
+        if (dark && toast.paws > 0) {
+            // The Paws it earned, on an orange coin pill.
+            Row(
+                Modifier.background(Action, CircleShape).padding(start = 6.dp, end = 12.dp, top = 5.dp, bottom = 5.dp),
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(Modifier.size(20.dp).background(Color.White, CircleShape), contentAlignment = Alignment.Center) { Icon(DesignIcon.PAW, size = 12.dp, tint = Action) }
+                Text("+${toast.paws}", style = opaw(16.sp, FontWeight.Black), color = Color.White)
+            }
+        } else if (dark) {
+            Text("+${toast.kind.points}", style = opaw(19.sp, FontWeight.Black), color = Color.White)
+        }
         if (onUndo != null) {
             Row(
                 Modifier

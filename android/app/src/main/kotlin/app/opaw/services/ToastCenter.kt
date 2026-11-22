@@ -40,6 +40,8 @@ data class CareToast(
     val eventId: String? = null,
     /** A deleted log, so Undo can put it back. */
     val restore: CareEvent? = null,
+    /** Paws this log earned, shown as "+5" on the toast (16a). */
+    val paws: Int = 0,
     override val id: String = UUID.randomUUID().toString(),
 ) : ToastItem {
     enum class Style {

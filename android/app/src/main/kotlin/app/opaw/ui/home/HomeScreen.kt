@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -149,6 +150,7 @@ fun HomeScreen() {
                 PetRoomPage(
                     data,
                     openToday = { navigator.push(Route.Today(data.dog.id)) },
+                    openDecorate = { navigator.push(Route.Decorate(data.dog.id)) },
                     openWalk = { selectTab(AppTab.ACTIVITY) },
                     openStudio = { navigator.push(Route.Studio(data.dog.id)) },
                 )
@@ -165,6 +167,8 @@ fun HomeScreen() {
                 TopCircle(onClick = { navigator.push(Route.Profile(current.dog.id)) }) { Icon(DesignIcon.SETTINGS, size = 23.dp) }
             }
         }
+        // A new level unlocks pieces in the shop (16d).
+        if (pager.currentPage != addPage) LevelUpCard(current.dog.id) { navigator.push(Route.Decorate(current.dog.id)) }
     }
 
     addSource?.let { source -> AddDogSheet(source, onDismiss = { addSource = null }) }
@@ -197,7 +201,7 @@ private fun moodLine(report: CareReport, night: Boolean, meal: String): Pair<Str
 // MARK: - The pet's room
 
 @Composable
-private fun PetRoomPage(data: DogData, openToday: () -> Unit, openWalk: () -> Unit, openStudio: () -> Unit) {
+private fun PetRoomPage(data: DogData, openToday: () -> Unit, openDecorate: () -> Unit, openWalk: () -> Unit, openStudio: () -> Unit) {
     val app = rememberApp()
     val colors = Opaw.colors
     val haptics = rememberHaptics()
@@ -219,17 +223,13 @@ private fun PetRoomPage(data: DogData, openToday: () -> Unit, openWalk: () -> Un
     }
 
     Box(Modifier.fillMaxSize()) {
+        val room = app.paws.state(dog.id)
         PetRoom(
             night,
             mealDue = if (CareNeed.MEAL in report.needs) meal else null,
+            pieces = { room.piece(it) },
             actions = RoomActions(onBowl = { log(CareKind.MEAL) }, onWater = { log(CareKind.WATER) }, onDoor = openWalk, onBed = openToday),
-        ) { view, standing ->
-            if (roams) {
-                PetAvatar(dog, image, mood, view, room = true)
-            } else {
-                PetAvatar(dog, image, mood, standing.loopMotion(report.tier.motion), sticker = 6.dp, faded = report.tier == CareTier.NEEDS_YOU, onTap = openStudio)
-            }
-        }
+        ) { view, standing -> RoomPet(data, view, standing, onTap = openStudio) }
         // The name, mood and Today ring, under the top bar and above anywhere the pet can reach.
         val (line, dot) = moodLine(report, night, meal)
         val ink = if (night) Color.White else colors.ink
@@ -237,17 +237,21 @@ private fun PetRoomPage(data: DogData, openToday: () -> Unit, openWalk: () -> Un
             Modifier.fillMaxWidth().statusBarsPadding().padding(top = 80.dp).padding(horizontal = 24.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            // Tap the name and mood for the day's list (the Today ring lives there now).
+            Column(Modifier.weight(1f).pressable(onClick = openToday), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(dog.name, style = opaw(34.sp, FontWeight.Black).copy(letterSpacing = (-0.3).sp), color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(8.dp).background(dot, CircleShape))
                     Text(line, style = opaw(13.sp, FontWeight.ExtraBold), color = ink.copy(alpha = 0.75f), maxLines = 1)
                 }
             }
-            val reminders = data.reminders(now)
-            val total = if (reminders.isEmpty()) maxOf(1, data.scheduledMealHours.size) else reminders.size
-            val done = (if (reminders.isEmpty()) data.count(CareKind.MEAL, now) else data.doneReminderIds(now).size).coerceAtMost(total)
-            TodayRing(done, total, night, openToday)
+            // The Paws count, and the brush that opens Decorate (16a).
+            PawsChip(room.paws, night, Modifier.pressable(onClick = openDecorate))
+            Spacer(Modifier.width(8.dp))
+            Box(
+                Modifier.size(40.dp).pressable(onClick = openDecorate).background(if (night) Color.White.copy(alpha = 0.12f) else colors.surface, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) { Icon(DesignIcon.PENCIL, size = 18.dp, tint = if (night) Color.White else colors.ink) }
         }
         WelcomeOfferBar(Modifier.statusBarsPadding().padding(top = 148.dp).padding(horizontal = 24.dp))
     }
@@ -315,10 +319,14 @@ private fun EmptyRoom(first: Boolean, locked: Boolean, onAdd: () -> Unit, onJoin
             Modifier.fillMaxWidth().statusBarsPadding().padding(top = if (first) 24.dp else 80.dp).padding(horizontal = 24.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Text(
-                if (first) "Your pet\u2019s room\nis ready" else if (locked) "Room for one more" else "Add a pet",
-                style = opaw(30.sp, FontWeight.Black).copy(lineHeight = 33.sp), color = ink,
-            )
+            Row(verticalAlignment = Alignment.Top) {
+                Text(
+                    if (first) "Your pet\u2019s room\nis ready" else if (locked) "Room for one more" else "Add a pet",
+                    style = opaw(30.sp, FontWeight.Black).copy(lineHeight = 33.sp), color = ink, modifier = Modifier.weight(1f),
+                )
+                // A new home starts with 50 Paws for its first pet (14k).
+                if (first) PawsChip(50, night)
+            }
             WelcomeOfferBar(Modifier.padding(top = 8.dp))
             if (!first) {
                 Text(
