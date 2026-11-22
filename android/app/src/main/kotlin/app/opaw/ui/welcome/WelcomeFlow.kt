@@ -273,7 +273,7 @@ private fun key(p: Float, vararg keys: Pair<Float, Float>): Float {
     return keys.last().second
 }
 
-/** The sample pet from the design. */
+/** The sample pet, drawn by the same prompt the avatar maker uses (supabase/functions/pet-model PICTURE_PROMPT). */
 @Composable
 private fun DesignPet(modifier: Modifier) {
     Image(painterResource(R.drawable.welcome_pet), null, modifier, contentScale = ContentScale.Fit)
@@ -429,30 +429,62 @@ private fun WelcomeScreen(busy: Boolean, failed: Boolean, error: String?, onStar
 
 // MARK: - 14b to 14e The beats
 
-/** 14b: peach. The pet hops, rings pulse out from it like a heartbeat, and a "Hi!" bubble pops up. */
+/**
+ * 14b: peach. What the app really does: a phone photo of a pet is scanned, a dotted trail
+ * carries it across, and the same pet, drawn the way Opaw draws every avatar, hops and says hi.
+ * One 2.4 s loop, in step with the hop: scan (0 to 0.4), trail (0.3 to 0.62), hop on arrival.
+ */
 @Composable
 private fun AliveScreen(onSkip: () -> Unit, onNext: () -> Unit) {
     val t = rememberSeconds()
     DesignScreen { st ->
-        Panel(st, Brush.verticalGradient(listOf(Color(0xFFFFF1E6), Color(0xFFFFF1E6)))) {
-            for (delay in listOf(0f, 0.8f, 1.6f)) {
-                val p = phase(t, 2.4f, delay)
-                if (p != null) {
-                    val k = 0.55f + (1.55f - 0.55f) * (1 - (1 - p) * (1 - p))
-                    Box(Modifier.at(st, 55, 180, 300, 300).graphicsLayer { scaleX = k; scaleY = k; alpha = 0.9f * (1 - p) }.border(3.dp, Action.copy(alpha = 0.35f), CircleShape))
+        Panel(st, Brush.verticalGradient(listOf(Color(0xFFFFF1E6), Color(0xFFFFE6D3)))) {
+            val p = t % 2.4f / 2.4f
+            // The photo, a tilted print with the scan sweeping down it.
+            Column(
+                Modifier.at(st, 26, 128, 160, 190).graphicsLayer { rotationZ = -7f }
+                    .shadow(14.dp, RoundedCornerShape(18.dp), ambientColor = Color(0x30783C00), spotColor = Color(0x30783C00))
+                    .background(Color.White, RoundedCornerShape(18.dp)).padding(st.d(10)),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Box(Modifier.size(st.d(140)).clip(RoundedCornerShape(12.dp))) {
+                    Image(painterResource(R.drawable.welcome_pet_photo), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                    val scan = key(p, 0f to -0.3f, 0.4f to 1.05f, 1f to 1.05f)
+                    Box(
+                        Modifier.fillMaxWidth().height(st.d(42)).graphicsLayer { translationY = scan * 140f * st.s * density }
+                            .background(Brush.verticalGradient(listOf(Color.Transparent, Color.White.copy(alpha = 0.75f), Color.Transparent))),
+                    )
+                }
+                Text("Your photo", style = opaw(13.sp, FontWeight.ExtraBold), color = Color(0xFF8A7A6E), modifier = Modifier.padding(top = st.d(9)))
+            }
+            // The dotted trail from the photo over to the pet.
+            val drawn = key(p, 0f to 0f, 0.3f to 0f, 0.62f to 1f, 1f to 1f)
+            Canvas(Modifier.at(st, 0, 0, 390, 540)) {
+                val u = size.width / 390f
+                val path = Path().apply {
+                    moveTo(190f * u, 176f * u)
+                    cubicTo(222f * u, 116f * u, 268f * u, 124f * u, 264f * u, 226f * u)
+                }
+                val measure = PathMeasure().apply { setPath(path, false) }
+                val part = Path()
+                measure.getSegment(0f, measure.length * drawn, part, true)
+                drawPath(part, Action, style = Stroke(5f * u, cap = StrokeCap.Round, pathEffect = PathEffect.dashPathEffect(floatArrayOf(0.1f, 13f * u))))
+                if (drawn > 0.98f) {
+                    val tip = Offset(264f * u, 230f * u)
+                    drawPath(Path().apply { moveTo(tip.x - 9f * u, tip.y - 10f * u); lineTo(tip.x, tip.y); lineTo(tip.x + 9f * u, tip.y - 10f * u) }, Action, style = Stroke(5f * u, cap = StrokeCap.Round, join = StrokeJoin.Round))
                 }
             }
-            Box(Modifier.at(st, 95, 220, 220, 220).background(Color.White, CircleShape))
-            SvgArt(RoomArt.pieces.getValue("rug-round"), Modifier.at(st, 80, 215, 250, 250))
-            Shadow(st, 139, 420, 132, 18)
-            DesignPet(Modifier.at(st, 95, 190, 220, 240).obHop(t, st))
+            // The pet, as the avatar maker draws it, hopping as the trail lands.
+            Shadow(st, 196, 452, 136, 18)
+            DesignPet(Modifier.at(st, 152, 222, 220, 236).obHop(t, st))
             Text(
                 "Hi!", style = opaw(15.sp, FontWeight.ExtraBold), color = Color.White,
-                modifier = Modifier.at(st, 255, 150).obPop(t, TransformOrigin(0f, 1f))
+                modifier = Modifier.at(st, 330, 196).obPop(t, TransformOrigin(0f, 1f))
                     .background(Ink, RoundedCornerShape(20.dp, 20.dp, 20.dp, 6.dp)).padding(start = 12.dp, end = 16.dp, top = 9.dp, bottom = 9.dp),
             )
-            Sparkle(st, t, 70, 160, 22, "#FF8F2E", 0f)
-            Sparkle(st, t, 320, 400, 18, "#FFB27A", 0.9f)
+            Sparkle(st, t, 236, 118, 22, "#FF8F2E", 0f)
+            Sparkle(st, t, 340, 160, 16, "#FFB27A", 0.7f)
+            Sparkle(st, t, 60, 400, 18, "#FFB27A", 1.4f)
         }
         BeatTop(st, 0, Color(0xFFB84300), onSkip)
         BeatText(st, "Your pet, alive in 3D", "One photo and your pet comes to life. It explores, naps and runs up to say hi.")
