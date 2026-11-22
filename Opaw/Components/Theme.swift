@@ -27,7 +27,7 @@ extension Color {
         self.init(uiColor: UIColor(hex: hex))
     }
 
-    /// The accent: black ink on light, white on dark. Defined in the asset catalog.
+    /// The accent: the action orange of the app icon. Defined in the asset catalog.
     static let opawOrange = Color("AccentColor")
 
     /// The ground behind cards.
@@ -38,6 +38,18 @@ extension Color {
 
     /// Text drawn on top of `opawInk`.
     static let opawOnInk = Color(uiColor: .opaw(light: 0xFFFFFF, dark: 0x111111))
+
+    /// Buttons, selected states, progress and the active tab: the orange of the app icon.
+    static let opawAction = Color(hex: 0xF2600C)
+
+    /// Text and icons drawn on top of `opawAction`.
+    static let opawOnAction = Color.white
+
+    /// The logo orange: splash, hero fills and illustration.
+    static let opawBrand = Color(hex: 0xFF7A1A)
+
+    /// Orange words and links on the light ground.
+    static let opawBrandText = Color(uiColor: .opaw(light: 0xB84300, dark: 0xFF9A4D))
 
     /// Cards, round buttons and sheets.
     static let opawSurface = Color(uiColor: .opaw(light: 0xFFFFFF, dark: 0x1C1C1E))
@@ -198,7 +210,7 @@ struct OpawPrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.opaw(17, .bold))
-            .foregroundStyle(Color.opawOnInk)
+            .foregroundStyle(Color.opawOnAction)
             .frame(maxWidth: .infinity, minHeight: 62)
             .background(Color.opawInk.opacity(isEnabled ? 1 : 0.18), in: Capsule())
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
@@ -269,10 +281,10 @@ struct ChoiceChip: View {
         Button(action: action) {
             Text(title)
                 .font(.opaw(14, .bold))
-                .foregroundStyle(isSelected ? Color.opawOnInk : Color.opawInk.opacity(0.7))
+                .foregroundStyle(isSelected ? Color.opawOnAction : Color.opawInk.opacity(0.7))
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
-                .background(isSelected ? Color.opawInk : Color.opawChip, in: Capsule())
+                .background(isSelected ? Color.opawAction : Color.opawChip, in: Capsule())
         }
         .buttonStyle(.pressable)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
@@ -361,11 +373,11 @@ struct FilterPill: View {
         Button(action: action) {
             Text(title)
                 .font(.opaw(14, .bold))
-                .foregroundStyle(isSelected ? Color.opawOnInk : Color.opawInk)
+                .foregroundStyle(isSelected ? Color.opawOnAction : Color.opawInk)
                 .padding(.horizontal, 18)
                 .padding(.vertical, verticalPadding)
                 .frame(minHeight: 44)
-                .background(isSelected ? Color.opawInk : Color.opawSurface, in: Capsule())
+                .background(isSelected ? Color.opawAction : Color.opawSurface, in: Capsule())
                 .shadow(color: .black.opacity(isSelected ? 0 : 0.05), radius: 8, y: 6)
         }
         .buttonStyle(.pressable)
@@ -509,9 +521,9 @@ struct CareGlyph: View {
     var body: some View {
         Image(systemName: symbol)
             .font(.system(size: size * 0.42, weight: .semibold))
-            .foregroundStyle(filled ? Color.opawOnInk : Color.opawInk)
+            .foregroundStyle(filled ? Color.opawOnAction : Color.opawInk)
             .frame(width: size, height: size)
-            .background(filled ? Color.opawInk : Color.opawChip, in: Circle())
+            .background(filled ? Color.opawAction : Color.opawChip, in: Circle())
     }
 }
 

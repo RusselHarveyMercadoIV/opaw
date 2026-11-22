@@ -223,10 +223,10 @@ struct HistoryView: View {
                         PointMark(x: .value("Date", point.date), y: .value("kg", point.kg))
                             .symbol {
                                 if index == points.count - 1 {
-                                    Circle().fill(Color.opawInk).frame(width: 12, height: 12)
+                                    Circle().fill(Color.opawAction).frame(width: 12, height: 12)
                                 } else {
                                     Circle().fill(Color.opawSurface).frame(width: 7, height: 7)
-                                        .overlay(Circle().stroke(Color.opawInk, lineWidth: 2.5))
+                                        .overlay(Circle().stroke(Color.opawAction, lineWidth: 2.5))
                                 }
                             }
                     }
@@ -289,7 +289,7 @@ struct HistoryView: View {
             HStack(spacing: 4) {
                 ForEach(Array(days.enumerated()), id: \.offset) { _, day in
                     RoundedRectangle(cornerRadius: 7, style: .continuous)
-                        .fill(day == .normal ? Color.opawInk : day == .empty ? Color(hex: 0xEEEEEF) : Color(hex: 0xD9D9DC))
+                        .fill(day == .normal ? Color.opawAction : day == .empty ? Color(hex: 0xEEEEEF) : Color(hex: 0xD9D9DC))
                         .frame(height: 26)
                 }
             }

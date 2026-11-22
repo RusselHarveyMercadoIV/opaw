@@ -92,6 +92,7 @@ import app.opaw.ui.components.DesignIcon
 import app.opaw.ui.components.FilterPill
 import app.opaw.ui.components.Hairline
 import app.opaw.ui.components.Icon
+import app.opaw.ui.components.Action
 import app.opaw.ui.components.Ink
 import app.opaw.ui.components.RoundIcon
 import app.opaw.ui.components.ScreenHeader
@@ -190,7 +191,7 @@ private fun WeekStrip(selected: LocalDate, now: Instant, modifier: Modifier, onS
             val future = date.isAfter(today)
             Column(
                 Modifier.weight(1f).height(64.dp).pressable(enabled = !future) { onSelect(date) }
-                    .background(if (isSelected) Ink else Color.Transparent, CircleShape),
+                    .background(if (isSelected) Action else Color.Transparent, CircleShape),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
@@ -410,7 +411,7 @@ private fun ScheduleRow(data: DogData, reminder: Reminder, isDone: Boolean, now:
             modifier = Modifier.width(clockColumnWidth(54).dp))
         Box(Modifier.width(22.dp), contentAlignment = Alignment.Center) {
             when {
-                isDone -> Box(Modifier.size(18.dp).background(Ink, CircleShape), contentAlignment = Alignment.Center) { Icon(DesignIcon.CHECK, size = 11.dp, tint = Color.White) }
+                isDone -> Box(Modifier.size(18.dp).background(Action, CircleShape), contentAlignment = Alignment.Center) { Icon(DesignIcon.CHECK, size = 11.dp, tint = Color.White) }
                 needsAttention -> Box(Modifier.size(18.dp).border(2.5.dp, colors.alert, CircleShape))
                 else -> Box(Modifier.size(18.dp).border(2.dp, Color(0xFFCCCCCC), CircleShape))
             }
@@ -578,7 +579,7 @@ fun HistoryScreen(dogId: String) {
                 HistoryRange.entries.forEach { option -> FilterPill(option.title, option == range) { range = option; haptics.select() } }
             }
             Row(
-                Modifier.padding(horizontal = 20.dp).padding(top = 14.dp).fillMaxWidth().background(Ink, RoundedCornerShape(30.dp)).padding(horizontal = 20.dp, vertical = 18.dp),
+                Modifier.padding(horizontal = 20.dp).padding(top = 14.dp).fillMaxWidth().background(Action, RoundedCornerShape(30.dp)).padding(horizontal = 20.dp, vertical = 18.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Icon(DesignIcon.SPARKLE, Modifier.padding(top = 2.dp), size = 18.dp, tint = Color.White)
@@ -590,7 +591,7 @@ fun HistoryScreen(dogId: String) {
             WeightCard(data, range, Modifier.padding(horizontal = 20.dp).padding(top = 12.dp))
             PoopCard(data, Modifier.padding(horizontal = 20.dp).padding(top = 12.dp))
             Row(
-                Modifier.padding(horizontal = 20.dp).padding(top = 16.dp).fillMaxWidth().height(62.dp).pressable(onClick = ::share).background(Ink, CircleShape),
+                Modifier.padding(horizontal = 20.dp).padding(top = 16.dp).fillMaxWidth().height(62.dp).pressable(onClick = ::share).background(Action, CircleShape),
                 horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -699,14 +700,14 @@ internal fun WeightChart(points: List<Pair<Instant, Double>>, range: HistoryRang
             fun y(w: Double) = pad + (1 - ((w - minW) / (maxW - minW)).toFloat()) * (size.height - 2 * pad)
             val path = Path()
             points.forEachIndexed { i, (t, w) -> if (i == 0) path.moveTo(x(t), y(w)) else path.lineTo(x(t), y(w)) }
-            drawPath(path, colors.ink, style = Stroke(3.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+            drawPath(path, colors.action, style = Stroke(3.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
             points.forEachIndexed { i, (t, w) ->
                 val c = Offset(x(t), y(w))
                 if (i == points.lastIndex) {
-                    drawCircle(colors.ink, 6.dp.toPx(), c)
+                    drawCircle(colors.action, 6.dp.toPx(), c)
                 } else {
                     drawCircle(colors.surface, 3.5.dp.toPx(), c)
-                    drawCircle(colors.ink, 3.5.dp.toPx(), c, style = Stroke(2.5.dp.toPx()))
+                    drawCircle(colors.action, 3.5.dp.toPx(), c, style = Stroke(2.5.dp.toPx()))
                 }
             }
         }

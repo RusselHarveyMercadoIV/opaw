@@ -1,6 +1,27 @@
 package app.opaw.ui.profile
 
 import android.content.Intent
+import android.graphics.Bitmap
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.unit.Dp
+import app.opaw.ui.onboarding.OrangeButton
+import app.opaw.ui.onboarding.PlainPet
+import app.opaw.ui.onboarding.Setup
+import app.opaw.ui.onboarding.SetupFoot
+import app.opaw.ui.onboarding.SetupLink
+import app.opaw.ui.onboarding.SetupTitle
+import app.opaw.ui.onboarding.hop
+import app.opaw.ui.onboarding.setupCard
+import app.opaw.ui.onboarding.spinning
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -48,6 +69,7 @@ import app.opaw.data.HouseholdMember
 import app.opaw.services.HouseholdSync
 import app.opaw.ui.components.BlackPillButton
 import app.opaw.ui.components.DesignIcon
+import app.opaw.ui.components.Action
 import app.opaw.ui.components.Ink
 import app.opaw.ui.components.MiniFace
 import app.opaw.ui.components.RowIcon
@@ -134,6 +156,163 @@ fun HouseholdCards(petId: String, petName: String, pet: () -> Dog?) {
     if (showJoin) JoinCodeDialog(app) { showJoin = false }
 }
 
+/**
+ * The household step of adding a pet (10i): the pet hops in the middle while the family circles
+ * it, so sharing the care is the picture, not a form. Pick Family or Walker, then share a real
+ * link; it shows Invited until it's opened. [pet] gives the pet to share; it isn't saved yet.
+ */
+@Composable
+fun SetupHousehold(petId: String, petName: String, face: Bitmap?, modifier: Modifier, pet: () -> Dog?, onNext: () -> Unit) {
+    val app = rememberApp()
+    val colors = Opaw.colors
+    val context = LocalContext.current
+    val haptics = rememberHaptics()
+    val scope = rememberCoroutineScope()
+    val sync = app.household
+    var invites by remember { mutableStateOf(emptyList<HouseholdSync.Invite>()) }
+    var refresh by remember { mutableIntStateOf(0) }
+    var role by remember { mutableStateOf(HouseholdMember.Role.FAMILY) }
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val shared = sync.role(petId) != null
+    LaunchedEffect(petId, shared, refresh) {
+        if (shared) runCatching { invites = sync.invites(petId) }
+    }
+
+    fun share() {
+        busy = true
+        error = null
+        scope.launch {
+            try {
+                val dog = pet() ?: throw IllegalStateException("Add $petName first.")
+                val raw = if (role == HouseholdMember.Role.WALKER) "walker" else "family"
+                val (code, link) = sync.invite(dog, "", raw)
+                refresh++
+                haptics.success()
+                val message = "Help me look after $petName on Opaw! You're invited as ${roleTitle(raw).lowercase()} " +
+                    "(${roleDetail(raw)}). Everyone logs to the same pet, so meals never get doubled.\n\n" +
+                    "Tap to join: $link\nOr enter code $code in Opaw."
+                context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, message), null))
+            } catch (failure: Throwable) {
+                error = HouseholdSync.readable(failure)
+            } finally {
+                busy = false
+            }
+        }
+    }
+
+    Column(modifier) {
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 16.dp)) {
+            FamilyOrbit(face, invites.firstOrNull()?.inviteeName?.take(1)?.ifBlank { null } ?: invites.firstOrNull()?.let { "?" })
+            SetupTitle("Who else looks after $petName?", "Everyone logs to the same pet, so meals never get doubled.", Modifier.padding(top = 8.dp))
+            Column(Modifier.padding(horizontal = 20.dp).padding(top = 20.dp).fillMaxWidth().setupCard(24.dp).padding(horizontal = 16.dp, vertical = 4.dp)) {
+                SetupMember("Y", Action, "You", "Owner · full access", "Owner", owner = true, last = invites.isEmpty())
+                invites.forEachIndexed { i, invite ->
+                    SetupMember(
+                        invite.inviteeName.take(1).ifBlank { "?" }, Color(0xFF8CC79A),
+                        invite.inviteeName.ifBlank { "Someone" }, "${roleTitle(invite.role)} · hasn't opened it yet", "Invited",
+                        owner = false, last = i == invites.lastIndex,
+                    )
+                }
+            }
+            // Family or Walker, for the next link.
+            Row(Modifier.padding(horizontal = 20.dp).padding(top = 14.dp).fillMaxWidth().height(44.dp).background(Setup.fill, CircleShape).padding(4.dp)) {
+                for (option in HouseholdMember.Role.entries) {
+                    val on = option == role
+                    Box(
+                        Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .pressable { haptics.select(); role = option }
+                            .then(if (on) Modifier.shadow(4.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.08f), spotColor = Color.Black.copy(alpha = 0.08f)).background(colors.surface, CircleShape) else Modifier),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            if (option == HouseholdMember.Role.WALKER) "Walker · walks only" else "Family · logs everything",
+                            style = opaw(14.sp, FontWeight.ExtraBold), color = if (on) colors.ink else colors.muted, maxLines = 1,
+                        )
+                    }
+                }
+            }
+            error?.let { Text(it, style = opaw(14.sp, FontWeight.SemiBold), color = colors.alert, modifier = Modifier.padding(horizontal = 26.dp).padding(top = 12.dp)) }
+        }
+        SetupFoot {
+            if (invites.isEmpty()) {
+                OrangeButton(if (busy) "Making the link…" else "Share invite link", enabled = !busy, icon = DesignIcon.LINK, onClick = ::share)
+                SetupLink("Skip for now", onClick = onNext)
+            } else {
+                OrangeButton("Continue", onClick = onNext)
+                SetupLink(if (busy) "Making the link…" else "Share another link", color = colors.ink, enabled = !busy, onClick = ::share)
+            }
+        }
+    }
+}
+
+/** The pet hopping on its grey stage, with the household's faces going round it. */
+@Composable
+private fun FamilyOrbit(face: Bitmap?, invited: String?) {
+    val ring = Setup.line
+    Box(Modifier.fillMaxWidth().height(260.dp), contentAlignment = Alignment.Center) {
+        Canvas(Modifier.size(240.dp)) {
+            drawCircle(ring, style = Stroke(2.5.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 9f))))
+        }
+        Box(Modifier.size(160.dp).background(Setup.fill, CircleShape))
+        PlainPet(face, Modifier.size(110.dp, 130.dp).hop(2600, 14.dp))
+        // The faces turn round the pet; each turns back the other way, so the letters stay upright.
+        Box(Modifier.size(240.dp).spinning(16000)) {
+            val spots = listOf(180.0, 300.0, 60.0)
+            spots.forEachIndexed { i, degrees ->
+                val r = Math.toRadians(degrees)
+                Box(Modifier.align(Alignment.Center).offset((120 * kotlin.math.cos(r)).dp, (120 * kotlin.math.sin(r)).dp).spinning(16000, reverse = true)) {
+                    when (i) {
+                        0 -> OrbitFace("Y", Action)
+                        1 -> if (invited != null) OrbitFace(invited, Color(0xFF8CC79A)) else OrbitFace("+", null)
+                        else -> if (invited != null) OrbitFace("+", null) else Unit
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OrbitFace(letter: String, fill: Color?, size: Dp = 56.dp) {
+    val colors = Opaw.colors
+    Box(
+        Modifier
+            .size(if (fill == null) size - 6.dp else size)
+            .shadow(8.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.12f), spotColor = Color.Black.copy(alpha = 0.12f))
+            .background(fill ?: colors.surface, CircleShape)
+            .border(if (fill == null) 3.dp else 4.dp, if (fill == null) colors.track else Color.White, CircleShape),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(letter.uppercase(), style = opaw(21.sp, FontWeight.Black), color = if (fill == null) colors.ghost else Color.White)
+    }
+}
+
+@Composable
+private fun SetupMember(letter: String, fill: Color, name: String, detail: String, chip: String, owner: Boolean, last: Boolean) {
+    val colors = Opaw.colors
+    Column {
+        Row(Modifier.fillMaxWidth().height(58.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(38.dp).background(fill, CircleShape), contentAlignment = Alignment.Center) {
+                Text(letter.uppercase(), style = opaw(15.sp, FontWeight.Black), color = Color.White)
+            }
+            Column(Modifier.weight(1f)) {
+                Text(name, style = opaw(15.sp, FontWeight.ExtraBold), color = colors.ink, maxLines = 1)
+                Text(detail, style = opaw(12.sp, FontWeight.Bold), color = colors.muted, maxLines = 1)
+            }
+            Text(
+                chip,
+                style = opaw(11.sp, FontWeight.ExtraBold),
+                color = if (owner) Setup.deep else colors.muted,
+                modifier = Modifier.background(if (owner) Setup.peach else colors.chip, CircleShape).padding(horizontal = 9.dp, vertical = 4.dp),
+            )
+        }
+        if (!last) Box(Modifier.fillMaxWidth().height(1.dp).background(Setup.line))
+    }
+}
+
 private fun roleTitle(role: String) = if (role == "walker") HouseholdMember.Role.WALKER.title else HouseholdMember.Role.FAMILY.title
 private fun roleDetail(role: String) = if (role == "walker") HouseholdMember.Role.WALKER.detail else HouseholdMember.Role.FAMILY.detail
 
@@ -176,7 +355,7 @@ private fun MemberRow(name: String, detail: String, chip: String, owner: Boolean
                 chip,
                 style = opaw(13.sp, FontWeight.Bold),
                 color = if (owner) Color.White else Color(0xFF888888),
-                modifier = Modifier.background(if (owner) Ink else colors.chip, CircleShape).padding(horizontal = 12.dp, vertical = 7.dp),
+                modifier = Modifier.background(if (owner) Action else colors.chip, CircleShape).padding(horizontal = 12.dp, vertical = 7.dp),
             )
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(colors.hairline))
@@ -230,7 +409,7 @@ private fun InviteSheet(petName: String, onDismiss: () -> Unit, makeInvite: susp
                             .fillMaxWidth()
                             .height(60.dp)
                             .pressable { haptics.select(); role = option }
-                            .background(if (selected) Ink else colors.chip, RoundedCornerShape(18.dp))
+                            .background(if (selected) Action else colors.chip, RoundedCornerShape(18.dp))
                             .padding(horizontal = 18.dp),
                         verticalArrangement = Arrangement.Center,
                     ) {

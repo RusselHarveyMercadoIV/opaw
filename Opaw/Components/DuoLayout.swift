@@ -228,11 +228,11 @@ struct TabRail: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
         }
-        .foregroundStyle(selected ? Color.opawOnInk : Color.opawInk)
+        .foregroundStyle(selected ? Color.opawOnAction : Color.opawInk)
         .frame(width: 60)
         .padding(.top, 12)
         .padding(.bottom, 10)
-        .background(selected ? Color.opawInk : Color.opawSurface, in: Capsule())
+        .background(selected ? Color.opawAction : Color.opawSurface, in: Capsule())
         .shadow(color: .black.opacity(selected ? 0.22 : 0.08), radius: selected ? 14 : 13, y: selected ? 14 : 10)
     }
 }

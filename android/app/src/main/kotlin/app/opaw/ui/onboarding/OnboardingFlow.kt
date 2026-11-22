@@ -26,6 +26,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -76,6 +77,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
@@ -106,7 +108,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.opaw.services.CutoutService
 import app.opaw.ui.premium.OneTimeOffer
 import app.opaw.ui.premium.PaywallScreen
-import app.opaw.ui.care.MealTimesCard
+import app.opaw.ui.care.MealTimesList
 import app.opaw.ui.care.TrackGrid
 import app.opaw.ui.life.LifeAngle
 import app.opaw.ui.life.LifeCamera
@@ -120,6 +122,7 @@ import app.opaw.ui.components.DesignIcon
 import app.opaw.ui.components.DesignToggle
 import app.opaw.ui.components.GhostCycle
 import app.opaw.ui.components.Icon
+import app.opaw.ui.components.Action
 import app.opaw.ui.components.Ink
 import app.opaw.ui.components.LoopMotion
 import app.opaw.ui.components.ProgressBar
@@ -131,7 +134,7 @@ import app.opaw.ui.components.StickerPet
 import app.opaw.ui.components.loopMotion
 import app.opaw.ui.components.pressable
 import app.opaw.ui.components.rememberHaptics
-import app.opaw.ui.profile.HouseholdCards
+import app.opaw.ui.profile.SetupHousehold
 import app.opaw.ui.theme.Opaw
 import app.opaw.ui.theme.opaw
 import app.opaw.ui.theme.whiteCard
@@ -143,16 +146,17 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.roundToInt
 
-private enum class Step { PHOTOS, CAMERA, DETAILS, REVEAL, TRACK, HOUSEHOLD, PERMISSIONS }
+private enum class Step { PHOTOS, CAMERA, DETAILS, TEMPERAMENT, TRACK, HOUSEHOLD, PERMISSIONS }
 
 /** The screen over the steps while a pet comes to life: its progress, or meeting it in 3D. */
 private enum class LifeScreen { NONE, PROGRESS, REVEAL }
 
 /**
- * First run (4b to 4g, with 9a), after Google sign-in on the welcome screen: photos from four angles, details with the detected breed,
- * the avatar reveal, what to track, the household and permissions, then home. "Bring to life"
- * starts from the photos and keeps going in the background through the rest of setup, with a
- * toast at the top. Mirrors OnboardingFlow.swift.
+ * Adding a pet (v5 10c to 10l), from "Add your first pet" on Home: photos from every side, the
+ * camera, the quick check of the drawing, about the pet, how it plays, what to track, the
+ * household and permissions, then meeting the pet in 3D and home. Clean white screens, one idea
+ * per screen, and the pet itself on every step. "Bring to life" starts from the photos and keeps
+ * going through the rest of setup, in the orange bar at the top.
  */
 @Composable
 fun OnboardingFlow(app: OpawApplication) {
@@ -173,12 +177,13 @@ fun OnboardingFlow(app: OpawApplication) {
     var showJoin by remember { mutableStateOf(false) }
     // The paywall was opened from "Bring to life" on the photos, not at the end of setup.
     var lifePaywall by remember { mutableStateOf(false) }
+    // Meeting the pet at the end of setup (10k) leads home, rather than back to the steps.
+    var meetThenFinish by remember { mutableStateOf(false) }
     val offerShown by app.settings.premiumOfferShown.collectAsStateWithLifecycle(true)
     val model = app.petModels.state(draft.id)
 
     // The front photo is the pet's picture everywhere else in setup.
     val front = photos.shots[LifeAngle.FRONT]
-    val isProcessing = front != null && front.scan == null
     val capture = remember(front) {
         CaptureResult(front?.photo, front?.cutout, front?.scan?.guess, front?.scan?.segmentation, front?.scan?.issues)
     }
@@ -221,8 +226,8 @@ fun OnboardingFlow(app: OpawApplication) {
         Step.PHOTOS -> null
         Step.CAMERA -> Step.PHOTOS
         Step.DETAILS -> Step.PHOTOS
-        Step.REVEAL -> Step.DETAILS
-        Step.TRACK -> Step.REVEAL
+        Step.TEMPERAMENT -> Step.DETAILS
+        Step.TRACK -> Step.TEMPERAMENT
         Step.HOUSEHOLD -> Step.TRACK
         Step.PERMISSIONS -> Step.HOUSEHOLD
     }
@@ -230,12 +235,13 @@ fun OnboardingFlow(app: OpawApplication) {
 
     // The toast rides along on every setup screen once the job has started.
     val showsToast = model.isStarted && lifeScreen == LifeScreen.NONE && step != Step.CAMERA
-    val toastSpace by animateDpAsState(if (showsToast) 78.dp else 0.dp, label = "toast")
+    val toastSpace by animateDpAsState(if (showsToast) 80.dp else 0.dp, label = "toast")
     val name = draft.displayName
     // The pet's face on the rail, in the toast and on the last steps.
     val face = capture.cutout ?: capture.original
 
-    Box(Modifier.fillMaxSize().background(Opaw.colors.cream)) {
+    val ground = Setup.ground
+    Box(Modifier.fillMaxSize().background(ground)) {
         AnimatedContent(
             targetState = step,
             transitionSpec = {
@@ -246,39 +252,48 @@ fun OnboardingFlow(app: OpawApplication) {
             modifier = Modifier.fillMaxSize(),
             label = "onboarding",
         ) { current ->
-            val padded = Modifier.fillMaxSize().safeDrawingPadding().padding(top = toastSpace)
+            val padded = Modifier.fillMaxSize().safeDrawingPadding().padding(top = toastSpace + 8.dp)
             when (current) {
                 Step.PHOTOS -> LifePhotosGrid(
                     photos, name, model, padded,
                     onOpen = { cameraAngle = it; go(Step.CAMERA) },
-                    // Not ready to add a pet yet: straight to the app, where Home offers "Add a pet".
-                    // Or join someone else's pet with an invite code.
+                    // Back goes to Home, where "Add your first pet" waits; or join someone else's pet with a code.
                     header = {
-                        StepHeader(
-                            1, "Photos", face, onBack = null,
-                            onSkip = if (model.isStarted) null else ({ scope.launch { app.settings.setOnboardingSkipped(true) } }),
-                            onJoin = if (model.isStarted) null else ({ showJoin = true }),
+                        SetupHeader(
+                            photos.good, LifeAngle.entries.size, null,
+                            onBack = if (model.isStarted) null else ({ scope.launch { app.settings.setOnboardingSkipped(true) } }),
+                            right = if (model.isStarted) null else ({ HeaderPill("Join with a code") { showJoin = true } }),
                         )
                     },
                 ) {
                     when {
-                        model.isReady -> BottomActions("Meet $name", secondary = "Continue setup", secondaryAction = { go(Step.DETAILS) }) { lifeScreen = LifeScreen.REVEAL }
-                        model.isStarted -> BottomActions("Continue setup") { go(Step.DETAILS) }
-                        // Both ways through, together: the 3D pet with Premium, or one photo (free,
-                        // and enough for the sticker avatar) once the front has been looked at.
-                        else -> PathActions(
-                            name, app.premium.isPremium, enabled = photos.isReady, onLife = ::bringToLife,
+                        model.isReady -> SetupFoot {
+                            OrangeButton("Meet $name") { lifeScreen = LifeScreen.REVEAL }
+                            SetupLink("Continue setup", color = Opaw.colors.ink) { go(Step.DETAILS) }
+                        }
+                        model.isStarted -> SetupFoot { OrangeButton("Continue setup") { go(Step.DETAILS) } }
+                        // The 3D pet with Premium once there are enough photos, or one photo for the
+                        // free sticker once the front has been looked at.
+                        else -> PhotoActions(
+                            name, app.premium.isPremium, photos,
+                            onTake = { cameraAngle = it; go(Step.CAMERA) },
+                            onLife = ::bringToLife,
                             onFree = if (front?.scan != null) ({ go(Step.DETAILS) }) else null,
                         )
                     }
                 }
                 Step.CAMERA -> LifeCamera(photos, cameraAngle) { go(Step.PHOTOS) }
-                Step.DETAILS -> DetailsStep(padded, draft, { draft = it }, capture, isProcessing, foundDog, onBack = { go(Step.PHOTOS) }) { go(Step.REVEAL) }
-                Step.REVEAL -> RevealStep(padded, name, capture, isProcessing, onBack = { go(Step.DETAILS) }, onRetake = if (model.isWorking) null else ({ go(Step.PHOTOS) })) { go(Step.TRACK) }
-                Step.TRACK -> TrackStep(padded, draft, face, { draft = it }, onBack = { go(Step.REVEAL) }) { go(Step.HOUSEHOLD) }
+                Step.DETAILS -> DetailsStep(padded, draft, { draft = it }, capture, foundDog, onBack = { go(Step.PHOTOS) }) { go(Step.TEMPERAMENT) }
+                Step.TEMPERAMENT -> TemperamentStep(padded, draft, face, { draft = it }, onBack = { go(Step.DETAILS) }) { go(Step.TRACK) }
+                Step.TRACK -> TrackStep(padded, draft, { draft = it }, onBack = { go(Step.TEMPERAMENT) }) { go(Step.HOUSEHOLD) }
                 Step.HOUSEHOLD -> HouseholdStep(padded, name, draft, face, onBack = { go(Step.TRACK) }) { go(Step.PERMISSIONS) }
                 Step.PERMISSIONS -> PermissionsStep(padded, name, face, onBack = { go(Step.HOUSEHOLD) }) {
-                    if (app.premium.isPremium) finish() else showPaywall = true
+                    when {
+                        !app.premium.isPremium -> showPaywall = true
+                        // A 3D pet that hasn't been met yet is met on the way home (10k).
+                        model.isReady && !model.seen -> { meetThenFinish = true; lifeScreen = LifeScreen.REVEAL }
+                        else -> finish()
+                    }
                 }
             }
         }
@@ -293,7 +308,7 @@ fun OnboardingFlow(app: OpawApplication) {
         }
         // Progress and the 3D reveal sit over the steps, so setup is right where it was left.
         AnimatedContent(lifeScreen, transitionSpec = { fadeIn(tween(250)) togetherWith fadeOut(tween(200)) }, label = "life") { screen ->
-            val over = Modifier.fillMaxSize().background(Opaw.colors.cream).safeDrawingPadding()
+            val over = Modifier.fillMaxSize().background(ground).safeDrawingPadding()
             when (screen) {
                 LifeScreen.NONE -> Unit
                 LifeScreen.PROGRESS -> {
@@ -312,9 +327,15 @@ fun OnboardingFlow(app: OpawApplication) {
                 LifeScreen.REVEAL -> {
                     BackHandler { lifeScreen = LifeScreen.NONE }
                     val temperament = draft.temperament ?: Temperament.guess(draft.energy)
-                    LifeRevealScreen(draft.id, name, over, note = temperament.homeNote(), onBack = { lifeScreen = LifeScreen.NONE }) {
+                    LifeRevealScreen(
+                        draft.id, name, Modifier.fillMaxSize(), note = temperament.homeNote(),
+                        onBack = { lifeScreen = LifeScreen.NONE; meetThenFinish = false },
+                    ) {
                         lifeScreen = LifeScreen.NONE
-                        if (step == Step.PHOTOS) go(Step.DETAILS)
+                        when {
+                            meetThenFinish -> finish()
+                            step == Step.PHOTOS -> go(Step.DETAILS)
+                        }
                     }
                 }
             }
@@ -322,7 +343,7 @@ fun OnboardingFlow(app: OpawApplication) {
         // Join with a code (10l) sits over the photos, like the 3D screens.
         AnimatedVisibility(showJoin, enter = fadeIn(tween(250)) + slideInVertically { it / 8 }, exit = fadeOut(tween(200))) {
             BackHandler { showJoin = false }
-            JoinCodeScreen(app, Modifier.fillMaxSize().background(Opaw.colors.cream).safeDrawingPadding()) { showJoin = false }
+            JoinCodeScreen(app, Modifier.fillMaxSize().background(ground).safeDrawingPadding()) { showJoin = false }
         }
     }
 
@@ -363,54 +384,41 @@ private fun afterPaywall(app: OpawApplication, offerShown: Boolean, showOffer: (
     }
 }
 
-// MARK: - Shared layout
+// MARK: - 10c Photos
 
-/** The chapter rail (10c to 10j), with the pet's face riding along it. */
+/**
+ * The buttons under the photos (10c): take the next side, or once there are enough, bring the pet
+ * to life in 3D (Premium). One photo still works for the free sticker.
+ */
 @Composable
-internal fun StepHeader(
-    index: Int,
-    chapter: String,
-    face: Bitmap?,
-    inset: Int = 20,
-    onBack: (() -> Unit)?,
-    onSkip: (() -> Unit)? = null,
-    onJoin: (() -> Unit)? = null,
-) = ChapterRail(index, chapter, face, inset, onBack, onSkip, onJoin)
-
-/** A step's big title and gray subtitle. */
-@Composable
-private fun StepTitle(title: String, subtitle: String) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 26.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(title, style = opaw(30.sp, FontWeight.Black), color = Opaw.colors.ink)
-        Text(subtitle, style = opaw(16.sp, FontWeight.Medium).copy(lineHeight = 22.sp), color = Opaw.colors.muted)
-    }
-}
-
-/** The primary button pinned to the bottom, with an optional text button under it. */
-@Composable
-private fun BottomActions(
-    title: String,
-    enabled: Boolean = true,
-    secondary: String? = null,
-    secondaryColor: Color = Opaw.colors.ink,
-    secondaryAction: (() -> Unit)? = null,
-    action: () -> Unit,
+private fun PhotoActions(
+    name: String,
+    isPremium: Boolean,
+    photos: LifePhotos,
+    onTake: (LifeAngle) -> Unit,
+    onLife: () -> Unit,
+    /** Null until the front photo has been looked at. */
+    onFree: (() -> Unit)?,
 ) {
-    Column(
-        Modifier.padding(horizontal = 20.dp).padding(bottom = 8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        BlackPillButton(title, enabled = enabled, onClick = action)
-        if (secondary != null && secondaryAction != null) {
-            Text(secondary, style = opaw(15.sp, FontWeight.Bold), color = secondaryColor, modifier = Modifier.clickable(onClick = secondaryAction).padding(4.dp))
+    SetupFoot {
+        if (photos.isReady) {
+            OrangeButton("Bring $name to life", icon = DesignIcon.SPARKLE, badge = if (isPremium) "3D" else "3D · Premium", onClick = onLife)
+        } else {
+            val retake = LifeAngle.entries.firstOrNull { photos.problem(it) != null }
+            val angle = retake ?: photos.next ?: LifeAngle.FRONT
+            OrangeButton(
+                "${if (retake != null) "Retake" else "Take"} the ${angle.title.lowercase()}",
+                enabled = !photos.scanning || photos.next != null,
+                icon = DesignIcon.CAMERA,
+            ) { onTake(angle) }
         }
+        SetupLink("Use one photo instead · free sticker", enabled = onFree != null) { onFree?.invoke() }
     }
 }
 
-// MARK: - 4c Details
+// MARK: - 10f About
 
-private enum class Field(val title: String) { SPECIES("Species"), BREED("Breed"), BIRTHDAY("Birthday"), WEIGHT("Weight"), SEX("Sex"), TEMPERAMENT("Temperament") }
+private enum class Field(val title: String) { SPECIES("Species"), BREED("Breed"), BIRTHDAY("Birthday"), WEIGHT("Weight"), SEX("Sex") }
 
 @Composable
 private fun DetailsStep(
@@ -418,7 +426,6 @@ private fun DetailsStep(
     draft: DogDraft,
     onDraft: (DogDraft) -> Unit,
     capture: CaptureResult,
-    isProcessing: Boolean,
     foundDog: Boolean,
     onBack: () -> Unit,
     onNext: () -> Unit,
@@ -427,56 +434,35 @@ private fun DetailsStep(
     val focus = LocalFocusManager.current
     val nameFocus = remember { FocusRequester() }
     var field by remember { mutableStateOf<Field?>(null) }
-    // Fills slowly while the avatar is built, as in the design.
-    var started by remember { mutableStateOf(false) }
-    val progress by animateFloatAsState(if (started) 0.9f else 0f, tween(6000), label = "build")
     LaunchedEffect(Unit) {
-        started = true
         kotlinx.coroutines.delay(400)
         if (draft.name.isEmpty()) runCatching { nameFocus.requestFocus() }
     }
 
-    val title = when {
-        capture.guess != null -> {
-            val name = capture.guess.breed.name
-            "Looks like a${if (name.first().uppercaseChar() in "AEIOU") "n" else ""} $name"
-        }
-        isProcessing -> "Taking a good look…"
-        else -> "Tell us about your pet"
-    }
-
     Column(modifier) {
-        StepHeader(2, "About ${draft.displayName}", capture.cutout ?: capture.original, onBack = onBack)
+        SetupHeader(1, 5, "About", onBack = onBack)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
-            Row(Modifier.padding(horizontal = 20.dp).padding(top = 22.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(72.dp).shadow(10.dp, RoundedCornerShape(24.dp)).clip(RoundedCornerShape(24.dp)).background(Color(0xFFE6E6E8))) {
-                    capture.original?.let { Image(remember(it) { it.asImageBitmap() }, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
-                }
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(title, style = opaw(26.sp, FontWeight.Black), color = colors.ink)
-                    Text(if (isProcessing) "Building the avatar while you finish" else "Avatar ready", style = opaw(14.sp, FontWeight.Medium), color = colors.muted)
-                }
-            }
-            ProgressBar(if (isProcessing) progress else 1f, Modifier.padding(horizontal = 20.dp).padding(top = 18.dp))
-
-            Column(Modifier.padding(horizontal = 20.dp).padding(top = 18.dp).fillMaxWidth().whiteCard().padding(horizontal = 20.dp).padding(top = 4.dp, bottom = 2.dp)) {
-                Column(Modifier.padding(vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text("Name", style = opaw(13.sp, FontWeight.SemiBold), color = colors.muted)
+            Row(Modifier.padding(horizontal = 24.dp).padding(top = 22.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                PetDisc(capture.cutout ?: capture.original, 96.dp)
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Their name", style = opaw(13.sp, FontWeight.Bold), color = colors.muted)
                     Box {
-                        if (draft.name.isEmpty()) Text("Their name", style = opaw(26.sp, FontWeight.Black), color = colors.ghost)
+                        if (draft.name.isEmpty()) Text("Name", style = opaw(34.sp, FontWeight.Black), color = colors.ghost)
                         BasicTextField(
                             draft.name, { onDraft(draft.copy(name = it)) },
-                            textStyle = opaw(26.sp, FontWeight.Black).copy(color = colors.ink),
+                            textStyle = opaw(34.sp, FontWeight.Black).copy(color = colors.ink),
                             singleLine = true,
-                            cursorBrush = SolidColor(colors.ink),
+                            cursorBrush = SolidColor(Action),
                             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words, autoCorrectEnabled = false, imeAction = ImeAction.Done),
                             keyboardActions = KeyboardActions(onDone = { focus.clearFocus() }),
                             modifier = Modifier.fillMaxWidth().focusRequester(nameFocus),
                         )
                     }
                 }
+            }
+            Column(Modifier.padding(horizontal = 20.dp).padding(top = 24.dp).fillMaxWidth().setupCard().padding(horizontal = 18.dp, vertical = 2.dp)) {
                 @Composable
-                fun row(f: Field, value: String, detected: Boolean = false, leading: (@Composable () -> Unit)? = null) = DetailRow(f.title, value, detected, leading) {
+                fun row(f: Field, value: String, detected: Boolean = false, last: Boolean = false) = DetailRow(f.title, value, detected, last) {
                     focus.clearFocus()
                     field = f
                 }
@@ -484,51 +470,45 @@ private fun DetailsStep(
                 row(Field.BREED, draft.breed.ifEmpty { "Add" }, detected = draft.breed.isNotEmpty() && capture.guess?.breed?.name == draft.breed)
                 row(Field.BIRTHDAY, birthdayText(draft))
                 row(Field.WEIGHT, draft.weightKg?.let { OpawFormat.weight(it) } ?: "Add")
-                row(Field.SEX, sexText(draft))
-                // Shown with a tiny version of the pet already acting it out (10f).
-                val temperament = draft.temperament ?: Temperament.guess(draft.energy)
-                row(Field.TEMPERAMENT, temperament.title) { TemperamentTile(capture.cutout ?: capture.original, temperament, 28.dp) }
+                row(Field.SEX, sexText(draft), last = true)
             }
             Text(
-                "Breed and age set walk goals and food portions. Tap any detected field to change it.",
-                style = opaw(14.sp, FontWeight.Medium).copy(lineHeight = 19.sp),
+                "Breed and age set walk goals and food portions. Tap any row to change it.",
+                style = opaw(14.sp, FontWeight.SemiBold).copy(lineHeight = 19.sp),
                 color = colors.muted,
-                modifier = Modifier.padding(horizontal = 24.dp).padding(top = 12.dp),
+                modifier = Modifier.padding(horizontal = 26.dp).padding(top = 12.dp),
             )
         }
-        BottomActions("Continue", enabled = draft.isValid, action = onNext)
+        SetupFoot { OrangeButton("Continue", enabled = draft.isValid, onClick = onNext) }
     }
 
-    field?.let { FieldSheet(it, draft, capture.cutout ?: capture.original, onDraft) { field = null } }
+    field?.let { FieldSheet(it, draft, onDraft) { field = null } }
 }
 
 @Composable
-private fun DetailRow(label: String, value: String, detected: Boolean, leading: (@Composable () -> Unit)? = null, onClick: () -> Unit) {
+private fun DetailRow(label: String, value: String, detected: Boolean, last: Boolean, onClick: () -> Unit) {
     val colors = Opaw.colors
     Column(Modifier.fillMaxWidth().clickable(onClick = onClick)) {
-        Box(Modifier.fillMaxWidth().height(1.dp).background(colors.hairline))
-        Row(Modifier.padding(vertical = 15.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(label, style = opaw(15.sp, FontWeight.SemiBold), color = colors.muted)
+        Row(Modifier.height(52.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(label, style = opaw(15.sp, FontWeight.Bold), color = colors.muted, modifier = Modifier.width(86.dp))
             if (detected) {
-                Spacer(Modifier.width(8.dp))
-                SparkleChip("Detected", size = 11, iconSize = 11.dp)
+                Text(
+                    "Detected", style = opaw(11.sp, FontWeight.ExtraBold), color = Setup.deep,
+                    modifier = Modifier.background(Setup.peach, CircleShape).padding(horizontal = 8.dp, vertical = 3.dp),
+                )
             }
-            Spacer(Modifier.weight(1f).width(8.dp))
-            if (leading != null) {
-                leading()
-                Spacer(Modifier.width(8.dp))
-            }
+            Spacer(Modifier.weight(1f))
             Text(
                 value,
-                style = opaw(16.sp, FontWeight.ExtraBold),
+                style = opaw(15.sp, FontWeight.ExtraBold),
                 color = if (value == "Add") colors.ghost else colors.ink,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f, fill = false),
             )
-            Spacer(Modifier.width(6.dp))
-            Icon(DesignIcon.CHEVRON_DOWN, size = 16.dp, tint = colors.ghost)
+            Icon(DesignIcon.CHEVRON_DOWN, size = 14.dp, weight = 3f, tint = colors.ghost)
         }
+        if (!last) Box(Modifier.fillMaxWidth().height(1.dp).background(Setup.line))
     }
 }
 
@@ -553,7 +533,7 @@ private fun sexText(draft: DogDraft): String {
 /** Changes one detail from 4c. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun FieldSheet(field: Field, draft: DogDraft, image: Bitmap?, onDraft: (DogDraft) -> Unit, onDismiss: () -> Unit) {
+private fun FieldSheet(field: Field, draft: DogDraft, onDraft: (DogDraft) -> Unit, onDismiss: () -> Unit) {
     val colors = Opaw.colors
     val haptics = rememberHaptics()
     var weightText by remember {
@@ -597,7 +577,7 @@ private fun FieldSheet(field: Field, draft: DogDraft, image: Bitmap?, onDraft: (
                 .fillMaxWidth()
                 .height(60.dp)
                 .pressable { haptics.select(); action() }
-                .background(if (selected) Ink else colors.surface, RoundedCornerShape(18.dp))
+                .background(if (selected) Action else Setup.fill, RoundedCornerShape(18.dp))
                 .padding(horizontal = 18.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -608,8 +588,8 @@ private fun FieldSheet(field: Field, draft: DogDraft, image: Bitmap?, onDraft: (
 
     ModalBottomSheet(
         onDismissRequest = { save(); onDismiss() },
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = field == Field.BREED || field == Field.BIRTHDAY || field == Field.TEMPERAMENT),
-        containerColor = colors.cream,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = field == Field.BREED || field == Field.BIRTHDAY),
+        containerColor = Setup.ground,
         shape = RoundedCornerShape(topStart = 36.dp, topEnd = 36.dp),
     ) {
         Column(Modifier.padding(horizontal = 20.dp).navigationBarsPadding().padding(bottom = 16.dp)) {
@@ -635,11 +615,11 @@ private fun FieldSheet(field: Field, draft: DogDraft, image: Bitmap?, onDraft: (
                     showModeToggle = false,
                     colors = DatePickerDefaults.colors(
                         containerColor = colors.surface,
-                        selectedDayContainerColor = colors.ink,
-                        selectedDayContentColor = colors.onInk,
+                        selectedDayContainerColor = colors.action,
+                        selectedDayContentColor = colors.onAction,
                         todayDateBorderColor = colors.ink,
                         todayContentColor = colors.ink,
-                        selectedYearContainerColor = colors.ink,
+                        selectedYearContainerColor = colors.action,
                     ),
                     modifier = Modifier.whiteCard(),
                 )
@@ -659,44 +639,6 @@ private fun FieldSheet(field: Field, draft: DogDraft, image: Bitmap?, onDraft: (
                         )
                     }
                     Text(OpawFormat.weightUnit, style = opaw(20.sp, FontWeight.ExtraBold), color = colors.muted)
-                }
-                // How their 3D self plays on Home; a guess from their energy is picked out until then.
-                // 10g: each choice plays its own motion with the pet, so owners pick by recognising
-                // their pet rather than by reading. The guess comes from their energy.
-                Field.TEMPERAMENT -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    val guess = Temperament.guess(draft.energy)
-                    val current = draft.temperament ?: guess
-                    val name = draft.displayName
-                    Text(
-                        "How $name plays on Home. " + if (draft.breed.isNotEmpty()) "${draft.breed}s are ${draft.energy.title.lowercase()} energy, so we guessed ${guess.title}." else "We guessed ${guess.title} from their energy.",
-                        style = opaw(15.sp, FontWeight.Medium).copy(lineHeight = 20.sp), color = colors.muted,
-                        modifier = Modifier.padding(bottom = 6.dp),
-                    )
-                    for (option in Temperament.entries) {
-                        val selected = option == current
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .height(74.dp)
-                                .pressable { haptics.select(); onDraft(draft.copy(temperament = option)) }
-                                .background(if (selected) Ink else colors.surface, RoundedCornerShape(22.dp))
-                                .padding(start = 8.dp, end = 14.dp),
-                            horizontalArrangement = Arrangement.spacedBy(14.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            TemperamentTile(image, option, 58.dp, dark = selected)
-                            Column(Modifier.weight(1f)) {
-                                Text(option.title, style = opaw(17.sp, FontWeight.ExtraBold), color = if (selected) Color.White else colors.ink)
-                                Text(option.blurb, style = opaw(13.sp, FontWeight.SemiBold), color = if (selected) Color.White.copy(alpha = 0.72f) else colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            }
-                            if (option == guess) {
-                                Text(
-                                    "Our guess", style = opaw(11.sp, FontWeight.ExtraBold), color = Ink,
-                                    modifier = Modifier.background(if (selected) Color.White else colors.chip, CircleShape).padding(horizontal = 9.dp, vertical = 5.dp),
-                                )
-                            }
-                        }
-                    }
                 }
                 Field.SEX -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     choice("Female", draft.sex == "female") { onDraft(draft.copy(sex = "female")) }
@@ -742,129 +684,129 @@ private fun BreedSearch(breed: String, onBreed: (String) -> Unit, onPick: (Breed
     }
 }
 
-// MARK: - 4d Reveal
+// MARK: - 10g Temperament
 
+/** The few words under each temperament card. */
+private val Temperament.short: String
+    get() = when (this) {
+        Temperament.PLAYFUL -> "Spins and zooms"
+        Temperament.CALM -> "Strolls and sniffs"
+        Temperament.CURIOUS -> "Comes up close"
+        Temperament.SHY -> "Peeks at you"
+        Temperament.GOOFY -> "Wobbly hops"
+        Temperament.SLEEPY -> "Naps a lot"
+    }
+
+/**
+ * How the pet plays (10g): six cards, each with the pet already acting the mood out, so owners
+ * pick by recognising their pet, not by reading. The guess from their breed's energy is picked first.
+ */
 @Composable
-private fun RevealStep(
-    modifier: Modifier,
-    name: String,
-    capture: CaptureResult,
-    isProcessing: Boolean,
-    onBack: () -> Unit,
-    /** Null while the photos are locked, because a 3D pet is being made from them. */
-    onRetake: (() -> Unit)?,
-    onNext: () -> Unit,
-) {
+private fun TemperamentStep(modifier: Modifier, draft: DogDraft, image: Bitmap?, onDraft: (DogDraft) -> Unit, onBack: () -> Unit, onNext: () -> Unit) {
     val colors = Opaw.colors
-    val image = capture.cutout ?: capture.original
+    val haptics = rememberHaptics()
+    val guess = Temperament.guess(draft.energy)
+    val current = draft.temperament ?: guess
+    val name = draft.displayName
     Column(modifier) {
-        StepHeader(3, "Say hi", image, onBack = onBack)
-        Box(Modifier.fillMaxWidth().padding(top = 10.dp).height(300.dp)) {
-            Box(Modifier.align(Alignment.TopCenter).padding(top = 40.dp).size(230.dp, 250.dp), contentAlignment = Alignment.Center) {
-                // The avatar pops in when the cutout is ready.
-                val shown by animateFloatAsState(if (isProcessing) 0f else 1f, spring(dampingRatio = 0.75f, stiffness = 200f), label = "reveal")
-                if (isProcessing) CircularProgressIndicator(color = colors.ink)
-                StickerPet(
-                    if (isProcessing) null else image,
-                    Modifier.fillMaxSize().graphicsLayer { val s = 0.7f + 0.3f * shown; scaleX = s; scaleY = s; alpha = shown },
-                    edge = 5.dp,
-                    motion = LoopMotion.BOB,
-                    duration = 3.2,
-                )
-            }
-            SpeechBubble("is that me?!", Modifier.padding(start = 218.dp, top = 6.dp).alpha(if (isProcessing) 0f else 1f))
-            Box(Modifier.padding(start = 24.dp, top = 14.dp)) {
-                if (isProcessing) {
-                    Row(
-                        Modifier.background(Ink, CircleShape).padding(horizontal = 12.dp, vertical = 7.dp),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        CircularProgressIndicator(Modifier.size(12.dp), color = Color.White, strokeWidth = 2.dp)
-                        Text("Building avatar", style = opaw(13.sp, FontWeight.ExtraBold), color = Color.White)
-                    }
+        SetupHeader(2, 5, "About", onBack = onBack)
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
+            SetupTitle(
+                "How does $name play?",
+                "Each one plays out. " + if (draft.breed.isNotEmpty()) {
+                    "${draft.breed}s are ${draft.energy.title.lowercase()} energy, so we guessed ${guess.title}."
                 } else {
-                    SparkleChip("Avatar ready")
-                }
-            }
-        }
-        Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 20.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("Say hi to $name", style = opaw(30.sp, FontWeight.Black), color = colors.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text("$name's mood follows the care you log.", style = opaw(15.sp, FontWeight.Medium), color = colors.muted, textAlign = TextAlign.Center)
-        }
-        Row(Modifier.padding(horizontal = 20.dp).padding(top = 22.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            for ((label, motion, duration) in listOf(Triple("Walked", LoopMotion.BOB, 1.4), Triple("Fed", LoopMotion.BREATHE, 2.6), Triple("Ignored", LoopMotion.DROOP, 3.0))) {
-                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Box(Modifier.fillMaxWidth().height(108.dp).whiteCard(24.dp), contentAlignment = Alignment.Center) {
-                        StickerPet(
-                            if (isProcessing) null else image,
-                            Modifier.size(76.dp, 84.dp).alpha(if (motion == LoopMotion.DROOP) 0.6f else 1f),
-                            edge = 3.dp,
-                            motion = motion,
-                            duration = duration,
-                            desaturate = motion == LoopMotion.DROOP,
-                        )
+                    "We guessed ${guess.title} from their energy."
+                },
+                Modifier.padding(top = 18.dp),
+            )
+            Column(Modifier.padding(horizontal = 24.dp).padding(top = 22.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                for (row in Temperament.entries.chunked(2)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        for (option in row) {
+                            val on = option == current
+                            val shape = RoundedCornerShape(24.dp)
+                            Box(
+                                Modifier
+                                    .weight(1f)
+                                    .height(154.dp)
+                                    .pressable { haptics.select(); onDraft(draft.copy(temperament = option)) }
+                                    .background(if (on) Setup.peach else Setup.soft, shape)
+                                    .then(if (on) Modifier.border(3.dp, Action, shape) else Modifier)
+                                    .clip(shape),
+                            ) {
+                                PlainPet(
+                                    image,
+                                    Modifier.align(Alignment.TopCenter).padding(top = 14.dp).size(76.dp, 80.dp).temperamentMotion(option, amplitude = 76f / 58f),
+                                )
+                                if (on) Tick(24.dp, Modifier.align(Alignment.TopEnd).padding(10.dp))
+                                Column(Modifier.align(Alignment.BottomStart).padding(start = 14.dp, bottom = 12.dp, end = 8.dp)) {
+                                    Text(option.title, style = opaw(16.sp, FontWeight.Black), color = colors.ink)
+                                    Text(
+                                        if (option == guess) "Our guess · ${option.short.lowercase()}" else option.short,
+                                        style = opaw(12.sp, FontWeight.Bold), color = colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
+                        }
                     }
-                    Text(label, style = opaw(13.sp, FontWeight.Bold), color = colors.ink)
                 }
             }
         }
-        Spacer(Modifier.weight(1f))
-        Row(Modifier.padding(horizontal = 20.dp).padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            if (onRetake != null) {
-                Box(
-                    Modifier.size(64.dp).pressable(onClick = onRetake).shadow(10.dp, CircleShape).background(Color.White, CircleShape),
-                    contentAlignment = Alignment.Center,
-                ) { Icon(DesignIcon.REFRESH, size = 22.dp, tint = Ink) }
+        SetupFoot {
+            OrangeButton("Continue") {
+                if (draft.temperament == null) onDraft(draft.copy(temperament = current))
+                onNext()
             }
-            BlackPillButton("Looks like $name", Modifier.weight(1f), enabled = !isProcessing, onClick = onNext)
         }
     }
 }
 
-// MARK: - 4e Track
+// MARK: - 10h Track
 
+/** What to track (10h): the round care icons, orange when on and grey when off, then the meal times. */
 @Composable
-private fun TrackStep(modifier: Modifier, draft: DogDraft, face: Bitmap?, onDraft: (DogDraft) -> Unit, onBack: () -> Unit, onNext: () -> Unit) {
+private fun TrackStep(modifier: Modifier, draft: DogDraft, onDraft: (DogDraft) -> Unit, onBack: () -> Unit, onNext: () -> Unit) {
     val tracksMeals = CareKind.MEAL.raw in draft.trackedKinds
     Column(modifier) {
-        StepHeader(4, "Care", face, onBack = onBack)
+        SetupHeader(3, 5, "Care", onBack = onBack)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
-            StepTitle("What should we track?", "You can change this any time in Care.")
-            Box(Modifier.padding(horizontal = 20.dp).padding(top = 24.dp)) {
-                TrackGrid(draft.trackedKinds, { onDraft(draft.copy(trackedKinds = it)) })
+            SetupTitle("What should we track?", "You can change this any time in Care.", Modifier.padding(top = 18.dp))
+            Box(Modifier.padding(horizontal = 20.dp).padding(top = 22.dp)) {
+                TrackGrid(draft.trackedKinds, { onDraft(draft.copy(trackedKinds = it)) }, offFill = Setup.fill)
             }
             AnimatedVisibility(tracksMeals) {
                 Box(Modifier.padding(horizontal = 20.dp).padding(top = 22.dp)) {
-                    MealTimesCard(draft.mealTimes, { onDraft(draft.copy(mealTimes = it)) }, draft.weightKg, draft.species)
+                    MealTimesList(draft.mealTimes, { onDraft(draft.copy(mealTimes = it)) }, draft.weightKg, draft.species, Modifier.setupCard())
                 }
             }
         }
-        BottomActions("Continue", enabled = draft.trackedKinds.isNotEmpty(), action = onNext)
+        SetupFoot { OrangeButton("Continue", enabled = draft.trackedKinds.isNotEmpty(), onClick = onNext) }
     }
 }
 
-// MARK: - 4f Household
+// MARK: - 10i Household
 
 @Composable
 private fun HouseholdStep(modifier: Modifier, name: String, draft: DogDraft, face: Bitmap?, onBack: () -> Unit, onNext: () -> Unit) {
     Column(modifier) {
-        StepHeader(5, "Household", face, onBack = onBack)
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
-            StepTitle("Who else looks after $name?", "Everyone logs to the same pet, so meals never get doubled.")
-            // The pet isn't saved yet: an invite shares it as set up so far, and the rest follows once it is.
-            Box(Modifier.padding(horizontal = 20.dp).padding(top = 22.dp)) { HouseholdCards(draft.id, name) { draft.makeDog() } }
-        }
-        BottomActions("Continue", secondary = "Skip for now", secondaryAction = onNext, action = onNext)
+        SetupHeader(4, 5, "Family", onBack = onBack)
+        // The pet isn't saved yet: an invite shares it as set up so far, and the rest follows once it is.
+        SetupHousehold(draft.id, name, face, Modifier.weight(1f), pet = { draft.makeDog() }, onNext = onNext)
     }
 }
 
-// MARK: - 4g Permissions
+// MARK: - 10j Permissions
 
+/**
+ * Two quick permissions (10j), shown as what you'll get: the reminder the pet will send floats
+ * over it, then the two switches. Both can be turned on later in Settings.
+ */
 @Composable
 private fun PermissionsStep(modifier: Modifier, name: String, image: Bitmap?, onBack: () -> Unit, onNext: () -> Unit) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current
+    val colors = Opaw.colors
     fun has(permission: String) = ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
     fun notificationsAllowed() = Build.VERSION.SDK_INT < 33 || has(Manifest.permission.POST_NOTIFICATIONS)
     fun locationAllowed() = has(Manifest.permission.ACCESS_FINE_LOCATION) || has(Manifest.permission.ACCESS_COARSE_LOCATION)
@@ -893,47 +835,73 @@ private fun PermissionsStep(modifier: Modifier, name: String, image: Bitmap?, on
     }
 
     Column(modifier) {
-        StepHeader(6, "Last step", image, onBack = onBack)
-        StepTitle("Two quick permissions", "So $name can ask for dinner and walks get mapped.")
-        Column(Modifier.padding(horizontal = 20.dp).padding(top = 22.dp).fillMaxWidth().whiteCard().padding(horizontal = 20.dp)) {
-            PermissionRow(DesignIcon.BELL, "Notifications", "Meal and meds reminders, plus a nudge when $name feels left out", notificationsOn, first = true) { on ->
-                if (on && !notificationsAsked && Build.VERSION.SDK_INT >= 33) {
-                    notificationsAsked = true
-                    askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
-                } else {
-                    openSettings()
+        SetupHeader(5, 5, "Last step", onBack = onBack)
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
+            Box(Modifier.fillMaxWidth().height(300.dp)) {
+                Box(Modifier.align(Alignment.TopCenter).padding(top = 100.dp).size(180.dp).background(Setup.fill, CircleShape))
+                PlainPet(image, Modifier.align(Alignment.TopCenter).padding(top = 102.dp).size(116.dp, 150.dp).hop(2200, 14.dp))
+                // The reminder the pet will send.
+                Row(
+                    Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 6.dp)
+                        .drift(3000)
+                        .width(330.dp)
+                        .shadow(14.dp, RoundedCornerShape(22.dp), ambientColor = Color.Black.copy(alpha = 0.1f), spotColor = Color.Black.copy(alpha = 0.1f))
+                        .background(colors.surface, RoundedCornerShape(22.dp))
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        Modifier.size(40.dp).background(Brush.verticalGradient(listOf(Setup.glowTop, Setup.glowBottom)), RoundedCornerShape(11.dp)),
+                        contentAlignment = Alignment.Center,
+                    ) { Icon(DesignIcon.BELL, size = 22.dp, tint = Color.White) }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text("Dinner in 10 minutes", style = opaw(14.sp, FontWeight.ExtraBold), color = colors.ink)
+                        Text("$name is getting hungry", style = opaw(12.sp, FontWeight.SemiBold), color = colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    Text("now", style = opaw(11.sp, FontWeight.Bold), color = colors.ghost)
                 }
             }
-            PermissionRow(DesignIcon.LOCATION, "Location while walking", "Maps your walk route. Never shared without asking.", locationOn) { on ->
-                if (on && !locationAsked) {
-                    locationAsked = true
-                    askLocation.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
-                } else {
-                    openSettings()
+            SetupTitle("Two quick permissions", "So $name can ask for dinner, and walks get mapped.")
+            Column(Modifier.padding(horizontal = 20.dp).padding(top = 20.dp).fillMaxWidth().setupCard(24.dp).padding(horizontal = 16.dp)) {
+                PermissionRow(DesignIcon.BELL, "Notifications", "Meals and meds, plus a nudge when $name feels left out", notificationsOn) { on ->
+                    if (on && !notificationsAsked && Build.VERSION.SDK_INT >= 33) {
+                        notificationsAsked = true
+                        askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    } else {
+                        openSettings()
+                    }
+                }
+                PermissionRow(DesignIcon.LOCATION, "Location while walking", "Maps the route. Never shared without asking.", locationOn, last = true) { on ->
+                    if (on && !locationAsked) {
+                        locationAsked = true
+                        askLocation.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+                    } else {
+                        openSettings()
+                    }
                 }
             }
         }
-        Spacer(Modifier.weight(1f))
-        Box(Modifier.fillMaxWidth().height(200.dp).padding(bottom = 16.dp)) {
-            StickerPet(image, Modifier.padding(start = 26.dp, top = 30.dp).size(150.dp, 170.dp), edge = 5.dp, motion = LoopMotion.BREATHE, duration = 2.6)
-            SpeechBubble("don’t forget my dinner", Modifier.padding(start = 168.dp, top = 20.dp))
-        }
-        BottomActions("Meet $name at home", action = onNext)
+        SetupFoot { OrangeButton("Take $name home", onClick = onNext) }
     }
 }
 
 @Composable
-private fun PermissionRow(icon: DesignIcon, title: String, detail: String, isOn: Boolean, first: Boolean = false, onChange: (Boolean) -> Unit) {
+private fun PermissionRow(icon: DesignIcon, title: String, detail: String, isOn: Boolean, last: Boolean = false, onChange: (Boolean) -> Unit) {
     val colors = Opaw.colors
     Column {
-        if (!first) Box(Modifier.fillMaxWidth().height(1.dp).background(colors.hairline))
-        Row(Modifier.padding(vertical = 16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
-            RowIcon(icon, size = 44.dp, iconSize = 20.dp)
+        Row(Modifier.padding(vertical = 14.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(44.dp).background(Setup.peach, RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) {
+                Icon(icon, size = 22.dp, tint = Action)
+            }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(title, style = opaw(16.sp, FontWeight.ExtraBold), color = colors.ink)
-                Text(detail, style = opaw(13.sp, FontWeight.Medium).copy(lineHeight = 17.sp), color = colors.muted)
+                Text(title, style = opaw(15.sp, FontWeight.ExtraBold), color = colors.ink)
+                Text(detail, style = opaw(12.sp, FontWeight.SemiBold).copy(lineHeight = 16.sp), color = colors.muted)
             }
             DesignToggle(isOn, onChange)
         }
+        if (!last) Box(Modifier.fillMaxWidth().height(1.dp).background(Setup.line))
     }
 }

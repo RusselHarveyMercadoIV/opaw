@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 200 200">
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1A1A1E"/><stop offset="1" stop-color="#070708"/></linearGradient>
+<linearGradient id="line" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#FFB13D"/><stop offset="1" stop-color="#FF5A0A"/></linearGradient>
+<filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="5"/></filter>
+</defs>
+<rect width="200" height="200" fill="url(#bg)"/>
+<g fill="#FFFFFF">
+<ellipse cx="50" cy="70" rx="13" ry="17" transform="rotate(-24 50 70)"/>
+<ellipse cx="80" cy="42" rx="13" ry="17" transform="rotate(-8 80 42)"/>
+<ellipse cx="120" cy="42" rx="13" ry="17" transform="rotate(8 120 42)"/>
+<ellipse cx="150" cy="70" rx="13" ry="17" transform="rotate(24 150 70)"/>
+</g>
+<path d="M28 132h36l12-26 18 52 16-40 10 14h52" fill="none" stroke="#FF7A1A" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" opacity="0.6" filter="url(#glow)"/>
+<path d="M28 132h36l12-26 18 52 16-40 10 14h52" fill="none" stroke="url(#line)" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

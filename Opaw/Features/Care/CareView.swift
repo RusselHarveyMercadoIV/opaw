@@ -249,7 +249,7 @@ struct CareView: View {
                 HStack(alignment: .center, spacing: 5) {
                     ForEach(Array(bars.enumerated()), id: \.offset) { index, count in
                         RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill((count ?? 0) >= 3 ? Color.opawInk : Color.opawTrack)
+                            .fill((count ?? 0) >= 3 ? Color.opawAction : Color.opawTrack)
                             .frame(width: compact ? 11 : 12, height: index == 4 ? (compact ? 28 : 30) : (compact ? 20 : 22))
                     }
                 }

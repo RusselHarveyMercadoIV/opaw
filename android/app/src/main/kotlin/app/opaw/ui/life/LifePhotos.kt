@@ -13,7 +13,12 @@ import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.ImageProxy
 import androidx.camera.view.LifecycleCameraController
 import androidx.camera.view.PreviewView
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -22,6 +27,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -53,7 +60,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -76,10 +86,17 @@ import app.opaw.services.PhotoIssue
 import app.opaw.ui.components.BlackPillButton
 import app.opaw.ui.components.DesignIcon
 import app.opaw.ui.components.Icon
+import app.opaw.ui.components.Action
 import app.opaw.ui.components.Ink
 import app.opaw.ui.components.StickerPet
 import app.opaw.ui.components.pressable
 import app.opaw.ui.components.rememberHaptics
+import app.opaw.ui.onboarding.PlainPet
+import app.opaw.ui.onboarding.Setup
+import app.opaw.ui.onboarding.SetupChip
+import app.opaw.ui.onboarding.SetupTitle
+import app.opaw.ui.onboarding.Tick
+import app.opaw.ui.onboarding.pulse
 import app.opaw.ui.theme.Opaw
 import app.opaw.ui.theme.opaw
 import app.opaw.ui.theme.whiteCard
@@ -242,8 +259,9 @@ private fun overlap(a: BooleanArray, b: BooleanArray, mirrored: Boolean): Float 
 }
 
 /**
- * The photos screen (9a): a two by two grid of angles, the tips, the count, and the button that
- * starts it. [header] and [actions] differ between first run and the Avatar screen.
+ * The photos screen (10c): clean and simple on white. Four big tiles, the taken ones show the pet
+ * with an orange tick and the next one pulses, then the tips. [header] and [actions] differ
+ * between first run and the Avatar screen.
  */
 @Composable
 fun LifePhotosGrid(
@@ -260,15 +278,12 @@ fun LifePhotosGrid(
     Column(modifier) {
         header()
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 16.dp)) {
-            Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 22.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Photos from every side", style = opaw(30.sp, FontWeight.Black), color = colors.ink)
-                Text(
-                    "The 3D shape is made from these. The front and at least one side, all of the same pet in the same pose.",
-                    style = opaw(16.sp, FontWeight.Medium).copy(lineHeight = 22.sp), color = colors.muted,
-                )
-            }
-            Box(Modifier.padding(horizontal = 20.dp).padding(top = 20.dp)) {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            SetupTitle(
+                "Photos from every side",
+                "Front, both sides and back, standing up. Your 3D pet is shaped from these.",
+                Modifier.padding(top = 18.dp),
+            )
+            Column(Modifier.padding(horizontal = 24.dp).padding(top = 22.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 for (row in LifeAngle.entries.chunked(2)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         for (angle in row) {
@@ -279,72 +294,66 @@ fun LifePhotosGrid(
                                 modifier = Modifier.weight(1f),
                             ) { onOpen(angle) }
                         }
-                        // An odd one out keeps the same size as the others.
                         if (row.size == 1) Spacer(Modifier.weight(1f))
                     }
                 }
             }
-            // The count sits where the four photos meet (10c).
-            val taken = photos.shots.size
-            val total = LifeAngle.entries.size
-            Column(
-                Modifier
-                    .align(Alignment.Center)
-                    .size(76.dp)
-                    .background(colors.cream, CircleShape)
-                    .padding(6.dp)
-                    .shadow(10.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.18f), spotColor = Color.Black.copy(alpha = 0.18f))
-                    .background(Ink, CircleShape),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                Text("$taken of $total", style = opaw(15.sp, FontWeight.Black), color = Color.White)
-                Text(if (taken >= 3) "All good" else "3 is best", style = opaw(10.sp, FontWeight.Bold), color = Color(0xFFBBBBBB))
+            Row(Modifier.padding(horizontal = 24.dp).padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SetupChip("Good light", background = Setup.fill, flat = true) { Icon(DesignIcon.SUN, size = 15.dp, tint = colors.ink) }
+                SetupChip("Standing", background = Setup.fill, flat = true)
+                SetupChip("At their height", background = Setup.fill, flat = true)
             }
+            // Only when there's something to say: a photo to retake, or the photos are in use.
+            val note = photos.countText(name, state)
+            if (locked || photos.scanning || LifeAngle.entries.any { photos.problem(it) != null }) {
+                Text(
+                    note,
+                    style = opaw(14.sp, FontWeight.Bold), color = colors.muted,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 26.dp).padding(top = 14.dp),
+                )
             }
-            Row(
-                Modifier.padding(horizontal = 20.dp).padding(top = 14.dp).fillMaxWidth().background(colors.chip, CircleShape).padding(horizontal = 14.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(DesignIcon.SPARKLE, size = 14.dp, weight = 2.4f, tint = colors.ink)
-                Text("Good light · Standing up · Camera at their height", style = opaw(13.sp, FontWeight.Bold), color = colors.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            Text(
-                photos.countText(name, state),
-                style = opaw(14.sp, FontWeight.Bold), color = colors.muted, textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 14.dp),
-            )
         }
         actions()
     }
 }
 
-/** One angle's slot: empty with its hint, the next one to take in black, or the photo with a check. */
+/** One angle's tile: waiting in grey, the next one to take pulsing in orange, or the pet with a tick. */
 @Composable
 private fun LifeSlot(angle: LifeAngle, shot: LifeShot?, problem: PhotoIssue?, isNext: Boolean, locked: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val colors = Opaw.colors
     val shape = RoundedCornerShape(26.dp)
+    val look = when {
+        shot != null -> Modifier.background(Setup.fill, shape)
+        isNext -> Modifier
+            .shadow(14.dp, shape, ambientColor = Action.copy(alpha = 0.25f), spotColor = Action.copy(alpha = 0.25f))
+            .background(Setup.ground, shape)
+            .border(3.dp, Action, shape)
+        else -> Modifier.background(Setup.soft, shape).border(2.dp, colors.track, shape)
+    }
     Box(
         modifier
-            .aspectRatio(1f)
+            .aspectRatio(165f / 188f)
             .pressable(enabled = !locked, onClick = onClick)
-            .whiteCard(26.dp)
+            .then(look)
             .clip(shape),
         contentAlignment = Alignment.Center,
     ) {
         if (shot == null) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Box(Modifier.size(48.dp).background(if (isNext) Ink else colors.chip, CircleShape), contentAlignment = Alignment.Center) {
-                    Icon(DesignIcon.CAMERA, size = 22.dp, tint = if (isNext) Color.White else colors.ghost)
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(if (isNext) 10.dp else 8.dp)) {
+                if (isNext) {
+                    Box(Modifier.size(60.dp).pulse().background(Action, CircleShape), contentAlignment = Alignment.Center) {
+                        Icon(DesignIcon.CAMERA, size = 28.dp, tint = Color.White)
+                    }
+                } else {
+                    Icon(DesignIcon.CAMERA, size = 30.dp, tint = colors.ghost)
                 }
-                Text(angle.title, style = opaw(17.sp, FontWeight.Black), color = if (isNext) colors.ink else colors.muted)
-                Text(if (isNext) "Tap to take" else angle.hint, style = opaw(13.sp, if (isNext) FontWeight.ExtraBold else FontWeight.Medium), color = if (isNext) colors.ink else colors.ghost)
+                Text(angle.title, style = opaw(if (isNext) 16.sp else 15.sp, if (isNext) FontWeight.Black else FontWeight.ExtraBold), color = if (isNext) colors.ink else colors.muted)
+                Text(angle.hint, style = opaw(12.sp, FontWeight.Bold), color = if (isNext) Setup.deep else colors.ghost)
             }
             return@Box
         }
         val cutout = shot.cutout
-        // The sticker pops in once the pet is lifted off the photo, as on the old scan step.
+        // The pet pops in once it's lifted off the photo.
         val lifted by animateFloatAsState(if (cutout != null) 1f else 0f, spring(dampingRatio = 0.6f, stiffness = 220f), label = "lift")
         if (cutout == null || problem != null) {
             Image(remember(shot.photo) { shot.photo.asImageBitmap() }, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
@@ -354,22 +363,24 @@ private fun LifeSlot(angle: LifeAngle, shot: LifeShot?, problem: PhotoIssue?, is
                 }
             }
         } else {
-            StickerPet(
+            PlainPet(
                 cutout,
-                Modifier.fillMaxSize().padding(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 30.dp).graphicsLayer { val s = 0.85f + 0.15f * lifted; scaleX = s; scaleY = s },
-                edge = 3.dp, motion = null,
+                Modifier.fillMaxSize().padding(start = 22.dp, end = 22.dp, top = 22.dp, bottom = 40.dp).graphicsLayer { val s = 0.85f + 0.15f * lifted; scaleX = s; scaleY = s },
             )
         }
         Text(
             angle.title,
-            style = opaw(12.sp, FontWeight.ExtraBold), color = Color.White,
-            modifier = Modifier.align(Alignment.BottomStart).padding(10.dp).background(Ink, CircleShape).padding(horizontal = 10.dp, vertical = 5.dp),
+            style = opaw(12.sp, FontWeight.ExtraBold), color = Ink,
+            modifier = Modifier.align(Alignment.BottomStart).padding(10.dp).background(Color.White, CircleShape).padding(horizontal = 10.dp, vertical = 5.dp),
         )
         if (shot.scan != null) {
-            Box(
-                Modifier.align(Alignment.TopEnd).padding(10.dp).size(26.dp).background(if (problem == null) Ink else colors.alert, CircleShape),
-                contentAlignment = Alignment.Center,
-            ) { Icon(if (problem == null) DesignIcon.CHECK else DesignIcon.REFRESH, size = 13.dp, tint = Color.White) }
+            if (problem == null) {
+                Tick(26.dp, Modifier.align(Alignment.TopEnd).padding(10.dp))
+            } else {
+                Box(Modifier.align(Alignment.TopEnd).padding(10.dp).size(26.dp).background(colors.alert, CircleShape), contentAlignment = Alignment.Center) {
+                    Icon(DesignIcon.REFRESH, size = 13.dp, tint = Color.White)
+                }
+            }
         }
         if (problem != null) {
             Text(
@@ -382,9 +393,10 @@ private fun LifeSlot(angle: LifeAngle, shot: LifeShot?, problem: PhotoIssue?, is
 }
 
 /**
- * The angle camera (9a): the live view with white corners and the tip for this angle, then a
- * white panel with the four angles and the shutter. After each photo it moves to the next empty
- * angle, and closes when there are none left.
+ * The angle camera (10d): the live view with an outline of the side you need breathing over it
+ * (drawn from the photo of the opposite side, mirrored), a scan line sweeping and white corners,
+ * then a white panel with the four angles and the orange shutter. After each photo it moves to
+ * the next empty angle, and closes when there are none left.
  */
 @Composable
 fun LifeCamera(photos: LifePhotos, start: LifeAngle, onClose: () -> Unit) {
@@ -424,8 +436,18 @@ fun LifeCamera(photos: LifePhotos, start: LifeAngle, onClose: () -> Unit) {
     }
     var isCapturing by remember { mutableStateOf(false) }
     val shutterScale by animateFloatAsState(if (isCapturing) 0.92f else 1f, label = "shutter")
+    // The outline to line up with: the opposite side mirrored, or front and back for each other.
+    val (guide, mirrored) = when (angle) {
+        LifeAngle.LEFT -> photos.shots[LifeAngle.RIGHT]?.cutout to true
+        LifeAngle.RIGHT -> photos.shots[LifeAngle.LEFT]?.cutout to true
+        LifeAngle.FRONT -> photos.shots[LifeAngle.BACK]?.cutout to false
+        LifeAngle.BACK -> photos.shots[LifeAngle.FRONT]?.cutout to false
+    }
+    val loop = rememberInfiniteTransition(label = "camera")
+    val glow by loop.animateFloat(0.16f, 0.32f, infiniteRepeatable(tween(1000), RepeatMode.Reverse), label = "glow")
+    val sweep by loop.animateFloat(0.08f, 0.88f, infiniteRepeatable(tween(2200), RepeatMode.Reverse), label = "sweep")
 
-    Box(Modifier.fillMaxSize().background(Ink)) {
+    Box(Modifier.fillMaxSize().background(Brush.radialGradient(listOf(Color(0xFF3A3A3E), Color(0xFF151517)), radius = 1400f))) {
         if (granted) {
             AndroidView(
                 factory = { PreviewView(it).apply { this.controller = controller; scaleType = PreviewView.ScaleType.FILL_CENTER } },
@@ -435,17 +457,36 @@ fun LifeCamera(photos: LifePhotos, start: LifeAngle, onClose: () -> Unit) {
         Column(Modifier.fillMaxSize()) {
             Box(Modifier.statusBarsPadding().fillMaxWidth().padding(horizontal = 20.dp).padding(top = 10.dp)) {
                 Box(
-                    Modifier.size(54.dp).pressable(onClick = onClose).shadow(10.dp, CircleShape).background(Color.White, CircleShape),
+                    Modifier.size(44.dp).pressable(onClick = onClose).background(Color.White.copy(alpha = 0.16f), CircleShape),
                     contentAlignment = Alignment.Center,
-                ) { Icon(DesignIcon.BACK, size = 22.dp, tint = Ink) }
-                Text(
-                    "${LifeAngle.entries.indexOf(angle) + 1} of ${LifeAngle.entries.size} · ${angle.title}",
-                    style = opaw(14.sp, FontWeight.ExtraBold), color = Color.White,
-                    modifier = Modifier.align(Alignment.Center).background(Ink, CircleShape).padding(horizontal = 14.dp, vertical = 8.dp),
+                ) { Icon(DesignIcon.CLOSE, size = 20.dp, tint = Color.White) }
+                SetupChip(
+                    "${angle.title} · ${LifeAngle.entries.indexOf(angle) + 1} of ${LifeAngle.entries.size}",
+                    Modifier.align(Alignment.Center), background = Color.White, color = Ink,
                 )
             }
-            Box(Modifier.weight(1f).fillMaxWidth()) {
-                Brackets(Modifier.padding(horizontal = 36.dp).padding(top = 40.dp, bottom = 86.dp).fillMaxSize())
+            BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+                val frame = Modifier.padding(horizontal = 36.dp).padding(top = 30.dp, bottom = 70.dp).fillMaxSize()
+                if (guide != null) {
+                    Image(
+                        remember(guide) { guide.asImageBitmap() }, null,
+                        Modifier.align(Alignment.Center).padding(bottom = 40.dp).size(280.dp).graphicsLayer { if (mirrored) scaleX = -1f },
+                        contentScale = ContentScale.Fit,
+                        colorFilter = ColorFilter.tint(Color.White.copy(alpha = glow), BlendMode.SrcIn),
+                    )
+                }
+                Brackets(frame)
+                // The scan line, sweeping down the frame and back.
+                Box(frame.padding(horizontal = 8.dp)) {
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .offset(y = (maxHeight - 100.dp) * sweep)
+                            .height(3.dp)
+                            .shadow(10.dp, CircleShape, ambientColor = Action, spotColor = Action)
+                            .background(Brush.horizontalGradient(listOf(Color.Transparent, Action, Color.Transparent)), CircleShape),
+                    )
+                }
                 if (!granted) {
                     Text(
                         "Allow the camera, or pick photos from your library",
@@ -453,63 +494,63 @@ fun LifeCamera(photos: LifePhotos, start: LifeAngle, onClose: () -> Unit) {
                         modifier = Modifier.align(Alignment.Center).padding(horizontal = 70.dp),
                     )
                 }
-                Row(
-                    Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = 18.dp)
-                        .shadow(10.dp, CircleShape)
-                        .background(Color.White, CircleShape)
-                        .padding(horizontal = 16.dp, vertical = 10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(DesignIcon.SPARKLE, size = 16.dp, weight = 2.4f, tint = Ink)
-                    Text(angle.tip, style = opaw(15.sp, FontWeight.ExtraBold), color = Ink, maxLines = 1)
-                }
+                SetupChip(
+                    if (guide != null) "Line them up with the outline · ${angle.hint.lowercase()}" else angle.tip,
+                    Modifier.align(Alignment.BottomCenter).padding(bottom = 18.dp),
+                    background = Color.Black.copy(alpha = 0.55f), color = Color.White, flat = true,
+                )
             }
             // Controls on a white sheet with rounded top corners, as on every Opaw camera.
             Column(
                 Modifier
                     .fillMaxWidth()
-                    .background(Color.White, RoundedCornerShape(topStart = 36.dp, topEnd = 36.dp))
+                    .background(Color.White, RoundedCornerShape(topStart = 34.dp, topEnd = 34.dp))
                     .navigationBarsPadding()
-                    .padding(top = 18.dp, bottom = 14.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
+                    .padding(top = 20.dp, bottom = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp),
             ) {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
                     for (option in LifeAngle.entries) {
                         val on = option == angle
                         val done = option in photos.shots
                         Row(
                             Modifier
-                                .weight(1f)
-                                .height(44.dp)
+                                .height(36.dp)
                                 .clip(CircleShape)
-                                .background(if (on) Ink else Color(0xFFF1F1F2))
-                                .clickable { haptics.select(); angle = option },
-                            horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
+                                .background(
+                                    when {
+                                        on -> Action
+                                        done -> Color(0xFFFFF1E6)
+                                        else -> Color(0xFFF2F2F4)
+                                    },
+                                )
+                                .clickable { haptics.select(); angle = option }
+                                .padding(horizontal = 14.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            if (done) Icon(DesignIcon.CHECK, size = 11.dp, tint = if (on) Color.White else Ink)
-                            Text(option.label, style = opaw(13.sp, FontWeight.ExtraBold), maxLines = 1, color = if (on) Color.White else Ink.copy(alpha = if (done) 1f else 0.55f))
+                            if (done && !on) Icon(DesignIcon.CHECK, size = 14.dp, weight = 3.2f, tint = Action)
+                            Text(
+                                option.label, style = opaw(14.sp, FontWeight.ExtraBold), maxLines = 1,
+                                color = when {
+                                    on -> Color.White
+                                    done -> Color(0xFFB84300)
+                                    else -> Color(0xFF999999)
+                                },
+                            )
                         }
                     }
                 }
                 Row(Modifier.fillMaxWidth().padding(horizontal = 40.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(
-                        Modifier
-                            .size(60.dp)
-                            .pressable { openLibrary() }
-                            .border(1.dp, Color(0xFFE6E6E8), RoundedCornerShape(19.dp))
-                            .padding(3.dp)
-                            .background(Color(0xFFE6E6E8), RoundedCornerShape(16.dp)),
+                        Modifier.size(54.dp).pressable { openLibrary() }.background(Color(0xFFF2F2F4), CircleShape),
                         contentAlignment = Alignment.Center,
-                    ) { Icon(DesignIcon.PHOTO, size = 22.dp, tint = Color(0xFF999999), cutoutColor = Color(0xFFE6E6E8)) }
+                    ) { Icon(DesignIcon.PHOTO, size = 22.dp, tint = Color(0xFF999999), cutoutColor = Color(0xFFF2F2F4)) }
                     Spacer(Modifier.weight(1f))
                     Box(
                         Modifier
                             .scale(shutterScale)
-                            .size(92.dp)
+                            .size(84.dp)
                             .pressable {
                                 if (!granted) return@pressable openLibrary()
                                 if (isCapturing) return@pressable
@@ -519,11 +560,9 @@ fun LifeCamera(photos: LifePhotos, start: LifeAngle, onClose: () -> Unit) {
                                     isCapturing = false
                                 }
                             }
-                            .background(Ink, CircleShape)
-                            .padding(4.dp)
-                            .background(Color.White, CircleShape)
-                            .padding(5.dp)
-                            .background(Ink, CircleShape),
+                            .border(5.dp, Action, CircleShape)
+                            .padding(10.dp)
+                            .background(Action, CircleShape),
                     )
                     Spacer(Modifier.weight(1f))
                     Box(
@@ -536,7 +575,7 @@ fun LifeCamera(photos: LifePhotos, start: LifeAngle, onClose: () -> Unit) {
                                     CameraSelector.DEFAULT_BACK_CAMERA
                                 }
                             }
-                            .background(Color(0xFFF1F1F2), CircleShape),
+                            .background(Color(0xFFF2F2F4), CircleShape),
                         contentAlignment = Alignment.Center,
                     ) { Icon(DesignIcon.REFRESH, size = 22.dp, tint = Ink.copy(alpha = if (granted) 1f else 0.4f)) }
                 }
@@ -560,12 +599,12 @@ private suspend fun capture(controller: LifecycleCameraController, executor: Exe
     )
 }
 
-/** White viewfinder corners. */
+/** White viewfinder corners, nearly square as in 10d. */
 @Composable
 private fun Brackets(modifier: Modifier) {
     Canvas(modifier) {
-        val arm = 44.dp.toPx()
-        val r = 30.dp.toPx()
+        val arm = 46.dp.toPx()
+        val r = 6.dp.toPx()
         val w = size.width
         val h = size.height
         val path = Path().apply {

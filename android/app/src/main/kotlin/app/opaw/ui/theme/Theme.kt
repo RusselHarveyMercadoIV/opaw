@@ -24,8 +24,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.opaw.R
 
-// Mirrors Opaw/Components/Theme.swift: "Soft white". Light gray ground, white cards with soft
-// shadows, round floating buttons, black pill buttons, rounded heavy type. Red only for attention.
+// Mirrors Opaw/Components/Theme.swift. The brand follows the app icon, a white "O" paw on orange:
+// soft white: light grey ground, white cards with soft shadows, orange pills for anything you do or pick,
+// ink for words, rounded heavy type. Red only for attention.
 
 @Immutable
 data class OpawColors(
@@ -35,6 +36,14 @@ data class OpawColors(
     val ink: Color,
     /** Text drawn on top of [ink]. */
     val onInk: Color,
+    /** Buttons, selected states, progress and the active tab. White bold labels sit on it. */
+    val action: Color,
+    /** Text and icons drawn on top of [action]. */
+    val onAction: Color,
+    /** The logo orange: splash, hero fills and illustration. */
+    val brand: Color,
+    /** Orange words and links on the light ground. */
+    val brandText: Color,
     /** Cards, round buttons and sheets. */
     val surface: Color,
     /** Chips and inputs inside a card. */
@@ -59,6 +68,10 @@ private val LightColors = OpawColors(
     cream = Color(0xFFF4F4F5),
     ink = Color(0xFF111111),
     onInk = Color(0xFFFFFFFF),
+    action = Color(0xFFF2600C),
+    onAction = Color(0xFFFFFFFF),
+    brand = Color(0xFFFF7A1A),
+    brandText = Color(0xFFB84300),
     surface = Color(0xFFFFFFFF),
     chip = Color(0xFFF1F1F2),
     muted = Color(0xFF666666),
@@ -73,6 +86,10 @@ private val DarkColors = OpawColors(
     cream = Color(0xFF0B0B0C),
     ink = Color(0xFFF5F5F5),
     onInk = Color(0xFF111111),
+    action = Color(0xFFF2600C),
+    onAction = Color(0xFFFFFFFF),
+    brand = Color(0xFFFF7A1A),
+    brandText = Color(0xFFFF9A4D),
     surface = Color(0xFF1C1C1E),
     chip = Color(0xFF2C2C2E),
     muted = Color(0xFF8E8E93),
@@ -127,9 +144,9 @@ object Opaw {
 fun OpawTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
     val colors = if (dark) DarkColors else LightColors
     val scheme = if (dark) {
-        darkColorScheme(primary = colors.ink, onPrimary = colors.onInk, background = colors.cream, surface = colors.surface, error = colors.alert)
+        darkColorScheme(primary = colors.action, onPrimary = colors.onAction, background = colors.cream, surface = colors.surface, error = colors.alert)
     } else {
-        lightColorScheme(primary = colors.ink, onPrimary = colors.onInk, background = colors.cream, surface = colors.surface, error = colors.alert)
+        lightColorScheme(primary = colors.action, onPrimary = colors.onAction, background = colors.cream, surface = colors.surface, error = colors.alert)
     }
     CompositionLocalProvider(LocalOpawColors provides colors) {
         MaterialTheme(

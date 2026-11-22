@@ -676,7 +676,7 @@ private struct DetailsStep: View {
                 TextField("Their name", text: $draft.name)
                     .font(.opaw(26, .black))
                     .foregroundStyle(Color.opawInk)
-                    .tint(Color.opawInk)
+                    .tint(Color.opawAction)
                     .textInputAutocapitalization(.words)
                     .autocorrectionDisabled()
                     .submitLabel(.done)

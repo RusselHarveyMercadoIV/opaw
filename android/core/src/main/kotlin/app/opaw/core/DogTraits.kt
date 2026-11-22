@@ -29,7 +29,8 @@ enum class Temperament(val raw: String, val title: String, val blurb: String) {
     CALM("calm", "Calm", "Strolls, sniffs and watches"),
     CURIOUS("curious", "Curious", "Explores and comes up close"),
     SHY("shy", "Shy", "Keeps back and peeks at you"),
-    GOOFY("goofy", "Goofy", "Silly spins and wobbly hops");
+    GOOFY("goofy", "Goofy", "Silly spins and wobbly hops"),
+    SLEEPY("sleepy", "Sleepy", "Naps a lot, wakes for food");
 
     companion object {
         fun fromRaw(raw: String?): Temperament? = entries.firstOrNull { it.raw == raw }

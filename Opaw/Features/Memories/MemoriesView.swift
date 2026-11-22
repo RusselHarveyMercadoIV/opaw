@@ -291,7 +291,7 @@ private struct MemoriesDuo: View {
                                 .overlay {
                                     if entry.id == selected?.id {
                                         RoundedRectangle(cornerRadius: 25, style: .continuous)
-                                            .strokeBorder(Color.opawInk, lineWidth: 2.5)
+                                            .strokeBorder(Color.opawAction, lineWidth: 2.5)
                                             .padding(-2.5)
                                     }
                                 }

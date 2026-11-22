@@ -535,13 +535,13 @@ struct BadgeGrid: View {
                 VStack(spacing: 6) {
                     ZStack {
                         Circle()
-                            .fill(isEarned ? Color.opawInk : Color.opawChip)
+                            .fill(isEarned ? Color.opawAction : Color.opawChip)
                         if !isEarned {
                             ProgressRing(progress: badge.progress(stats), lineWidth: 4)
                         }
                         Image(systemName: badge.symbol)
                             .font(.title2)
-                            .foregroundStyle(isEarned ? Color.opawOnInk : Color.opawMuted)
+                            .foregroundStyle(isEarned ? Color.opawOnAction : Color.opawMuted)
                     }
                     .frame(width: 60, height: 60)
                     Text(badge.title)

@@ -340,6 +340,11 @@ internal class PetStage(private val temperament: Temperament, private val random
                     speed = 0.85f, pause = 1.5f..3f, near = -4.2f, far = FAR_Z, retreat = 0.6f,
                     watch = 0.3f, tilting = 0.4f, wag = 0.12f, wagSpeed = 1f, tailRaise = -0.3f,
                 )
+                Temperament.SLEEPY -> Mood(
+                    mapOf(Kind.WANDER to 1f, Kind.CLOSE to 1f, Kind.LOOK to 5f),
+                    speed = 0.6f, pause = 4f..8f, near = -3.2f, far = -5.5f, hopHeight = 0.1f, hops = 1, retreat = 0.2f,
+                    watch = 0.3f, tilting = 0.2f, wag = 0.12f, wagSpeed = 0.9f, tailRaise = -0.15f,
+                )
                 Temperament.GOOFY -> Mood(
                     mapOf(Kind.WANDER to 1f, Kind.DASH to 2f, Kind.SPIN to 4f, Kind.HOP to 3f, Kind.PEEK to 2f, Kind.CLOSE to 1f, Kind.LOOK to 1f),
                     speed = 1.1f, pause = 0.6f..1.4f, near = NEAR_Z, far = FAR_Z, hopHeight = 0.24f, hops = 3, double = 0.5f, wobble = true, retreat = 0.2f,

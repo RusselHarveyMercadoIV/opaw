@@ -70,6 +70,7 @@ import app.opaw.ui.components.DesignIcon
 import app.opaw.ui.components.DesignToggle
 import app.opaw.ui.components.Hairline
 import app.opaw.ui.components.Icon
+import app.opaw.ui.components.Action
 import app.opaw.ui.components.Ink
 import app.opaw.ui.components.MiniFace
 import app.opaw.ui.components.RoundIcon
@@ -140,7 +141,7 @@ fun ProfileScreen(dogId: String) {
             }
             if (!isPremium) {
                 Row(
-                    Modifier.fillMaxWidth().height(50.dp).pressable(onClick = ::paywall).background(Ink, CircleShape).padding(start = 18.dp, end = 16.dp),
+                    Modifier.fillMaxWidth().height(50.dp).pressable(onClick = ::paywall).background(Action, CircleShape).padding(start = 18.dp, end = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -339,7 +340,7 @@ fun UnitsScreen() {
                         Text(option.second, style = opaw(13.sp, FontWeight.Medium), color = colors.muted)
                     }
                     if (selected) {
-                        Box(Modifier.size(22.dp).background(Ink, CircleShape), contentAlignment = Alignment.Center) { Icon(DesignIcon.CHECK, size = 12.dp, tint = Color.White) }
+                        Box(Modifier.size(22.dp).background(Action, CircleShape), contentAlignment = Alignment.Center) { Icon(DesignIcon.CHECK, size = 12.dp, tint = Color.White) }
                     } else {
                         Box(Modifier.size(22.dp).border(2.dp, Color(0xFFD4D4D8), CircleShape))
                     }
@@ -515,7 +516,7 @@ private fun StreakCard(data: DogData, modifier: Modifier) {
             Text("$streak/7", style = opaw(16.sp, FontWeight.Black), color = colors.ink)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            repeat(7) { index -> Box(Modifier.weight(1f).height(10.dp).background(if (index < streak) colors.ink else colors.hairline, CircleShape)) }
+            repeat(7) { index -> Box(Modifier.weight(1f).height(10.dp).background(if (index < streak) colors.action else colors.hairline, CircleShape)) }
         }
         Text("Reward: ${data.dog.name} earns the ${Badge.CARE_STREAK_7.title} badge", style = opaw(14.sp, FontWeight.Medium), color = colors.muted)
     }
@@ -526,7 +527,7 @@ private fun StreakCard(data: DogData, modifier: Modifier) {
 private fun BadgeMedal(badge: Badge, earned: Boolean, isNew: Boolean, modifier: Modifier) {
     val colors = Opaw.colors
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        val fill = if (isNew) colors.alert else if (earned) Ink else colors.surface
+        val fill = if (isNew) colors.alert else if (earned) Action else colors.surface
         val shadow = if (isNew) colors.alert.copy(alpha = 0.35f) else Color.Black.copy(alpha = if (earned) 0.2f else 0.08f)
         Box(Modifier.size(94.dp).shadow(12.dp, CircleShape, ambientColor = shadow, spotColor = shadow).background(fill, CircleShape), contentAlignment = Alignment.Center) {
             Text(if (isNew) "NEW" else badge.medal, style = opaw(26.sp, FontWeight.Black), color = if (earned || isNew) Color.White else colors.ink.copy(alpha = 0.35f), maxLines = 1)

@@ -189,7 +189,7 @@ private struct ActivityView: View {
             HStack(alignment: .bottom, spacing: 10) {
                 ForEach(Array(days.enumerated()), id: \.offset) { _, day in
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(day.isToday ? Color.opawInk : (day.isFuture || day.km == 0 ? Color.opawTrack : Color(hex: 0xCFCFD2)))
+                        .fill(day.isToday ? Color.opawAction : (day.isFuture || day.km == 0 ? Color.opawTrack : Color(hex: 0xCFCFD2)))
                         .frame(height: day.isFuture || day.km == 0 ? 6 : max(6, 100 * day.km / dayMax))
                         .frame(maxWidth: .infinity)
                 }
@@ -310,7 +310,7 @@ struct GoalRing: View {
                     .padding(line / 2 + proxy.size.width * 4 / 120)
                 Circle()
                     .trim(from: 0, to: min(1, max(0, progress)))
-                    .stroke(Color.opawInk, style: StrokeStyle(lineWidth: line, lineCap: .round))
+                    .stroke(Color.opawAction, style: StrokeStyle(lineWidth: line, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                     .padding(line / 2 + proxy.size.width * 4 / 120)
                     .animation(.spring(response: 0.8, dampingFraction: 0.8), value: progress)
@@ -904,7 +904,7 @@ private struct WalkStoryView: View {
             GeometryReader { proxy in
                 ZStack(alignment: .leading) {
                     Capsule().fill(Color.opawTrack)
-                    Capsule().fill(Color.opawInk)
+                    Capsule().fill(Color.opawAction)
                         .frame(width: proxy.size.width * min(1, total / goal))
                 }
             }
@@ -1067,7 +1067,7 @@ private struct WalkStoryView: View {
             GeometryReader { proxy in
                 ZStack(alignment: .leading) {
                     Capsule().fill(Color.opawTrack)
-                    Capsule().fill(Color.opawInk)
+                    Capsule().fill(Color.opawAction)
                         .frame(width: proxy.size.width * min(1, total / goal))
                 }
             }

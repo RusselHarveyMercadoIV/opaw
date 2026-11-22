@@ -63,7 +63,11 @@ import app.opaw.ui.theme.opaw
 
 // Pieces shared across screens. Mirrors DesignKit.swift and the shared views in Theme.swift.
 
+/** Ink: text and icons. */
 val Ink = Color(0xFF111111)
+
+/** The orange of buttons, selected states and progress. Same as `Opaw.colors.action`. */
+val Action = Color(0xFFF2600C)
 
 /** Settings > Haptics. Set from the settings store. */
 object Feedback {
@@ -220,7 +224,7 @@ fun BlackPillButton(
             .alpha(if (enabled) 1f else 0.3f)
             .pressable(enabled, onClick = onClick)
             .shadow(14.dp, CircleShape, ambientColor = Color.Black.copy(alpha = if (inverted) 0.07f else 0.18f), spotColor = Color.Black.copy(alpha = if (inverted) 0.07f else 0.18f))
-            .background(if (inverted) Color.White else Ink, CircleShape),
+            .background(if (inverted) Color.White else Action, CircleShape),
         contentAlignment = Alignment.Center,
     ) {
         Text(title, style = opaw(fontSize.sp, FontWeight.ExtraBold), color = if (inverted) Ink else Color.White, maxLines = 1)
@@ -231,7 +235,7 @@ fun BlackPillButton(
 @Composable
 fun DesignToggle(isOn: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier = Modifier) {
     val haptics = rememberHaptics()
-    val fill by animateColorAsState(if (isOn) Ink else Color(0xFFDCDCDF), label = "toggle")
+    val fill by animateColorAsState(if (isOn) Action else Color(0xFFDCDCDF), label = "toggle")
     val knob by animateFloatAsState(if (isOn) 1f else 0f, spring(dampingRatio = 0.8f, stiffness = 500f), label = "knob")
     Box(
         modifier
@@ -280,7 +284,7 @@ fun SparkleChip(text: String, size: Int = 13, iconSize: Dp = 14.dp) {
     val small = size < 12
     Row(
         Modifier
-            .background(Ink, CircleShape)
+            .background(Action, CircleShape)
             .padding(horizontal = if (small) 9.dp else 12.dp, vertical = if (small) 4.dp else 7.dp),
         horizontalArrangement = Arrangement.spacedBy(if (small) 4.dp else 6.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -309,7 +313,7 @@ fun MiniFace(image: Bitmap?, size: Dp = 42.dp, rim: Dp = 3.dp, fill: Color = Opa
 fun ProgressBar(value: Float, modifier: Modifier = Modifier) {
     val shown by animateFloatAsState(value.coerceIn(0f, 1f), tween(400), label = "progress")
     Box(modifier.fillMaxWidth().height(6.dp).clip(CircleShape).background(Opaw.colors.track)) {
-        Box(Modifier.fillMaxWidth(shown).height(6.dp).background(Ink, CircleShape))
+        Box(Modifier.fillMaxWidth(shown).height(6.dp).background(Action, CircleShape))
     }
 }
 

@@ -62,6 +62,7 @@ import app.opaw.services.Segmentation
 import app.opaw.ui.components.BlackPillButton
 import app.opaw.ui.components.DesignIcon
 import app.opaw.ui.components.Icon
+import app.opaw.ui.components.Action
 import app.opaw.ui.components.Ink
 import app.opaw.ui.components.LoopMotion
 import app.opaw.ui.components.SparkleChip
@@ -199,7 +200,7 @@ fun BringToLifeCard(
     val colors = Opaw.colors
     Column(modifier.fillMaxWidth().whiteCard().padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(44.dp).background(Ink, CircleShape), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(44.dp).background(Action, CircleShape), contentAlignment = Alignment.Center) {
                 Icon(DesignIcon.SPARKLE, size = 20.dp, weight = 2.4f, tint = Color.White)
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {

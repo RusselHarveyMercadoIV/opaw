@@ -115,12 +115,12 @@ fun FilterPill(title: String, isSelected: Boolean, verticalPadding: Int = 10, on
         Modifier
             .pressable(onClick = onClick)
             .then(if (isSelected) Modifier else Modifier.shadow(6.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.05f), spotColor = Color.Black.copy(alpha = 0.05f)))
-            .background(if (isSelected) colors.ink else colors.surface, CircleShape)
+            .background(if (isSelected) colors.action else colors.surface, CircleShape)
             .defaultMinSize(minHeight = 44.dp)
             .padding(horizontal = 18.dp, vertical = verticalPadding.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(title, style = opaw(14.sp, FontWeight.Bold), color = if (isSelected) colors.onInk else colors.ink)
+        Text(title, style = opaw(14.sp, FontWeight.Bold), color = if (isSelected) colors.onAction else colors.ink)
     }
 }
 
@@ -131,8 +131,8 @@ fun ChoiceChip(title: String, isSelected: Boolean, onClick: () -> Unit) {
     Text(
         title,
         style = opaw(14.sp, FontWeight.Bold),
-        color = if (isSelected) colors.onInk else colors.ink.copy(alpha = 0.7f),
-        modifier = Modifier.pressable(onClick = onClick).background(if (isSelected) colors.ink else colors.chip, CircleShape).padding(horizontal = 14.dp, vertical = 10.dp),
+        color = if (isSelected) colors.onAction else colors.ink.copy(alpha = 0.7f),
+        modifier = Modifier.pressable(onClick = onClick).background(if (isSelected) colors.action else colors.chip, CircleShape).padding(horizontal = 14.dp, vertical = 10.dp),
     )
 }
 

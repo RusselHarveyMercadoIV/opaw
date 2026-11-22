@@ -59,6 +59,7 @@ import app.opaw.ui.components.ChoiceChip
 import app.opaw.ui.components.DesignIcon
 import app.opaw.ui.components.DesignToggle
 import app.opaw.ui.components.Hairline
+import app.opaw.ui.components.Action
 import app.opaw.ui.components.Ink
 import app.opaw.ui.components.MiniFace
 import app.opaw.ui.components.RoundIcon
@@ -175,7 +176,7 @@ private fun PetProfileBody(data: DogData, modifier: Modifier) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Weight, last 6 months", style = opaw(17.sp, FontWeight.Black), color = colors.ink, modifier = Modifier.weight(1f))
                 Box(
-                    Modifier.height(44.dp).pressable { editor = Editor.WEIGHT }.background(Ink, CircleShape).padding(horizontal = 16.dp),
+                    Modifier.height(44.dp).pressable { editor = Editor.WEIGHT }.background(Action, CircleShape).padding(horizontal = 16.dp),
                     contentAlignment = Alignment.Center,
                 ) { Text("Log weight", style = opaw(14.sp, FontWeight.ExtraBold), color = Color.White) }
             }

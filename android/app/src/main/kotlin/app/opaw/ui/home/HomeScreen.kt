@@ -57,6 +57,7 @@ import app.opaw.ui.components.BlackPillButton
 import app.opaw.ui.components.DesignIcon
 import app.opaw.ui.components.GhostCycle
 import app.opaw.ui.components.Icon
+import app.opaw.ui.components.Action
 import app.opaw.ui.components.Ink
 import app.opaw.ui.components.LoopMotion
 import app.opaw.ui.components.MiniFace
@@ -122,10 +123,10 @@ fun HomeScreen() {
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
             all.forEachIndexed { index, _ ->
                 val selected = index == pager.currentPage
-                Box(Modifier.size(if (selected) 22.dp else 8.dp, 8.dp).background(if (selected) Opaw.colors.ink else Color(0xFFCCCCCC), CircleShape))
+                Box(Modifier.size(if (selected) 22.dp else 8.dp, 8.dp).background(if (selected) Opaw.colors.action else Color(0xFFCCCCCC), CircleShape))
             }
             if (pager.currentPage == addPage) {
-                Box(Modifier.size(22.dp, 8.dp).background(Opaw.colors.ink, CircleShape))
+                Box(Modifier.size(22.dp, 8.dp).background(Opaw.colors.action, CircleShape))
             } else {
                 Box(Modifier.padding(start = 2.dp).size(16.dp).pressable { scope.launch { pager.animateScrollToPage(addPage) } }.dashedCapsule(Opaw.colors.ghost, dash = 3f, gap = 2.5f))
             }
@@ -286,7 +287,7 @@ private fun AddPetPage(dots: @Composable () -> Unit, locked: Boolean, onAdd: (Ph
             GhostCycle(Modifier.align(Alignment.TopCenter).padding(top = 40.dp).size(190.dp, 210.dp))
             Box(
                 Modifier.align(Alignment.BottomEnd).padding(end = 66.dp).size(56.dp)
-                    .shadow(12.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.22f), spotColor = Color.Black.copy(alpha = 0.22f)).background(Ink, CircleShape),
+                    .shadow(12.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.22f), spotColor = Color.Black.copy(alpha = 0.22f)).background(Action, CircleShape),
                 contentAlignment = Alignment.Center,
             ) { Icon(if (locked) DesignIcon.LOCK else DesignIcon.CAMERA, size = 24.dp, weight = if (locked) 2.6f else 2.4f, tint = Color.White) }
         }

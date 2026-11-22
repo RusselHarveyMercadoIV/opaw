@@ -62,6 +62,7 @@ import app.opaw.ui.components.BlackPillButton
 import app.opaw.ui.components.DesignIcon
 import app.opaw.ui.components.Hairline
 import app.opaw.ui.components.Icon
+import app.opaw.ui.components.Action
 import app.opaw.ui.components.Ink
 import app.opaw.ui.components.LoopMotion
 import app.opaw.ui.components.MiniFace
@@ -197,7 +198,7 @@ fun PaywallScreen(petName: String, petImage: Bitmap?, onClose: (Boolean) -> Unit
             }
             Box(Modifier.padding(horizontal = 20.dp).padding(top = 16.dp)) {
                 if (store.isPurchasing) {
-                    Box(Modifier.fillMaxWidth().height(62.dp).background(if (dark) Color.White else Ink, CircleShape), contentAlignment = Alignment.Center) {
+                    Box(Modifier.fillMaxWidth().height(62.dp).background(if (dark) Color.White else Action, CircleShape), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(Modifier.size(24.dp), color = if (dark) Ink else Color.White, strokeWidth = 2.5.dp)
                     }
                 } else {
@@ -340,7 +341,7 @@ fun SubscriptionScreen() {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("Opaw Premium", style = opaw(15.sp, FontWeight.ExtraBold), color = colors.ink, modifier = Modifier.weight(1f))
                             Text(if (status.isTrial) "Free trial" else if (status.willRenew) "Active" else "Ending", style = opaw(12.sp, FontWeight.ExtraBold), color = Color.White,
-                                modifier = Modifier.background(Ink, CircleShape).padding(horizontal = 10.dp, vertical = 5.dp))
+                                modifier = Modifier.background(Action, CircleShape).padding(horizontal = 10.dp, vertical = 5.dp))
                         }
                         val end = status.expirationDate
                         Text(
@@ -351,7 +352,7 @@ fun SubscriptionScreen() {
                             val total = maxOf(1, ChronoUnit.DAYS.between(status.purchaseDate, end).toInt())
                             val used = (total - daysLeft(end)).coerceIn(0, total)
                             Row(Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                                repeat(total) { Box(Modifier.weight(1f).height(8.dp).background(if (it < used) Ink else colors.track, CircleShape)) }
+                                repeat(total) { Box(Modifier.weight(1f).height(8.dp).background(if (it < used) Action else colors.track, CircleShape)) }
                             }
                         }
                         Row(Modifier.padding(top = 8.dp)) {

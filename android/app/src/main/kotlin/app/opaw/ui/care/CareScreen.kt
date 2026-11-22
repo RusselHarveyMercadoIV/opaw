@@ -64,6 +64,7 @@ import app.opaw.ui.rememberApp
 import app.opaw.ui.components.DesignIcon
 import app.opaw.ui.components.Hairline
 import app.opaw.ui.components.Icon
+import app.opaw.ui.components.Action
 import app.opaw.ui.components.Ink
 import app.opaw.ui.components.MiniFace
 import app.opaw.ui.components.PetChip
@@ -214,7 +215,7 @@ private fun StreakCard(data: DogData, modifier: Modifier, onClick: () -> Unit) {
                 Box(
                     Modifier
                         .size(12.dp, if (index == 4) 30.dp else 22.dp)
-                        .background(if ((count ?: 0) >= 3) colors.ink else colors.track, RoundedCornerShape(6.dp)),
+                        .background(if ((count ?: 0) >= 3) colors.action else colors.track, RoundedCornerShape(6.dp)),
                 )
             }
         }
@@ -310,7 +311,7 @@ fun CareCircle(
                 Modifier
                     .size(size)
                     .shadow(10.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.06f), spotColor = Color.Black.copy(alpha = 0.06f))
-                    .background(if (selected) Ink else colors.surface, CircleShape)
+                    .background(if (selected) Action else colors.surface, CircleShape)
                     .then(if (alert) Modifier.border(2.5.dp, colors.alert, CircleShape) else Modifier),
                 contentAlignment = Alignment.Center,
             ) {
@@ -325,7 +326,7 @@ fun CareCircle(
                         .background(colors.cream, CircleShape)
                         .padding(2.dp)
                         .defaultMinSize(22.dp, 22.dp)
-                        .background(if (alert) colors.alert else Ink, CircleShape)
+                        .background(if (alert) colors.alert else Action, CircleShape)
                         .padding(horizontal = 6.dp),
                     contentAlignment = Alignment.Center,
                 ) {

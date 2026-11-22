@@ -75,6 +75,7 @@ import app.opaw.ui.components.DesignIcon
 import app.opaw.ui.components.FilterPill
 import app.opaw.ui.components.Hairline
 import app.opaw.ui.components.Icon
+import app.opaw.ui.components.Action
 import app.opaw.ui.components.Ink
 import app.opaw.ui.components.MiniFace
 import app.opaw.ui.components.PetChip
@@ -263,7 +264,7 @@ fun MemoriesScreen() {
                         if (item.second != null) PairTile(item.second, Modifier.weight(1f)) else Spacer(Modifier.weight(1f))
                     }
                     is Item.Milestone -> Row(
-                        Modifier.fillMaxWidth().background(Ink, RoundedCornerShape(30.dp)).padding(start = 14.dp, end = 18.dp, top = 14.dp, bottom = 14.dp),
+                        Modifier.fillMaxWidth().background(Action, RoundedCornerShape(30.dp)).padding(start = 14.dp, end = 18.dp, top = 14.dp, bottom = 14.dp),
                         horizontalArrangement = Arrangement.spacedBy(14.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {

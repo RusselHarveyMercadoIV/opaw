@@ -30,9 +30,9 @@ struct CareLogSheet: View {
                                 VStack(spacing: 4) {
                                     Image(systemName: option.symbol)
                                         .font(.title3)
-                                        .foregroundStyle(option == kind ? Color.opawOnInk : Color.opawInk)
+                                        .foregroundStyle(option == kind ? Color.opawOnAction : Color.opawInk)
                                         .frame(width: 40, height: 40)
-                                        .background(option == kind ? Color.opawInk : Color.opawChip, in: Circle())
+                                        .background(option == kind ? Color.opawAction : Color.opawChip, in: Circle())
                                     Text(option.title)
                                         .font(.caption)
                                         .lineLimit(1)

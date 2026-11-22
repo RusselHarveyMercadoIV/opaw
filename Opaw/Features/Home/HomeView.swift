@@ -178,11 +178,11 @@ struct HomeView: View {
             HStack(spacing: 6) {
                 ForEach(ids, id: \.self) { id in
                     Capsule()
-                        .fill(id == current ? Color.opawInk : Color(hex: 0xCCCCCC))
+                        .fill(id == current ? Color.opawAction : Color(hex: 0xCCCCCC))
                         .frame(width: id == current ? 22 : 8, height: 8)
                 }
                 if current == Self.addPage {
-                    Capsule().fill(Color.opawInk).frame(width: 22, height: 8)
+                    Capsule().fill(Color.opawAction).frame(width: 22, height: 8)
                 } else {
                     Button {
                         withAnimation { page = Self.addPage }

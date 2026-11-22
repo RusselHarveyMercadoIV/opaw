@@ -247,7 +247,7 @@ fun NoticeView(notice: Notice, onAction: () -> Unit) {
         }
         if (notice.actionTitle != null && notice.action != null) {
             Box(
-                Modifier.height(46.dp).pressable(onClick = onAction).background(if (dark) Color.White.copy(alpha = 0.16f) else Ink, CircleShape).padding(horizontal = 16.dp),
+                Modifier.height(46.dp).pressable(onClick = onAction).background(if (dark) Color.White.copy(alpha = 0.16f) else Action, CircleShape).padding(horizontal = 16.dp),
                 contentAlignment = Alignment.Center,
             ) { Text(notice.actionTitle, style = opaw(15.sp, FontWeight.ExtraBold), color = Color.White) }
         }

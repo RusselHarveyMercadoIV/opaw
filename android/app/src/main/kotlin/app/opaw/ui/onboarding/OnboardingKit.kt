@@ -1,6 +1,10 @@
 package app.opaw.ui.onboarding
 
 import android.graphics.Bitmap
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -62,6 +66,7 @@ import app.opaw.core.Temperament
 import app.opaw.ui.components.BlackPillButton
 import app.opaw.ui.components.DesignIcon
 import app.opaw.ui.components.Icon
+import app.opaw.ui.components.Action
 import app.opaw.ui.components.Ink
 import app.opaw.ui.components.LoopMotion
 import app.opaw.ui.components.RoundIcon
@@ -75,149 +80,8 @@ import app.opaw.ui.theme.whiteCard
 import kotlin.math.PI
 import kotlin.math.cos
 
-// The pieces Turn 10 of the design adds to onboarding: the chapter rail, the two ways through the
-// photos, the pet acting out each temperament, the care icons on the welcome screen, joining with
-// a code, and welcoming back a returning owner.
-
-/** Where the rail's pet face was last, so the next step's rail slides on from there. */
-private var railLast = 0f
-
-/**
- * The chapter rail (10c to 10j): a back button, one line that fills as setup goes on with the
- * pet's face riding along it, and the chapter's name, or Join and Skip on the first screen.
- */
-@Composable
-internal fun ChapterRail(
-    index: Int,
-    chapter: String,
-    face: Bitmap?,
-    inset: Int = 20,
-    onBack: (() -> Unit)?,
-    onSkip: (() -> Unit)? = null,
-    onJoin: (() -> Unit)? = null,
-) {
-    val colors = Opaw.colors
-    val target = ((index - 1) * 17 + 8) / 100f
-    val fraction = remember { Animatable(railLast) }
-    LaunchedEffect(target) {
-        fraction.animateTo(target, spring(dampingRatio = 0.8f, stiffness = 120f))
-        railLast = target
-    }
-    Row(
-        Modifier.fillMaxWidth().padding(horizontal = inset.dp).padding(top = 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (onBack != null) RoundIcon(DesignIcon.BACK, onClick = onBack)
-        BoxWithConstraints(Modifier.weight(1f).height(36.dp), contentAlignment = Alignment.CenterStart) {
-            val width = maxWidth
-            Box(Modifier.fillMaxWidth().height(6.dp).clip(CircleShape).background(colors.track)) {
-                Box(Modifier.fillMaxWidth(fraction.value).height(6.dp).background(Ink, CircleShape))
-            }
-            Box(
-                Modifier
-                    .offset(x = width * fraction.value - 17.dp)
-                    .size(34.dp)
-                    .shadow(8.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.14f), spotColor = Color.Black.copy(alpha = 0.14f))
-                    .background(Color.White, CircleShape)
-                    .border(2.5.dp, Ink, CircleShape)
-                    .padding(3.dp)
-                    .clip(CircleShape),
-                contentAlignment = Alignment.Center,
-            ) {
-                if (face != null) {
-                    Image(remember(face) { face.asImageBitmap() }, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                } else {
-                    Icon(DesignIcon.PAW, size = 15.dp, tint = Ink)
-                }
-            }
-        }
-        if (onJoin != null || onSkip != null) {
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (onJoin != null) {
-                    Row(
-                        Modifier
-                            .height(38.dp)
-                            .pressable(onClick = onJoin)
-                            .shadow(8.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.05f), spotColor = Color.Black.copy(alpha = 0.05f))
-                            .background(colors.surface, CircleShape)
-                            .padding(horizontal = 14.dp),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(DesignIcon.USERS, size = 15.dp, tint = colors.ink)
-                        Text("Join", style = opaw(14.sp, FontWeight.ExtraBold), color = colors.ink)
-                    }
-                }
-                if (onSkip != null) {
-                    Text(
-                        "Skip", style = opaw(14.sp, FontWeight.ExtraBold), color = colors.muted,
-                        modifier = Modifier.pressable(onClick = onSkip).padding(horizontal = 10.dp, vertical = 9.dp),
-                    )
-                }
-            }
-        } else {
-            Column(Modifier.widthIn(min = 64.dp), horizontalAlignment = Alignment.End) {
-                Text(chapter, style = opaw(13.sp, FontWeight.Black), color = colors.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 110.dp))
-                Text("$index of 6", style = opaw(11.sp, FontWeight.Bold), color = colors.muted)
-            }
-        }
-    }
-}
-
-/**
- * The two ways through the photos (10c), together so the choice is plain: the 3D pet, which is
- * Premium, or one photo for the free sticker avatar.
- */
-@Composable
-internal fun PathActions(
-    name: String,
-    isPremium: Boolean,
-    enabled: Boolean,
-    onLife: () -> Unit,
-    /** Null until the front photo has been looked at. */
-    onFree: (() -> Unit)?,
-) {
-    val colors = Opaw.colors
-    Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .height(64.dp)
-                .alpha(if (enabled) 1f else 0.3f)
-                .pressable(enabled, onClick = onLife)
-                .shadow(14.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.18f), spotColor = Color.Black.copy(alpha = 0.18f))
-                .background(Ink, CircleShape)
-                .padding(start = 24.dp, end = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text("Bring $name to life", style = opaw(17.sp, FontWeight.ExtraBold), color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-            Row(
-                Modifier.height(28.dp).background(Color.White.copy(alpha = 0.16f), CircleShape).padding(horizontal = 10.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(DesignIcon.SPARKLE, size = 12.dp, weight = 2.4f, tint = Color.White)
-                Text(if (isPremium) "3D" else "3D · Premium", style = opaw(12.sp, FontWeight.ExtraBold), color = Color.White)
-            }
-        }
-        if (onFree != null) {
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .height(56.dp)
-                    .pressable(onClick = onFree)
-                    .shadow(10.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.05f), spotColor = Color.Black.copy(alpha = 0.05f))
-                    .background(colors.surface, CircleShape)
-                    .padding(horizontal = 22.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("Continue with one photo", style = opaw(15.sp, FontWeight.ExtraBold), color = colors.ink, modifier = Modifier.weight(1f))
-                Text("Free sticker", style = opaw(13.sp, FontWeight.Bold), color = colors.muted)
-            }
-        }
-    }
-}
+// More pieces of adding a pet: the pet acting out each temperament, the care icons on the welcome
+// screen, and joining with a code.
 
 /**
  * The pet acting out a temperament, as it will on Home (10f, 10g): Playful spins and hops, Calm
@@ -231,6 +95,7 @@ internal fun Modifier.temperamentMotion(temperament: Temperament, amplitude: Flo
         Temperament.CURIOUS -> 2800
         Temperament.SHY -> 3400
         Temperament.GOOFY -> 1600
+        Temperament.SLEEPY -> 3400
     }
     val t by rememberInfiniteTransition(label = "temperament").animateFloat(
         0f, 1f, infiniteRepeatable(tween(period, easing = LinearEasing), RepeatMode.Restart), label = "t",
@@ -269,6 +134,11 @@ internal fun Modifier.temperamentMotion(temperament: Temperament, amplitude: Flo
                 val x = ease(t * 4 - i)
                 rotationZ = lerp(rotations[i], rotations[i + 1], x)
                 translationY = lerp(lifts[i], lifts[i + 1], x) * unit
+            }
+            Temperament.SLEEPY -> {
+                val wave = ((1 - cos(2 * PI * t)) / 2).toFloat()
+                rotationZ = lerp(-4f, -6f, wave)
+                translationY = lerp(0f, 3f, wave) * unit
             }
         }
     }
@@ -331,59 +201,100 @@ internal fun CareOrbs(modifier: Modifier = Modifier) {
 }
 
 /**
- * Join with a code (10l), from the first screen: for a walker or partner who was sent a code.
- * The code goes to [HouseholdJoinHost], which joins as soon as it can and says how it went.
+ * Join with a code (10l), from the photos: for a walker or partner who was sent a code. No photos,
+ * no setup. The code goes to [HouseholdJoinHost], which joins as soon as it can, brings their pet
+ * and lands on its room. "I have a link instead" reads an invite link from the clipboard.
  */
 @Composable
 internal fun JoinCodeScreen(app: OpawApplication, modifier: Modifier, onDone: () -> Unit) {
     val colors = Opaw.colors
     val haptics = rememberHaptics()
+    val clipboard = LocalClipboardManager.current
     val focus = remember { FocusRequester() }
     var code by remember { mutableStateOf("") }
+    var note by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
     val boxes = 8
+    fun join(value: String) {
+        haptics.medium()
+        app.household.offer(value)
+        onDone()
+    }
     Column(modifier) {
-        Row(Modifier.padding(horizontal = 20.dp).padding(top = 10.dp)) { RoundIcon(DesignIcon.BACK, onClick = onDone) }
-        Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 22.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Join a household", style = opaw(30.sp, FontWeight.Black), color = colors.ink)
-            Text("Enter the code from your invite to help look after their pet.", style = opaw(16.sp, FontWeight.Medium).copy(lineHeight = 22.sp), color = colors.muted)
-        }
-        // One hidden field drives the boxes, so pasting a whole code works.
-        Box(Modifier.padding(horizontal = 20.dp).padding(top = 24.dp)) {
-            BasicTextField(
-                code, { code = it.uppercase().filter(Char::isLetterOrDigit).take(boxes) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, autoCorrectEnabled = false),
-                modifier = Modifier.fillMaxWidth().height(58.dp).alpha(0f).focusRequester(focus),
-            )
-            Row(Modifier.fillMaxWidth().pressable { runCatching { focus.requestFocus() } }, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                for (i in 0 until boxes) {
-                    val current = i == code.length.coerceAtMost(boxes - 1)
+        Spacer(Modifier.height(8.dp))
+        SetupHeader(1, 1, "Join", onBack = onDone)
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+            Box(Modifier.fillMaxWidth().padding(top = 18.dp), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(160.dp).background(Setup.fill, CircleShape), contentAlignment = Alignment.Center) {
+                    HouseArt(Modifier.size(96.dp))
                     Box(
-                        Modifier
-                            .weight(1f)
-                            .height(58.dp)
-                            .whiteCard(16.dp)
-                            .then(if (current) Modifier.border(2.5.dp, Ink, RoundedCornerShape(16.dp)) else Modifier),
+                        Modifier.align(Alignment.TopEnd).offset(x = 6.dp, y = 6.dp).drift(2400)
+                            .size(48.dp).shadow(8.dp, CircleShape).background(Action, CircleShape).border(4.dp, Color.White, CircleShape),
                         contentAlignment = Alignment.Center,
-                    ) { Text(code.getOrNull(i)?.toString().orEmpty(), style = opaw(24.sp, FontWeight.Black), color = colors.ink) }
+                    ) { Text("+", style = opaw(20.sp, FontWeight.Black), color = Color.White) }
                 }
             }
-        }
-        Text(
-            "You'll skip the photos and land on Home with their pet.",
-            style = opaw(14.sp, FontWeight.Medium), color = colors.muted,
-            modifier = Modifier.padding(horizontal = 24.dp).padding(top = 14.dp),
-        )
-        Spacer(Modifier.weight(1f))
-        Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            BlackPillButton("Join household", enabled = code.length >= 6) {
-                haptics.medium()
-                app.household.offer(code)
-                onDone()
+            SetupTitle("Join a household", "Enter the code from your invite to help look after their pet.", Modifier.padding(top = 26.dp))
+            // One hidden field drives the boxes, so pasting a whole code works.
+            Box(Modifier.padding(horizontal = 20.dp).padding(top = 24.dp)) {
+                BasicTextField(
+                    code, { code = it.uppercase().filter(Char::isLetterOrDigit).take(boxes); note = null },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, autoCorrectEnabled = false),
+                    modifier = Modifier.fillMaxWidth().height(56.dp).alpha(0f).focusRequester(focus),
+                )
+                Row(Modifier.fillMaxWidth().pressable { runCatching { focus.requestFocus() } }, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    for (i in 0 until boxes) {
+                        val current = i == code.length.coerceAtMost(boxes - 1)
+                        val shape = RoundedCornerShape(16.dp)
+                        Box(
+                            Modifier
+                                .weight(1f)
+                                .height(56.dp)
+                                .then(
+                                    if (current) Modifier.background(colors.surface, shape).border(3.dp, Action, shape)
+                                    else Modifier.shadow(8.dp, shape, ambientColor = Color.Black.copy(alpha = 0.08f), spotColor = Color.Black.copy(alpha = 0.08f)).background(colors.surface, shape),
+                                ),
+                            contentAlignment = Alignment.Center,
+                        ) { Text(code.getOrNull(i)?.toString().orEmpty(), style = opaw(24.sp, FontWeight.Black), color = colors.ink) }
+                    }
+                }
             }
-            Text("Not now", style = opaw(15.sp, FontWeight.Bold), color = colors.ink, modifier = Modifier.pressable(onClick = onDone).padding(4.dp))
+            Text(
+                note ?: "You'll skip the photos and land in their pet's room.",
+                style = opaw(14.sp, FontWeight.SemiBold), color = if (note != null) colors.alert else colors.muted,
+                modifier = Modifier.padding(horizontal = 26.dp).padding(top = 14.dp),
+            )
         }
+        SetupFoot {
+            OrangeButton("Join household", enabled = code.length >= 6) { join(code) }
+            SetupLink("I have a link instead") {
+                // An invite link ends in ?c=CODE.
+                val text = clipboard.getText()?.text.orEmpty()
+                val found = Regex("[?&]c=([A-Za-z0-9]{6,32})").find(text)?.groupValues?.get(1)
+                    ?: text.trim().takeIf { it.length in 6..32 && it.all(Char::isLetterOrDigit) }
+                if (found != null) join(found) else note = "Copy the invite link first, then tap here."
+            }
+        }
+    }
+}
+
+/** A flat house in the brand orange, for joining a household. */
+@Composable
+private fun HouseArt(modifier: Modifier) {
+    Canvas(modifier) {
+        val u = size.width / 100f
+        val body = androidx.compose.ui.graphics.Path().apply {
+            moveTo(14 * u, 46 * u); lineTo(50 * u, 16 * u); lineTo(86 * u, 46 * u); lineTo(86 * u, 86 * u)
+            quadraticTo(86 * u, 92 * u, 80 * u, 92 * u); lineTo(20 * u, 92 * u); quadraticTo(14 * u, 92 * u, 14 * u, 86 * u); close()
+        }
+        drawPath(body, Color(0xFFFFE3CF))
+        drawPath(body, Action, style = androidx.compose.ui.graphics.drawscope.Stroke(5 * u, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+        val door = androidx.compose.ui.graphics.Path().apply {
+            moveTo(40 * u, 92 * u); lineTo(40 * u, 66 * u); quadraticTo(40 * u, 56 * u, 50 * u, 56 * u); quadraticTo(60 * u, 56 * u, 60 * u, 66 * u); lineTo(60 * u, 92 * u)
+        }
+        drawPath(door, Color.White)
+        drawPath(door, Action, style = androidx.compose.ui.graphics.drawscope.Stroke(5 * u))
     }
 }
 
@@ -394,4 +305,5 @@ internal fun Temperament.homeNote(): String = when (this) {
     Temperament.CURIOUS -> "Curious, so expect them to come up close on Home."
     Temperament.SHY -> "Shy, so expect them to peek at you on Home."
     Temperament.GOOFY -> "Goofy, so expect silly spins on Home."
+    Temperament.SLEEPY -> "Sleepy, so expect lots of naps on Home."
 }

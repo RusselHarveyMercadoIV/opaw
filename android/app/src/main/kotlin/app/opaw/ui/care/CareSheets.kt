@@ -93,6 +93,7 @@ import app.opaw.ui.components.DesignIcon
 import app.opaw.ui.components.DesignToggle
 import app.opaw.ui.components.Hairline
 import app.opaw.ui.components.Icon
+import app.opaw.ui.components.Action
 import app.opaw.ui.components.Ink
 import app.opaw.ui.components.LoopMotion
 import app.opaw.ui.components.StickerPet
@@ -205,7 +206,7 @@ fun PoopLogForm(data: DogData, onLog: (CareEvent) -> Unit) {
                     val selected = option == consistency
                     Box(
                         Modifier.weight(1f).height(44.dp).pressable { consistency = option; haptics.select() }
-                            .background(if (selected) Ink else Color(0xFFF1F1F2), CircleShape),
+                            .background(if (selected) Action else Color(0xFFF1F1F2), CircleShape),
                         contentAlignment = Alignment.Center,
                     ) { Text(option.title, style = opaw(14.sp, FontWeight.Bold), color = if (selected) Color.White else Color(0xFF555555), maxLines = 1) }
                 }
@@ -218,7 +219,7 @@ fun PoopLogForm(data: DogData, onLog: (CareEvent) -> Unit) {
                     val selected = option == color
                     Column(Modifier.pressable { color = option; haptics.select() }, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Box(
-                            Modifier.size(44.dp).then(if (selected) Modifier.border(2.5.dp, Ink, CircleShape) else Modifier).padding(5.5.dp)
+                            Modifier.size(44.dp).then(if (selected) Modifier.border(2.5.dp, Action, CircleShape) else Modifier).padding(5.5.dp)
                                 .background(option.swatch, CircleShape)
                                 .then(if (selected) Modifier else Modifier.border(1.dp, Color.Black.copy(alpha = 0.08f), CircleShape)),
                         )
@@ -360,8 +361,8 @@ fun CareLogSheet(data: DogData, initialKind: CareKind, onDismiss: () -> Unit) {
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.Center,
                             ) {
-                                Box(Modifier.size(40.dp).background(if (selected) colors.ink else colors.chip, CircleShape), contentAlignment = Alignment.Center) {
-                                    Icon(DesignIcon.forKind(option) ?: DesignIcon.SPARKLE, size = 20.dp, tint = if (selected) colors.onInk else colors.ink)
+                                Box(Modifier.size(40.dp).background(if (selected) colors.action else colors.chip, CircleShape), contentAlignment = Alignment.Center) {
+                                    Icon(DesignIcon.forKind(option) ?: DesignIcon.SPARKLE, size = 20.dp, tint = if (selected) colors.onAction else colors.ink)
                                 }
                                 Text(option.title, style = opaw(12.sp, FontWeight.SemiBold), color = colors.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
@@ -452,7 +453,7 @@ fun EditTracksSheet(data: DogData, onDismiss: () -> Unit) {
         Column(Modifier.padding(horizontal = 24.dp).navigationBarsPadding()) {
             Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("Edit tracks", style = opaw(30.sp, FontWeight.Black), color = colors.ink, modifier = Modifier.weight(1f))
-                Text("Done", style = opaw(15.sp, FontWeight.ExtraBold), color = Color.White, modifier = Modifier.pressable(onClick = onDismiss).background(Ink, CircleShape).padding(horizontal = 16.dp, vertical = 10.dp))
+                Text("Done", style = opaw(15.sp, FontWeight.ExtraBold), color = Color.White, modifier = Modifier.pressable(onClick = onDismiss).background(Action, CircleShape).padding(horizontal = 16.dp, vertical = 10.dp))
             }
             Text("Choose what shows on Care. Drag to reorder.", style = opaw(15.sp, FontWeight.Medium), color = colors.muted, modifier = Modifier.padding(top = 4.dp))
             Column(Modifier.verticalScroll(rememberScrollState(), enabled = dragKey == null).padding(top = 10.dp, bottom = 24.dp)) {
@@ -634,7 +635,7 @@ fun TrackEditorSheet(data: DogData, trackId: String?, onDismiss: () -> Unit) {
                     horizontalArrangement = Arrangement.spacedBy(14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Box(Modifier.size(52.dp).background(Ink, CircleShape), contentAlignment = Alignment.Center) { Icon(icon, size = 22.dp, tint = Color.White) }
+                    Box(Modifier.size(52.dp).background(Action, CircleShape), contentAlignment = Alignment.Center) { Icon(icon, size = 22.dp, tint = Color.White) }
                     Column {
                         Text("Name", style = opaw(12.sp, FontWeight.SemiBold), color = colors.muted)
                         PlainField(name, { name = it }, "Brushing teeth", opaw(22.sp, FontWeight.Black), Modifier.fillMaxWidth(),
@@ -656,7 +657,7 @@ fun TrackEditorSheet(data: DogData, trackId: String?, onDismiss: () -> Unit) {
                                 } else {
                                     val selected = option == icon
                                     Box(
-                                        Modifier.size(52.dp).pressable { haptics.select(); icon = option }.background(if (selected) Ink else colors.chip, CircleShape),
+                                        Modifier.size(52.dp).pressable { haptics.select(); icon = option }.background(if (selected) Action else colors.chip, CircleShape),
                                         contentAlignment = Alignment.Center,
                                     ) { Icon(option, size = 22.dp, weight = if (option.isFilled) null else 2.3f, tint = if (selected) Color.White else colors.ink) }
                                 }
@@ -673,7 +674,7 @@ fun TrackEditorSheet(data: DogData, trackId: String?, onDismiss: () -> Unit) {
                             option.title,
                             style = opaw(14.sp, FontWeight.Bold),
                             color = if (selected) Color.White else Color(0xFF555555),
-                            modifier = Modifier.pressable { haptics.select(); style = option }.background(if (selected) Ink else colors.chip, CircleShape).padding(horizontal = 16.dp, vertical = 11.dp),
+                            modifier = Modifier.pressable { haptics.select(); style = option }.background(if (selected) Action else colors.chip, CircleShape).padding(horizontal = 16.dp, vertical = 11.dp),
                         )
                     }
                 }

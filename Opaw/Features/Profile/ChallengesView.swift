@@ -141,7 +141,7 @@ struct ChallengesView: View {
             HStack(spacing: compact ? 5 : 6) {
                 ForEach(0..<7, id: \.self) { index in
                     Capsule()
-                        .fill(index < streak ? Color.opawInk : (compact ? Color.opawTrack : Color.opawHairline))
+                        .fill(index < streak ? Color.opawAction : (compact ? Color.opawTrack : Color.opawHairline))
                         .frame(height: compact ? 8 : 10)
                 }
             }

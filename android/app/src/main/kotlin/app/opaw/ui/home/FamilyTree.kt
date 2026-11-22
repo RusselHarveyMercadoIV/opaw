@@ -64,6 +64,7 @@ import app.opaw.ui.components.BlackPillButton
 import app.opaw.ui.components.ChoiceChip
 import app.opaw.ui.components.DesignIcon
 import app.opaw.ui.components.Icon
+import app.opaw.ui.components.Action
 import app.opaw.ui.components.Ink
 import app.opaw.ui.components.MiniFace
 import app.opaw.ui.components.RoundIcon
@@ -165,7 +166,7 @@ fun FamilyTreeScreen(dogId: String) {
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        Box(Modifier.shadow(10.dp, CircleShape).border(4.dp, Ink, CircleShape)) {
+                        Box(Modifier.shadow(10.dp, CircleShape).border(4.dp, Action, CircleShape)) {
                             MiniFace(rememberPhoto(dog.cutoutPath ?: dog.photoPath, 300), size = 104.dp, rim = 4.dp, fill = colors.surface)
                         }
                         Text(dog.name, style = opaw(18.sp, FontWeight.Black), color = colors.ink, maxLines = 1)
@@ -186,7 +187,7 @@ fun FamilyTreeScreen(dogId: String) {
                                     haptics.select()
                                     app.scope.launch { app.settings.setActiveDog(item.id) }
                                     navigator.pop()
-                                }.then(if (item.id == dog.id) Modifier.border(3.dp, Ink, CircleShape) else Modifier).padding(3.dp),
+                                }.then(if (item.id == dog.id) Modifier.border(3.dp, Action, CircleShape) else Modifier).padding(3.dp),
                             ) { MiniFace(rememberPhoto(item.cutoutPath ?: item.photoPath, 200), size = 58.dp, rim = 0.dp, fill = colors.chip) }
                         }
                         Box(

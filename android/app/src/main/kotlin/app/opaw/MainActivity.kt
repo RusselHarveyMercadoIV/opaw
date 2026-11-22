@@ -59,6 +59,7 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.opaw.services.CrashLog
 import app.opaw.ui.MainTabs
+import app.opaw.ui.OpawSplash
 import app.opaw.ui.SignInScreen
 import app.opaw.ui.onboarding.OnboardingFlow
 import app.opaw.ui.theme.Opaw
@@ -116,15 +117,14 @@ private fun RootView(app: OpawApplication) {
     var signInShown by rememberSaveable { mutableStateOf(false) }
     var restoreFailed by remember { mutableStateOf(false) }
     var attempt by remember { mutableIntStateOf(0) }
+    // The animated opening plays once per launch; saved so turning the phone doesn't replay it.
+    var splashDone by rememberSaveable { mutableStateOf(false) }
     // Wait for the first read so onboarding doesn't flash for returning users.
-    val current = dogs
-    val skippedSetup = skipped
-    if (current == null || skippedSetup == null) {
-        OpeningScreen()
-        return
-    }
+    val current = dogs.orEmpty()
+    val loaded = dogs != null && skipped != null
+    val skippedSetup = skipped == true
     // Signed in with no pets here: bring back the account's pets before choosing a screen.
-    val needsRestore = app.pack.isSignedIn && current.isEmpty() && !skippedSetup && !app.household.hasChecked
+    val needsRestore = loaded && app.pack.isSignedIn && current.isEmpty() && !skippedSetup && !app.household.hasChecked
     LaunchedEffect(needsRestore, attempt) {
         if (needsRestore) {
             restoreFailed = false
@@ -132,6 +132,7 @@ private fun RootView(app: OpawApplication) {
         }
     }
     val root = when {
+        !splashDone || !loaded -> Root.OPENING
         !app.pack.isSignedIn -> Root.SIGN_IN
         // Just signed in, or the account couldn't be reached: stay on sign-in (11b, 11d).
         needsRestore -> if (signInShown || restoreFailed) Root.SIGN_IN else Root.OPENING
@@ -148,7 +149,7 @@ private fun RootView(app: OpawApplication) {
         label = "root",
     ) { screen ->
         when (screen) {
-            Root.OPENING -> OpeningScreen()
+            Root.OPENING -> OpawSplash(onFinished = { splashDone = true })
             Root.SIGN_IN -> SignInScreen(
                 restoring = needsRestore && !restoreFailed,
                 restoreFailed = needsRestore && restoreFailed,
@@ -156,35 +157,6 @@ private fun RootView(app: OpawApplication) {
             )
             Root.ONBOARDING -> OnboardingFlow(app)
             Root.TABS -> MainTabs()
-        }
-    }
-}
-
-/** The app opening (11a): the Opaw paw on cream, shown only if loading takes over 300 ms. */
-@Composable
-private fun OpeningScreen() {
-    val shown = remember { Animatable(0f) }
-    LaunchedEffect(Unit) {
-        delay(300)
-        shown.animateTo(1f, tween(420, easing = CubicBezierEasing(0.34f, 1.56f, 0.64f, 1f)))
-    }
-    Box(Modifier.fillMaxSize().background(Opaw.colors.cream), contentAlignment = Alignment.Center) {
-        Column(
-            Modifier.offset(y = (-20).dp).graphicsLayer {
-                alpha = shown.value.coerceIn(0f, 1f)
-                val scale = 0.86f + 0.14f * shown.value
-                scaleX = scale
-                scaleY = scale
-            },
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            Image(
-                painterResource(R.drawable.opaw_logo),
-                contentDescription = "Opaw",
-                modifier = Modifier.size(112.dp).shadow(18.dp, RoundedCornerShape(30.dp)).clip(RoundedCornerShape(30.dp)),
-            )
-            Text("Opaw", style = opaw(30.sp, FontWeight.Black), color = Opaw.colors.ink)
         }
     }
 }

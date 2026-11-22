@@ -239,14 +239,14 @@ private fun SelectedItem(tab: AppTab) {
         Modifier
             .height(64.dp)
             .shadow(14.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.22f), spotColor = Color.Black.copy(alpha = 0.22f))
-            .background(colors.ink, RoundedCornerShape(50))
+            .background(colors.action, RoundedCornerShape(50))
             .padding(start = 20.dp, end = 24.dp)
             .animateContentSize(spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow)),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(tab.icon, size = 24.dp, tint = colors.onInk, cutoutColor = colors.ink)
+        Icon(tab.icon, size = 24.dp, tint = colors.onAction, cutoutColor = colors.action)
         Spacer(Modifier.width(10.dp))
-        Text(tab.title, style = opaw(16.sp, FontWeight.ExtraBold), color = colors.onInk, maxLines = 1)
+        Text(tab.title, style = opaw(16.sp, FontWeight.ExtraBold), color = colors.onAction, maxLines = 1)
     }
 }
 

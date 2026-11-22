@@ -107,6 +107,7 @@ import app.opaw.ui.care.rememberNow
 import app.opaw.ui.components.DesignIcon
 import app.opaw.ui.components.Hairline
 import app.opaw.ui.components.Icon
+import app.opaw.ui.components.Action
 import app.opaw.ui.components.Ink
 import app.opaw.ui.components.LoopMotion
 import app.opaw.ui.components.PetChip
@@ -216,7 +217,7 @@ private fun ActivityScreen(dogs: List<Dog>, data: DogData?, activity: WalkActivi
                         denied -> context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null)))
                         else -> ask.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
                     }
-                }.background(Ink, CircleShape),
+                }.background(Action, CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
@@ -283,7 +284,7 @@ fun GoalRing(progress: Double, value: String, caption: String, modifier: Modifie
             val inset = line / 2 + size.width * 4 / 120
             val arcSize = androidx.compose.ui.geometry.Size(size.width - 2 * inset, size.height - 2 * inset)
             drawArc(colors.hairline, 0f, 360f, false, Offset(inset, inset), arcSize, style = Stroke(line))
-            drawArc(colors.ink, -90f, 360f * shown, false, Offset(inset, inset), arcSize, style = Stroke(line, cap = StrokeCap.Round))
+            drawArc(colors.action, -90f, 360f * shown, false, Offset(inset, inset), arcSize, style = Stroke(line, cap = StrokeCap.Round))
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(value, style = opaw(26.sp, FontWeight.Black), color = colors.ink)
@@ -310,7 +311,7 @@ private fun BarsCard(data: DogData, modifier: Modifier) {
                 val empty = day.isAfter(today) || km == 0.0
                 Box(
                     Modifier.weight(1f).height(if (empty) 6.dp else maxOf(6.0, 100 * km / dayMax).dp)
-                        .background(if (isToday) colors.ink else if (empty) colors.track else Color(0xFFCFCFD2), RoundedCornerShape(8.dp)),
+                        .background(if (isToday) colors.action else if (empty) colors.track else Color(0xFFCFCFD2), RoundedCornerShape(8.dp)),
                 )
             }
         }
@@ -463,7 +464,7 @@ private fun PlayGlyph() {
             lineTo(size.width * 0.28f, size.height * 0.85f)
             close()
         }
-        drawPath(path, Ink)
+        drawPath(path, Action)
     }
 }
 
@@ -491,7 +492,7 @@ fun BoxScope.RouteMarkers(points: List<GeoPoint>, pins: List<WalkPin>, toScreen:
     points.firstOrNull()?.let { first ->
         place(first.latitude, first.longitude, 18)?.let { at ->
             // The white start circle with a thick black ring.
-            Box(Modifier.offset { at }.size(18.dp).background(Color.White, CircleShape).border(4.dp, Ink, CircleShape))
+            Box(Modifier.offset { at }.size(18.dp).background(Color.White, CircleShape).border(4.dp, Action, CircleShape))
         }
     }
     pins.forEach { pin ->
@@ -505,7 +506,7 @@ fun PinBadge(kind: String, modifier: Modifier = Modifier) {
     val isPoop = kind == CareKind.POOP.raw
     Box(
         modifier.size(34.dp).shadow(6.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.18f), spotColor = Color.Black.copy(alpha = 0.18f))
-            .background(if (isPoop) Ink else Color.White, CircleShape),
+            .background(if (isPoop) Action else Color.White, CircleShape),
         contentAlignment = Alignment.Center,
     ) { Icon(if (isPoop) DesignIcon.POOP else DesignIcon.PEE, size = 17.dp, tint = if (isPoop) Color.White else Ink) }
 }
@@ -531,7 +532,7 @@ private fun HoldToFinishButton(height: Int, modifier: Modifier, onTap: () -> Uni
             .scale(pressScale)
             .shadow(14.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.18f), spotColor = Color.Black.copy(alpha = 0.18f))
             .clip(CircleShape)
-            .background(Ink)
+            .background(Action)
             .onSizeChanged { width = it.width }
             .pointerInput(Unit) {
                 awaitEachGesture {
@@ -703,7 +704,7 @@ private fun WalkStory(
             ) {
                 if (isRecord) {
                     Row(
-                        Modifier.padding(bottom = 10.dp).background(Ink, CircleShape).padding(horizontal = 12.dp, vertical = 7.dp),
+                        Modifier.padding(bottom = 10.dp).background(Action, CircleShape).padding(horizontal = 12.dp, vertical = 7.dp),
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -778,7 +779,7 @@ private fun WeekProgress(data: DogData, extraKm: Double, modifier: Modifier) {
     val goal = maxOf(0.5, data.dog.traits.recommendedWeeklyKm)
     Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.weight(1f).height(10.dp).background(colors.track, CircleShape)) {
-            Box(Modifier.fillMaxWidth((total / goal).coerceIn(0.0, 1.0).toFloat()).height(10.dp).background(colors.ink, CircleShape))
+            Box(Modifier.fillMaxWidth((total / goal).coerceIn(0.0, 1.0).toFloat()).height(10.dp).background(colors.action, CircleShape))
         }
         Text("${oneDecimal.format(OpawFormat.longDistance(total))} / ${upToOne.format(OpawFormat.longDistance(goal))} ${OpawFormat.distanceUnit} this week",
             style = opaw(15.sp, FontWeight.Bold), color = colors.ink, maxLines = 1)

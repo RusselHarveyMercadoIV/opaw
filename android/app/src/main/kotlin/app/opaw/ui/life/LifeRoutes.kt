@@ -102,7 +102,7 @@ fun LifeRoute(dogId: String) {
         navigator.push(Route.LifePhotos(dogId))
     }
     if (meeting && model.isReady) {
-        LifeRevealScreen(dogId, dog.name, modifier, onBack = navigator::pop, onRetake = if (app.premium.isPremium) ::retake else null, onDone = navigator::pop)
+        LifeRevealScreen(dogId, dog.name, Modifier.fillMaxSize(), onBack = navigator::pop, onRetake = if (app.premium.isPremium) ::retake else null, doneTitle = "Back to ${dog.name}", onDone = navigator::pop)
     } else {
         LifeProgressScreen(
             dogId, dog.name, rememberPetImage(dog, 600), modifier,

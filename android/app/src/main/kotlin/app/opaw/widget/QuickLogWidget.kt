@@ -147,12 +147,12 @@ class CareScoreWidget : GlanceAppWidget() {
         val score = data?.careReport()?.score
         provideContent {
             Box(
-                GlanceModifier.fillMaxSize().background(ColorProvider(Color(0xFF111111))).cornerRadius(40.dp).clickable(actionStartActivity<MainActivity>()),
+                GlanceModifier.fillMaxSize().background(ColorProvider(Color(0xFFF2600C))).cornerRadius(40.dp).clickable(actionStartActivity<MainActivity>()),
                 contentAlignment = Alignment.Center,
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(score?.toString() ?: "–", style = TextStyle(color = white, fontSize = 26.sp, fontWeight = FontWeight.Bold))
-                    Text(data?.dog?.name ?: "Opaw", style = TextStyle(color = ColorProvider(Color(0xFFAAAAAA)), fontSize = 11.sp), maxLines = 1)
+                    Text(data?.dog?.name ?: "Opaw", style = TextStyle(color = ColorProvider(Color(0xFFFFE3D1)), fontSize = 11.sp), maxLines = 1)
                 }
             }
         }

@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -46,7 +47,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -65,6 +68,7 @@ import app.opaw.services.clipTitle
 import app.opaw.ui.components.BlackPillButton
 import app.opaw.ui.components.DesignIcon
 import app.opaw.ui.components.Icon
+import app.opaw.ui.components.Action
 import app.opaw.ui.components.Ink
 import app.opaw.ui.components.LoopMotion
 import app.opaw.ui.components.ProgressBar
@@ -75,6 +79,18 @@ import app.opaw.ui.components.loopMotion
 import app.opaw.ui.components.pressable
 import app.opaw.ui.components.rememberHaptics
 import app.opaw.ui.home.PetModel3D
+import app.opaw.ui.onboarding.OrangeButton
+import app.opaw.ui.onboarding.PlainPet
+import app.opaw.ui.onboarding.Setup
+import app.opaw.ui.onboarding.SetupChip
+import app.opaw.ui.onboarding.SetupFoot
+import app.opaw.ui.onboarding.SetupHeader
+import app.opaw.ui.onboarding.SetupLink
+import app.opaw.ui.onboarding.SetupTitle
+import app.opaw.ui.onboarding.Tick
+import app.opaw.ui.onboarding.breathe
+import app.opaw.ui.onboarding.popIn
+import app.opaw.ui.onboarding.spinning
 import app.opaw.ui.rememberApp
 import app.opaw.ui.theme.Opaw
 import app.opaw.ui.theme.opaw
@@ -158,7 +174,7 @@ fun LifeProgressScreen(
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Box(Modifier.padding(top = 14.dp).size(300.dp, 220.dp), contentAlignment = Alignment.Center) {
-                Ring(fraction, 8.dp, colors.track, colors.ink, Modifier.size(180.dp))
+                Ring(fraction, 8.dp, colors.track, colors.action, Modifier.size(180.dp))
                 // The pet sharpens as the job goes on.
                 StickerPet(
                     image,
@@ -176,7 +192,7 @@ fun LifeProgressScreen(
                             contentScale = ContentScale.Fit,
                         )
                         if (state.progress >= LifeStep.CUTOUT.from) {
-                            Box(Modifier.align(Alignment.BottomEnd).offset(4.dp, 4.dp).size(20.dp).background(Ink, CircleShape).border(2.dp, Color.White, CircleShape), contentAlignment = Alignment.Center) {
+                            Box(Modifier.align(Alignment.BottomEnd).offset(4.dp, 4.dp).size(20.dp).background(Action, CircleShape).border(2.dp, Color.White, CircleShape), contentAlignment = Alignment.Center) {
                                 Icon(DesignIcon.CHECK, size = 9.dp, tint = Color.White)
                             }
                         }
@@ -222,9 +238,9 @@ fun LifeProgressScreen(
 }
 
 /**
- * The pet drawn in the app's game-art style, for the owner to check before the 3D model is made.
- * Saying yes builds it in 3D from this picture; trying again redraws only the picture, which costs
- * a fraction of a whole model.
+ * The quick check (10e): the pet drawn in the app's game-art style, on a round stage that gently
+ * breathes, with the three things to check popping in one by one. Saying yes builds it in 3D
+ * from this picture; drawing again redraws only the picture, which costs a fraction of a model.
  */
 @Composable
 private fun LifeReview(dogId: String, name: String, modifier: Modifier, onLeave: () -> Unit, onRetake: (() -> Unit)?) {
@@ -236,54 +252,52 @@ private fun LifeReview(dogId: String, name: String, modifier: Modifier, onLeave:
         value = withContext(Dispatchers.IO) { runCatching { BitmapFactory.decodeFile(app.petModels.sheetFile(dogId).path) }.getOrNull() }
     }
     Column(modifier) {
-        Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 10.dp)) {
-            RoundIcon(DesignIcon.BACK, onClick = onLeave)
-            Text("Quick check", style = opaw(14.sp, FontWeight.ExtraBold), color = colors.muted, modifier = Modifier.align(Alignment.Center))
-        }
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                "Does this look like $name?",
-                style = opaw(30.sp, FontWeight.Black).copy(lineHeight = 34.sp), color = colors.ink, textAlign = TextAlign.Center,
-                modifier = Modifier.padding(horizontal = 24.dp).padding(top = 18.dp),
-            )
-            Text(
-                "Here's $name as a game character. The 3D $name is built from this picture, so check the face, coat, markings and shape.",
-                style = opaw(15.sp, FontWeight.Medium).copy(lineHeight = 20.sp), color = colors.muted, textAlign = TextAlign.Center,
-                modifier = Modifier.padding(horizontal = 28.dp).padding(top = 8.dp),
-            )
-            Box(
-                Modifier.padding(horizontal = 20.dp).padding(top = 20.dp).fillMaxWidth().height(340.dp).whiteCard(26.dp).clip(RoundedCornerShape(26.dp)),
-                contentAlignment = Alignment.Center,
-            ) {
-                val image = sheet
-                if (image != null) {
-                    Image(remember(image) { image.asImageBitmap() }, "$name, drawn as a game character", Modifier.fillMaxSize().padding(10.dp), contentScale = ContentScale.Fit)
-                } else {
-                    androidx.compose.material3.CircularProgressIndicator(Modifier.size(28.dp), color = colors.ink, strokeWidth = 3.dp)
+        Spacer(Modifier.height(8.dp))
+        SetupHeader(4, 4, "Quick check", onBack = onLeave)
+        Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(280.dp)) {
+                // The drawing comes on white, so it sits on a white stage inside a grey ring.
+                Box(Modifier.fillMaxSize().background(Setup.fill, CircleShape).padding(10.dp).background(Color.White, CircleShape), contentAlignment = Alignment.Center) {
+                    val image = sheet
+                    if (image != null) {
+                        Image(
+                            remember(image) { image.asImageBitmap() }, "$name, drawn as a game character",
+                            Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 40.dp).breathe(3000), contentScale = ContentScale.Fit,
+                        )
+                    } else {
+                        androidx.compose.material3.CircularProgressIndicator(Modifier.size(28.dp), color = colors.action, strokeWidth = 3.dp)
+                    }
                 }
-            }
-            if (state.error != null) {
-                Text(state.error, style = opaw(14.sp, FontWeight.Bold), color = colors.alert, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 28.dp).padding(top = 12.dp))
-            }
-            // What to look for, so the check is quick.
-            Column(Modifier.fillMaxWidth().padding(horizontal = 28.dp).padding(top = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                for (point in listOf("Face, coat colour and markings", "Ears, tail and legs", "Body shape and size")) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(22.dp).border(2.dp, colors.ink, CircleShape), contentAlignment = Alignment.Center) {
-                            Icon(DesignIcon.CHECK, size = 11.dp, tint = colors.ink)
-                        }
-                        Text(point, style = opaw(14.sp, FontWeight.Bold), color = colors.ink)
+                SetupChip("Our drawing", Modifier.align(Alignment.TopCenter).offset(y = (-18).dp)) {
+                    Icon(DesignIcon.SPARKLE, size = 16.dp, weight = 2.4f, tint = Action)
+                }
+                if (sheet != null) {
+                    val checks = listOf(
+                        Triple("Ears and tail", Alignment.TopEnd, Offset(36f, 96f)),
+                        Triple("Coat and markings", Alignment.BottomStart, Offset(-28f, -10f)),
+                        Triple("Body shape", Alignment.BottomEnd, Offset(24f, 30f)),
+                    )
+                    checks.forEachIndexed { i, (text, spot, shift) ->
+                        SetupChip(text, Modifier.align(spot).offset(shift.x.dp, shift.y.dp).popIn(3000, i * 0.083f)) { Tick(20.dp) }
                     }
                 }
             }
         }
-        Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            BlackPillButton("Yes, that's $name", enabled = sheet != null) { haptics.medium(); app.petModels.approve(dogId) }
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (onRetake != null) BlackPillButton("New photos", Modifier.weight(1f), inverted = true, onClick = onRetake)
-                BlackPillButton(
+        SetupTitle(
+            "Does this look right?",
+            "We drew $name from the photos. A quick yes before we build in 3D, so it comes out the right shape.",
+        )
+        if (state.error != null) {
+            Text(state.error, style = opaw(14.sp, FontWeight.Bold), color = colors.alert, modifier = Modifier.padding(horizontal = 26.dp).padding(top = 10.dp))
+        }
+        Spacer(Modifier.height(18.dp))
+        SetupFoot {
+            OrangeButton("Yes, that's my pet", enabled = sheet != null) { haptics.medium(); app.petModels.approve(dogId) }
+            Row(horizontalArrangement = Arrangement.spacedBy(22.dp)) {
+                if (onRetake != null) SetupLink("New photos", onClick = onRetake)
+                SetupLink(
                     if (state.drawsLeft > 0) "Draw again · ${state.drawsLeft} left" else "No tries left",
-                    Modifier.weight(1f), inverted = true, enabled = state.drawsLeft > 0,
+                    enabled = state.drawsLeft > 0,
                 ) { haptics.select(); app.petModels.redraw(dogId) }
             }
         }
@@ -299,15 +313,15 @@ private fun Checkpoint(step: LifeStep, state: PetModelState, first: Boolean, las
     val pulse by rememberInfiniteTransition(label = "dot").animateFloat(0.45f, 1f, infiniteRepeatable(tween(700), RepeatMode.Reverse), label = "pulse")
     Row(Modifier.fillMaxWidth().height(if (active) 96.dp else 52.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
         Column(Modifier.width(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(Modifier.width(2.dp).height(14.dp).background(if (first) Color.Transparent else if (done || active) Ink else colors.track))
+            Box(Modifier.width(2.dp).height(14.dp).background(if (first) Color.Transparent else if (done || active) Action else colors.track))
             Box(
-                Modifier.size(24.dp).background(if (done) Ink else colors.surface, CircleShape).border(2.dp, if (done || active) Ink else colors.track, CircleShape),
+                Modifier.size(24.dp).background(if (done) Action else colors.surface, CircleShape).border(2.dp, if (done || active) Action else colors.track, CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
                 if (done) Icon(DesignIcon.CHECK, size = 11.dp, tint = Color.White)
-                if (active) Box(Modifier.size(10.dp).alpha(pulse).background(Ink, CircleShape))
+                if (active) Box(Modifier.size(10.dp).alpha(pulse).background(Action, CircleShape))
             }
-            Box(Modifier.width(2.dp).weight(1f).background(if (last) Color.Transparent else if (done) Ink else colors.track))
+            Box(Modifier.width(2.dp).weight(1f).background(if (last) Color.Transparent else if (done) Action else colors.track))
         }
         Column(Modifier.weight(1f).padding(top = 14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -322,7 +336,7 @@ private fun Checkpoint(step: LifeStep, state: PetModelState, first: Boolean, las
                             val made = state.stepFraction >= (index + 1) / 3f
                             Text(
                                 clipTitle(clip), style = opaw(12.sp, FontWeight.ExtraBold), color = if (made) Color.White else colors.ink,
-                                modifier = Modifier.background(if (made) Ink else colors.chip, CircleShape).padding(horizontal = 10.dp, vertical = 4.dp),
+                                modifier = Modifier.background(if (made) Action else colors.chip, CircleShape).padding(horizontal = 10.dp, vertical = 4.dp),
                             )
                         }
                     }
@@ -336,9 +350,10 @@ private fun Checkpoint(step: LifeStep, state: PetModelState, first: Boolean, las
 }
 
 /**
- * The toast at the top while a pet comes to life (9a): black, with the pet inside a ring that
- * fills as the job goes on. Tap it for the progress screen, or to meet the pet once it's ready.
- * Swipe it up to put it away, where [onDismiss] is given.
+ * The bar at the top while a pet comes to life (10f, 10h): the brand orange, with a spinner, a
+ * bar that fills and the percent while it works, then the pet's face and "Miso is ready in 3D".
+ * Tap it for the progress screen, or to meet the pet once it's ready. Swipe it up to put it
+ * away, where [onDismiss] is given.
  */
 @Composable
 fun LifeToast(name: String, state: PetModelState, image: Bitmap?, modifier: Modifier = Modifier, onDismiss: (() -> Unit)? = null, onTap: () -> Unit) {
@@ -349,6 +364,7 @@ fun LifeToast(name: String, state: PetModelState, image: Bitmap?, modifier: Modi
         wasReady = state.isReady
     }
     var drag by remember { mutableFloatStateOf(0f) }
+    val shape = RoundedCornerShape(22.dp)
     Row(
         modifier
             .fillMaxWidth()
@@ -361,53 +377,65 @@ fun LifeToast(name: String, state: PetModelState, image: Bitmap?, modifier: Modi
                 )
             }
             .pressable(onClick = onTap)
-            .shadow(18.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.25f), spotColor = Color.Black.copy(alpha = 0.25f))
-            .background(Ink, CircleShape)
-            .padding(start = 8.dp, end = 20.dp, top = 8.dp, bottom = 8.dp),
+            .shadow(16.dp, shape, ambientColor = Action.copy(alpha = 0.3f), spotColor = Action.copy(alpha = 0.3f))
+            .background(Brush.horizontalGradient(listOf(Setup.glowTop, Setup.glowBottom)), shape)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(52.dp), contentAlignment = Alignment.Center) {
-            Box(Modifier.size(42.dp).clip(CircleShape).background(Color.White), contentAlignment = Alignment.Center) {
-                if (image != null) {
-                    Image(remember(image) { image.asImageBitmap() }, null, Modifier.fillMaxSize().padding(5.dp).loopMotion(LoopMotion.BOB, 0.9), contentScale = ContentScale.Fit)
-                } else {
-                    Icon(DesignIcon.PAW, size = 20.dp, tint = Ink)
-                }
+        if (state.isReady || state.isReviewing) {
+            Box(Modifier.size(44.dp).background(Color.White, CircleShape), contentAlignment = Alignment.Center) {
+                PlainPet(image, Modifier.size(32.dp))
             }
-            Ring(if (state.isReady) 1f else state.progress / 100f, 3.dp, Color.White.copy(alpha = 0.2f), Color.White, Modifier.fillMaxSize())
-            if (state.isReady) {
-                Box(Modifier.align(Alignment.BottomEnd).size(18.dp).background(Color.White, CircleShape), contentAlignment = Alignment.Center) {
-                    Icon(DesignIcon.CHECK, size = 9.dp, tint = Ink)
+        } else {
+            Box(Modifier.size(40.dp).background(Color.White.copy(alpha = 0.25f), CircleShape), contentAlignment = Alignment.Center) {
+                if (state.isFailed) {
+                    Icon(DesignIcon.ALERT, size = 20.dp, tint = Color.White)
+                } else {
+                    Box(Modifier.size(24.dp).spinning(1000)) { Ring(0.25f, 3.5.dp, Color.White.copy(alpha = 0.4f), Color.White, Modifier.fillMaxSize()) }
                 }
             }
         }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             Text(
                 when {
-                    state.isReady -> "$name is ready"
+                    state.isReady -> "$name is ready in 3D"
                     state.isFailed -> "$name couldn't come to life"
                     state.isReviewing -> "Does this look like $name?"
-                    else -> "Bringing $name to life"
+                    else -> "Building $name in 3D"
                 },
-                style = opaw(16.sp, FontWeight.ExtraBold), color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                style = opaw(15.sp, FontWeight.ExtraBold), color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
-            Text(
-                when {
-                    state.isReady -> "Avatar and motion clips · tap to meet"
-                    state.isFailed -> "Tap to see why"
-                    else -> state.summary
-                },
-                style = opaw(13.sp, FontWeight.Medium), color = Color(0xFFAAAAAA), maxLines = 1, overflow = TextOverflow.Ellipsis,
-            )
+            if (state.isWorking) {
+                val shown by animateFloatAsState(state.progress / 100f, tween(900), label = "bar")
+                Box(Modifier.fillMaxWidth().height(6.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.3f))) {
+                    Box(Modifier.fillMaxWidth(shown.coerceIn(0.04f, 1f)).height(6.dp).background(Color.White, CircleShape))
+                }
+            } else {
+                Text(
+                    when {
+                        state.isReady -> "Tap to meet $name"
+                        state.isFailed -> "Tap to see why"
+                        state.isReviewing -> "Tap to check the drawing"
+                        else -> state.summary
+                    },
+                    style = opaw(12.sp, FontWeight.Bold), color = Color(0xFFFFE3D1), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
-        Icon(DesignIcon.CHEVRON_RIGHT, size = 16.dp, tint = Color.White)
+        if (state.isWorking) {
+            Text("${state.progress}%", style = opaw(14.sp, FontWeight.Black), color = Color.White)
+        } else {
+            Icon(DesignIcon.CHEVRON_RIGHT, size = 18.dp, weight = 3f, tint = Color.White)
+        }
     }
 }
 
 /**
- * The reveal (9a): the pet in 3D, spinnable, with a button for each motion clip that came back.
- * Opening it counts as meeting the pet, so the "ready" toast goes.
+ * Meet the pet (10k): the payoff screen goes full brand orange, like the welcome. Rays turn
+ * slowly, confetti falls, and the pet stands in 3D on a white disc: drag to spin it, or tap a
+ * clip to play it. Opening it counts as meeting the pet, so the "ready" toast goes. Draws its
+ * own background edge to edge, so [modifier] should carry no padding.
  */
 @Composable
 fun LifeRevealScreen(
@@ -415,75 +443,128 @@ fun LifeRevealScreen(
     name: String,
     modifier: Modifier = Modifier,
     onBack: () -> Unit,
-    /** Start over with new photos; null where that isn't offered. */
+    /** Start over with new photos ("Change the look"); null where that isn't offered. */
     onRetake: (() -> Unit)? = null,
     /** How it will play on Home, such as "Playful, so expect zoomies on Home." */
     note: String? = null,
+    /** The main button; "Take Miso home" unless given. */
+    doneTitle: String? = null,
     onDone: () -> Unit,
 ) {
     val app = rememberApp()
-    val colors = Opaw.colors
     val haptics = rememberHaptics()
     val clips = app.petModels.clips(dogId)
-    val photos = app.petModels.state(dogId).photos.size
     var clip by remember { mutableStateOf("rest") }
     LaunchedEffect(dogId) { app.petModels.markSeen(dogId) }
 
-    Column(modifier) {
-        Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 10.dp)) {
-            RoundIcon(DesignIcon.BACK, onClick = onBack)
-            Box(Modifier.align(Alignment.Center)) { SparkleChip("$name in 3D") }
-        }
-        Box(Modifier.fillMaxWidth().weight(1f).padding(horizontal = 20.dp).padding(top = 8.dp), contentAlignment = Alignment.Center) {
-            // A soft disc for the pet to stand on.
-            Box(
-                Modifier.align(Alignment.BottomCenter).padding(bottom = 30.dp).fillMaxWidth(0.78f).height(46.dp)
-                    .background(androidx.compose.ui.graphics.Brush.radialGradient(listOf(Color.Black.copy(alpha = 0.1f), Color.Transparent)), CircleShape),
-            )
-            app.petModels.clip(dogId, clip)?.let { file ->
-                val motion = app.petModels.motion(dogId, clip)
-                PetModel3D(file, Modifier.fillMaxSize(), interactive = true, breathe = motion == null && file.nameWithoutExtension == "rest", motion = motion)
-            }
-            Row(
-                Modifier.align(Alignment.BottomCenter).padding(bottom = 4.dp)
-                    .shadow(8.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.06f), spotColor = Color.Black.copy(alpha = 0.06f))
-                    .background(colors.surface, CircleShape).padding(horizontal = 14.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(DesignIcon.REFRESH, size = 14.dp, tint = colors.ink)
-                Text("Drag to spin", style = opaw(13.sp, FontWeight.ExtraBold), color = colors.ink)
-            }
-        }
-        Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("Say hi to $name", style = opaw(30.sp, FontWeight.Black), color = colors.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(
-                (if (photos > 0) "Made from your $photos photos. " else "") + (note ?: "Tap a clip to play it."),
-                style = opaw(15.sp, FontWeight.Medium), color = colors.muted, textAlign = TextAlign.Center,
-            )
-        }
-        Row(Modifier.padding(horizontal = 20.dp).padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            for (option in clips) {
-                val on = option == clip
+    Box(modifier.background(Brush.verticalGradient(listOf(Setup.glowTop, Setup.glowBottom)))) {
+        Confetti(Modifier.fillMaxSize())
+        Column(Modifier.fillMaxSize().safeDrawingPadding()) {
+            Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 10.dp)) {
                 Box(
-                    Modifier
-                        .weight(1f)
-                        .height(56.dp)
-                        .pressable { haptics.select(); clip = option }
-                        .then(if (on) Modifier.background(Ink, RoundedCornerShape(20.dp)) else Modifier.whiteCard(20.dp)),
+                    Modifier.size(44.dp).pressable(onClick = onBack).background(Color.White.copy(alpha = 0.22f), CircleShape),
                     contentAlignment = Alignment.Center,
-                ) { Text(clipTitle(option), style = opaw(16.sp, FontWeight.ExtraBold), color = if (on) Color.White else colors.ink) }
+                ) { Icon(DesignIcon.BACK, size = 20.dp, tint = Color.White) }
+                SetupChip("$name is ready in 3D", Modifier.align(Alignment.Center), color = Setup.deep) {
+                    Icon(DesignIcon.SPARKLE, size = 16.dp, weight = 2.4f, tint = Action)
+                }
+            }
+            Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                Rays(Modifier.size(400.dp).spinning(24000))
+                Box(Modifier.size(280.dp).background(Color.White.copy(alpha = 0.95f), CircleShape))
+                Box(Modifier.align(Alignment.Center).offset(y = 130.dp).size(180.dp, 30.dp).background(Color(0xFFFFE3CF), CircleShape))
+                app.petModels.clip(dogId, clip)?.let { file ->
+                    val motion = app.petModels.motion(dogId, clip)
+                    PetModel3D(file, Modifier.size(320.dp), interactive = true, breathe = motion == null && file.nameWithoutExtension == "rest", motion = motion)
+                }
+                SetupChip(
+                    "Drag to spin", Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp),
+                    background = Color.Black.copy(alpha = 0.25f), color = Color.White, flat = true,
+                ) { Icon(DesignIcon.REFRESH, size = 16.dp, tint = Color.White) }
+            }
+            if (clips.size > 1) {
+                Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
+                    for (option in clips) {
+                        val on = option == clip
+                        Text(
+                            clipTitle(option),
+                            style = opaw(14.sp, FontWeight.ExtraBold), color = if (on) Action else Color.White,
+                            modifier = Modifier
+                                .pressable { haptics.select(); clip = option }
+                                .background(if (on) Color.White else Color.White.copy(alpha = 0.2f), CircleShape)
+                                .padding(horizontal = 16.dp, vertical = 9.dp),
+                        )
+                    }
+                }
+            }
+            SetupTitle(
+                "Meet $name!",
+                note ?: "Every walk, meal and cuddle you log, $name feels it. Their room is ready.",
+                Modifier.padding(top = 18.dp), center = true, onOrange = true,
+            )
+            Spacer(Modifier.height(18.dp))
+            SetupFoot {
+                OrangeButton(doneTitle ?: "Take $name home", white = true, onClick = onDone)
+                if (onRetake != null) SetupLink("Change the look", color = Color.White, onClick = onRetake)
             }
         }
-        Spacer(Modifier.height(20.dp))
-        Row(Modifier.padding(horizontal = 20.dp).padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            if (onRetake != null) {
-                Box(
-                    Modifier.size(64.dp).pressable(onClick = onRetake).shadow(10.dp, CircleShape).background(Color.White, CircleShape),
-                    contentAlignment = Alignment.Center,
-                ) { Icon(DesignIcon.REFRESH, size = 22.dp, tint = Ink) }
+    }
+}
+
+/** Twelve soft white rays from the middle, for the reveal. */
+@Composable
+private fun Rays(modifier: Modifier) {
+    Canvas(modifier) {
+        val c = Offset(size.width / 2, size.height / 2)
+        val r = size.minDimension / 2
+        for (i in 0 until 12) {
+            rotate(i * 30f, c) {
+                val path = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(c.x, c.y); lineTo(c.x - r * 0.12f, c.y - r); lineTo(c.x + r * 0.12f, c.y - r); close()
+                }
+                drawPath(path, Color.White.copy(alpha = 0.12f))
             }
-            BlackPillButton("Looks like $name", Modifier.weight(1f), onClick = onDone)
+        }
+    }
+}
+
+private class Piece(val x: Float, val millis: Int, val delay: Float, val size: Float, val round: Boolean, val color: Color)
+
+/** Confetti falling from the top, each piece on its own loop. */
+@Composable
+private fun Confetti(modifier: Modifier) {
+    val pieces = remember {
+        listOf(
+            Piece(0.10f, 3200, 0f, 10f, false, Color.White), Piece(0.25f, 2800, 0.28f, 8f, true, Color(0xFFFFE3CF)),
+            Piece(0.44f, 3600, 0.08f, 12f, false, Color(0xFFFFD36B)), Piece(0.62f, 3000, 0.46f, 9f, true, Color.White),
+            Piece(0.77f, 3400, 0.18f, 11f, false, Color(0xFFFFE3CF)), Piece(0.87f, 2600, 0.73f, 8f, true, Color(0xFFFFD36B)),
+            Piece(0.33f, 3800, 0.58f, 10f, false, Color.White), Piece(0.69f, 2900, 0.9f, 9f, false, Color(0xFFFFD36B)),
+        )
+    }
+    val t by rememberInfiniteTransition(label = "confetti").animateFloat(
+        0f, 1f, infiniteRepeatable(tween(11400, easing = androidx.compose.animation.core.LinearEasing), RepeatMode.Restart), label = "t",
+    )
+    Canvas(modifier) {
+        for (p in pieces) {
+            // Each piece's own clock, from the shared one.
+            val local = ((t * 11400f / p.millis) + p.delay) % 1f
+            val y = -40.dp.toPx() + local * (size.height * 0.75f)
+            val alpha = when {
+                local < 0.1f -> local / 0.1f
+                else -> 1f - (local - 0.1f) / 0.9f
+            }
+            val side = p.size.dp.toPx()
+            val center = Offset(p.x * size.width, y)
+            rotate(320f * local, center) {
+                if (p.round) {
+                    drawCircle(p.color.copy(alpha = alpha), side / 2, center)
+                } else {
+                    drawRoundRect(
+                        p.color.copy(alpha = alpha), Offset(center.x - side / 2, center.y - side / 2), Size(side, side),
+                        androidx.compose.ui.geometry.CornerRadius(3.dp.toPx()),
+                    )
+                }
+            }
         }
     }
 }

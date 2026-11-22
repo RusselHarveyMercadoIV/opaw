@@ -1,12 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Compose draws everything; this only sets the window before the first frame. -->
+    <!-- Compose draws everything; this only sets the window before the first frame. It is the
+         brand orange so a cold start opens orange and the animated opening (OpawSplash) pulls it in. -->
     <style name="Theme.Opaw" parent="android:Theme.Material.Light.NoActionBar">
-        <item name="android:windowBackground">@color/opaw_cream</item>
+        <item name="android:windowBackground">@color/opaw_orange</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
     </style>
 
     <color name="opaw_cream">#F4F4F5</color>
     <color name="opaw_ink">#111111</color>
+    <color name="opaw_orange">#FF7A1A</color>
 </resources>

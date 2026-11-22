@@ -160,13 +160,13 @@ struct FloatingTabBar: View {
                     .font(.opaw(16, .heavy))
                     .lineLimit(1)
             }
-            .foregroundStyle(Color.opawOnInk)
+            .foregroundStyle(Color.opawOnAction)
             .padding(.leading, 20)
             .padding(.trailing, 24)
             .frame(height: 64)
             .background {
                 Capsule()
-                    .fill(Color.opawInk)
+                    .fill(Color.opawAction)
                     .matchedGeometryEffect(id: "pill", in: pill)
             }
             .shadow(color: .black.opacity(0.22), radius: 14, y: 14)

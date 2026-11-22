@@ -79,6 +79,7 @@ import app.opaw.ui.components.DesignToggle
 import app.opaw.ui.components.FilterPill
 import app.opaw.ui.components.Hairline
 import app.opaw.ui.components.Icon
+import app.opaw.ui.components.Action
 import app.opaw.ui.components.Ink
 import app.opaw.ui.components.LoopMotion
 import app.opaw.ui.components.RoundIcon
@@ -414,7 +415,7 @@ private fun DogCard(dog: PackDog, posts: List<PackPost>, isFriend: Boolean, walk
             Box(Modifier.weight(1f).height(58.dp).pressable(onClick = onProfile).background(Color(0xFFF1F1F2), CircleShape), contentAlignment = Alignment.Center) {
                 Text("View profile", style = opaw(16.sp, FontWeight.Bold), color = Color(0xFF777777))
             }
-            Box(Modifier.weight(1f).height(58.dp).pressable(onClick = onWave).background(Ink, CircleShape), contentAlignment = Alignment.Center) {
+            Box(Modifier.weight(1f).height(58.dp).pressable(onClick = onWave).background(Action, CircleShape), contentAlignment = Alignment.Center) {
                 Text(if (isFriend) "Friends ✓" else "Wave hello", style = opaw(16.sp, FontWeight.Bold), color = Color.White)
             }
         }
