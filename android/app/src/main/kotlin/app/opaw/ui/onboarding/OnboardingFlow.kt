@@ -138,6 +138,7 @@ import app.opaw.ui.profile.SetupHousehold
 import app.opaw.ui.theme.Opaw
 import app.opaw.ui.theme.opaw
 import app.opaw.ui.theme.whiteCard
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
@@ -187,6 +188,19 @@ fun OnboardingFlow(app: OpawApplication) {
     val capture = remember(front) {
         CaptureResult(front?.photo, front?.cutout, front?.scan?.guess, front?.scan?.segmentation, front?.scan?.issues)
     }
+    // What to track starts from what Opaw was asked to help with before sign-in (14f).
+    LaunchedEffect(Unit) {
+        val focus = app.settings.careFocus.first()
+        if (focus.isEmpty()) return@LaunchedEffect
+        val kinds = buildList {
+            if ("meals" in focus) add(CareKind.MEAL.raw)
+            if ("water" in focus) addAll(listOf(CareKind.WATER.raw, CareKind.PEE.raw, CareKind.POOP.raw))
+            if ("walks" in focus) add(app.opaw.ui.care.TrackOption.WALK_KEY)
+            if ("meds" in focus) addAll(listOf(CareKind.MEDS.raw, CareKind.VET.raw))
+            add(CareKind.WEIGHT.raw)
+        }
+        draft = draft.copy(trackedKinds = kinds)
+    }
     LaunchedEffect(front?.scan) {
         val scan = front?.scan ?: return@LaunchedEffect
         foundDog = scan.hasDog || scan.guess != null
@@ -217,6 +231,7 @@ fun OnboardingFlow(app: OpawApplication) {
         saving = true
         scope.launch {
             draft.save(context, capture.original, capture.cutout)
+            app.settings.setAddingPet(false)
             haptics.success()
         }
     }
@@ -261,7 +276,7 @@ fun OnboardingFlow(app: OpawApplication) {
                     header = {
                         SetupHeader(
                             photos.good, LifeAngle.entries.size, null,
-                            onBack = if (model.isStarted) null else ({ scope.launch { app.settings.setOnboardingSkipped(true) } }),
+                            onBack = if (model.isStarted) null else ({ scope.launch { app.settings.setAddingPet(false) } }),
                             right = if (model.isStarted) null else ({ HeaderPill("Join with a code") { showJoin = true } }),
                         )
                     },

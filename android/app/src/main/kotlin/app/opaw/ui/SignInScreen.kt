@@ -171,7 +171,7 @@ fun SignInScreen(restoring: Boolean = false, restoreFailed: Boolean = false, onR
 }
 
 /** The design's message, plus Google's or Supabase's own reason in test builds, to find setup problems. */
-private fun failureText(reason: String): String {
+internal fun failureText(reason: String): String {
     val base = "Couldn't sign in with Google. Check your connection and try again."
     return if (BuildConfig.DEBUG && reason.isNotBlank()) "$base\n\n${reason.take(300)}" else base
 }
@@ -208,7 +208,7 @@ private fun GoogleButton(label: String, signing: Boolean, enabled: Boolean, onCl
  * Shows Google's account sheet and returns its ID token, with the raw nonce whose SHA-256 is
  * baked into the token. Supabase checks the two match, so a stolen token can't be replayed.
  */
-private suspend fun googleIdToken(context: Context): Pair<String, String> {
+internal suspend fun googleIdToken(context: Context): Pair<String, String> {
     val rawNonce = ByteArray(32).also { SecureRandom().nextBytes(it) }.joinToString("") { "%02x".format(it) }
     val hashedNonce = MessageDigest.getInstance("SHA-256").digest(rawNonce.toByteArray()).joinToString("") { "%02x".format(it) }
     val option = GetSignInWithGoogleOption.Builder(BuildConfig.GOOGLE_WEB_CLIENT_ID)

@@ -66,6 +66,7 @@ import app.opaw.ui.home.HomeScreen
 import app.opaw.ui.life.LifeRoute
 import app.opaw.ui.life.LifePhotosRoute
 import app.opaw.ui.life.LifeToastHost
+import app.opaw.ui.welcome.ClaimAfterSignIn
 import app.opaw.ui.memories.MemoriesScreen
 import app.opaw.ui.memories.MemoryDetailScreen
 import app.opaw.ui.profile.ChallengesScreen
@@ -140,6 +141,7 @@ fun MainTabs() {
             ToastHost(bottom = if (showsTabBar) 100.dp else 40.dp)
             ToastWatcher()
             LifeToastHost()
+            ClaimAfterSignIn()
         }
     }
     LaunchedEffect(app.toasts.showChallenges) {

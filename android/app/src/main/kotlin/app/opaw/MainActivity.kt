@@ -60,7 +60,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.opaw.services.CrashLog
 import app.opaw.ui.MainTabs
 import app.opaw.ui.OpawSplash
-import app.opaw.ui.SignInScreen
+import app.opaw.ui.welcome.WelcomeFlow
 import app.opaw.ui.onboarding.OnboardingFlow
 import app.opaw.ui.theme.Opaw
 import app.opaw.ui.theme.OpawTheme
@@ -113,7 +113,7 @@ private enum class Root { OPENING, SIGN_IN, ONBOARDING, TABS }
 @Composable
 private fun RootView(app: OpawApplication) {
     val dogs by app.database.dogs().observeAll().collectAsStateWithLifecycle(initialValue = null)
-    val skipped by app.settings.onboardingSkipped.collectAsStateWithLifecycle(initialValue = null)
+    val adding by app.settings.addingPet.collectAsStateWithLifecycle(initialValue = null)
     var signInShown by rememberSaveable { mutableStateOf(false) }
     var restoreFailed by remember { mutableStateOf(false) }
     var attempt by remember { mutableIntStateOf(0) }
@@ -121,10 +121,9 @@ private fun RootView(app: OpawApplication) {
     var splashDone by rememberSaveable { mutableStateOf(false) }
     // Wait for the first read so onboarding doesn't flash for returning users.
     val current = dogs.orEmpty()
-    val loaded = dogs != null && skipped != null
-    val skippedSetup = skipped == true
+    val loaded = dogs != null && adding != null
     // Signed in with no pets here: bring back the account's pets before choosing a screen.
-    val needsRestore = loaded && app.pack.isSignedIn && current.isEmpty() && !skippedSetup && !app.household.hasChecked
+    val needsRestore = loaded && app.pack.isSignedIn && current.isEmpty() && adding != true && !app.household.hasChecked
     LaunchedEffect(needsRestore, attempt) {
         if (needsRestore) {
             restoreFailed = false
@@ -136,7 +135,8 @@ private fun RootView(app: OpawApplication) {
         !app.pack.isSignedIn -> Root.SIGN_IN
         // Just signed in, or the account couldn't be reached: stay on sign-in (11b, 11d).
         needsRestore -> if (signInShown || restoreFailed) Root.SIGN_IN else Root.OPENING
-        current.isEmpty() && !skippedSetup -> Root.ONBOARDING
+        // A new account lands on Home's empty room (14k); "Add your first pet" opens the photos.
+        current.isEmpty() && adding == true -> Root.ONBOARDING
         else -> Root.TABS
     }
     LaunchedEffect(root) { if (root == Root.SIGN_IN) signInShown = true }
@@ -150,7 +150,7 @@ private fun RootView(app: OpawApplication) {
     ) { screen ->
         when (screen) {
             Root.OPENING -> OpawSplash(onFinished = { splashDone = true })
-            Root.SIGN_IN -> SignInScreen(
+            Root.SIGN_IN -> WelcomeFlow(
                 restoring = needsRestore && !restoreFailed,
                 restoreFailed = needsRestore && restoreFailed,
                 onRetry = { attempt++ },

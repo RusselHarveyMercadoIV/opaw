@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
@@ -47,6 +48,11 @@ class OpawSettings(context: Context) {
         val household = stringPreferencesKey("householdMembers")
         val premiumOfferShown = booleanPreferencesKey("premiumOfferShown")
         val onboardingSkipped = booleanPreferencesKey("onboardingSkipped")
+        val addingPet = booleanPreferencesKey("addingPet")
+        val welcomeOfferEnds = longPreferencesKey("welcomeOfferEnds")
+        val claimAfterSignIn = booleanPreferencesKey("claimAfterSignIn")
+        val careFocus = stringSetPreferencesKey("careFocus")
+        val careHelpers = stringPreferencesKey("careHelpers")
         val scheduledReminders = stringSetPreferencesKey("scheduledReminders")
         fun newestBadge(dogId: String) = stringPreferencesKey("newestBadge.$dogId")
     }
@@ -73,6 +79,26 @@ class OpawSettings(context: Context) {
     /** The owner skipped adding a first pet during setup; the app opens on Home's "Add a pet" instead. */
     val onboardingSkipped: Flow<Boolean> = store.data.map { it[Keys.onboardingSkipped] ?: false }.distinctUntilChanged()
     suspend fun setOnboardingSkipped(skipped: Boolean) = store.edit { it[Keys.onboardingSkipped] = skipped }
+
+    /** "Add your first pet" was tapped on Home's empty room: the photos and pet setup are showing (10c). */
+    val addingPet: Flow<Boolean> = store.data.map { it[Keys.addingPet] ?: false }.distinctUntilChanged()
+    suspend fun setAddingPet(adding: Boolean) = store.edit { it[Keys.addingPet] = adding }
+
+    /** When the welcome chest's 50% off ends (14h2), in epoch milliseconds; 0 before it's opened. */
+    val welcomeOfferEnds: Flow<Long> = store.data.map { it[Keys.welcomeOfferEnds] ?: 0L }.distinctUntilChanged()
+    suspend fun setWelcomeOfferEnds(millis: Long) = store.edit { it[Keys.welcomeOfferEnds] = millis }
+
+    /** "Claim 50% off" was tapped before signing in: open the store sheet once signed in (14j). */
+    val claimAfterSignIn: Flow<Boolean> = store.data.map { it[Keys.claimAfterSignIn] ?: false }.distinctUntilChanged()
+    suspend fun setClaimAfterSignIn(claim: Boolean) = store.edit { it[Keys.claimAfterSignIn] = claim }
+
+    /** What Opaw should help with (14f), such as "meals" and "walks", and who looks after the pet (14g). */
+    val careFocus: Flow<Set<String>> = store.data.map { it[Keys.careFocus].orEmpty() }.distinctUntilChanged()
+    val careHelpers: Flow<String> = store.data.map { it[Keys.careHelpers].orEmpty() }.distinctUntilChanged()
+    suspend fun setCareAnswers(focus: Set<String>, helpers: String) = store.edit {
+        it[Keys.careFocus] = focus
+        it[Keys.careHelpers] = helpers
+    }
 
     /** The dog currently shown on Home and targeted by quick logs. */
     val activeDogId: Flow<String?> = store.data.map { it[Keys.activeDog]?.takeIf(String::isNotEmpty) }.distinctUntilChanged()

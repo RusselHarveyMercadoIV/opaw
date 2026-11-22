@@ -15,6 +15,7 @@ import app.opaw.data.CareEvent
 import app.opaw.services.CareRecorder
 import app.opaw.ui.AppTab
 import app.opaw.ui.LocalSelectTab
+import app.opaw.ui.welcome.WelcomeOfferBar
 import java.time.Instant
 import java.time.ZoneId
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -121,7 +122,7 @@ fun HomeScreen() {
         // A new account lands here (14k): the room is ready, and adding the first pet opens the photos.
         EmptyRoom(
             first = true, locked = false,
-            onAdd = { scope.launch { app.settings.setOnboardingSkipped(false) } },
+            onAdd = { scope.launch { app.settings.setAddingPet(true) } },
             onJoin = { showJoin = true },
         ) { navigator.push(Route.Paywall) }
         if (showJoin) JoinCodeDialog(app) { showJoin = false }
@@ -248,6 +249,7 @@ private fun PetRoomPage(data: DogData, openToday: () -> Unit, openWalk: () -> Un
             val done = (if (reminders.isEmpty()) data.count(CareKind.MEAL, now) else data.doneReminderIds(now).size).coerceAtMost(total)
             TodayRing(done, total, night, openToday)
         }
+        WelcomeOfferBar(Modifier.statusBarsPadding().padding(top = 148.dp).padding(horizontal = 24.dp))
     }
 }
 
@@ -317,6 +319,7 @@ private fun EmptyRoom(first: Boolean, locked: Boolean, onAdd: () -> Unit, onJoin
                 if (first) "Your pet\u2019s room\nis ready" else if (locked) "Room for one more" else "Add a pet",
                 style = opaw(30.sp, FontWeight.Black).copy(lineHeight = 33.sp), color = ink,
             )
+            WelcomeOfferBar(Modifier.padding(top = 8.dp))
             if (!first) {
                 Text(
                     if (locked) "Free covers one pet. Premium adds as many as you like, each with their own room." else "One photo and they move into a room of their own.",
