@@ -227,9 +227,14 @@ private fun PetRoomPage(data: DogData, openToday: () -> Unit, openDecorate: () -
         PetRoom(
             night,
             mealDue = if (CareNeed.MEAL in report.needs) meal else null,
+            pose = when {
+                CareNeed.MEAL in report.needs -> RoomPose.WAIT
+                night && report.needs.isEmpty() -> RoomPose.SLEEP
+                else -> RoomPose.WALK
+            },
             pieces = { room.piece(it) },
             actions = RoomActions(onBowl = { log(CareKind.MEAL) }, onWater = { log(CareKind.WATER) }, onDoor = openWalk, onBed = openToday),
-        ) { view, standing -> RoomPet(data, view, standing, onTap = openStudio) }
+        ) { view, standing -> RoomPet(data, view, standing) }
         // The name, mood and Today ring, under the top bar and above anywhere the pet can reach.
         val (line, dot) = moodLine(report, night, meal)
         val ink = if (night) Color.White else colors.ink
@@ -298,7 +303,7 @@ private fun EmptyRoom(first: Boolean, locked: Boolean, onAdd: () -> Unit, onJoin
     val ink = if (night) Color.White else colors.ink
     val add = if (locked) onPremium else onAdd
     Box(Modifier.fillMaxSize()) {
-        PetRoom(night, actions = RoomActions({}, {}, {}, {})) { _, standing ->
+        PetRoom(night, pose = RoomPose.STILL, actions = RoomActions({}, {}, {}, {})) { _, standing ->
             Box(standing, contentAlignment = Alignment.BottomCenter) {
                 Box(
                     Modifier.fillMaxWidth(0.9f).fillMaxHeight(0.28f).drawBehind {

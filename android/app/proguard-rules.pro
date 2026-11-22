@@ -10,3 +10,7 @@
 -keep class androidx.credentials.playservices.** {
   *;
 }
+
+# AndroidSVG draws the room art.
+-keep class com.caverock.androidsvg.** { *; }
+-dontwarn com.caverock.androidsvg.**

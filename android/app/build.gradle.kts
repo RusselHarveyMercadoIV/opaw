@@ -113,6 +113,8 @@ dependencies {
     implementation(libs.filament.android)
     implementation(libs.filament.gltfio)
     implementation(libs.filament.utils)
+    // Draws the room art from the design, which is SVG.
+    implementation("com.caverock:androidsvg-aar:1.4")
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play)
     implementation(libs.googleid)

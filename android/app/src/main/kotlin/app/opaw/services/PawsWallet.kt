@@ -8,14 +8,14 @@ import kotlinx.serialization.json.Json
 import java.time.LocalDate
 
 /** The spots in a pet's room that can hold a piece (16b). */
-enum class RoomSlot(val title: String) { BED("Bed"), BOWL("Bowl"), WALL("Wall art"), WINDOW("Window"), RUG("Rug"), TOY("Toy"), LAMP("Lamp"), PLANT("Plant") }
+enum class RoomSlot(val title: String) { BED("Bed"), BOWL("Bowl"), WALL("Wall art"), RUG("Rug"), PLANT("Plant"), TOY("Toy") }
 
 /** The shop's tabs, each covering one or more spots. */
 enum class ShopTab(val title: String, val slots: List<RoomSlot>) {
     BEDS("Beds", listOf(RoomSlot.BED)),
     BOWLS("Bowls", listOf(RoomSlot.BOWL)),
-    WALLS("Walls", listOf(RoomSlot.WALL, RoomSlot.WINDOW)),
-    FLOORS("Floors", listOf(RoomSlot.RUG, RoomSlot.LAMP, RoomSlot.PLANT)),
+    WALLS("Walls", listOf(RoomSlot.WALL)),
+    FLOORS("Floors", listOf(RoomSlot.RUG, RoomSlot.PLANT)),
     TOYS("Toys", listOf(RoomSlot.TOY)),
 }
 
@@ -24,31 +24,24 @@ class RoomItem(val id: String, val slot: RoomSlot, val title: String, val price:
 
 /** Everything the shop sells. The first piece of each spot is the starter, already in the room. */
 object RoomCatalog {
+    /** The pieces, named as in the design's art (see RoomArt). */
     val items = listOf(
-        RoomItem("bed.donut", RoomSlot.BED, "Orange donut", 0),
-        RoomItem("bed.cloud", RoomSlot.BED, "Cloud bed", 120),
-        RoomItem("bed.teepee", RoomSlot.BED, "Teepee", 200, level = 6),
-        RoomItem("bed.royal", RoomSlot.BED, "Royal cushion", 0, premium = true),
-        RoomItem("bowl.orange", RoomSlot.BOWL, "Orange bowl", 0),
-        RoomItem("bowl.steel", RoomSlot.BOWL, "Steel bowl", 60),
-        RoomItem("bowl.blue", RoomSlot.BOWL, "Blue ceramic", 90, level = 3),
-        RoomItem("wall.none", RoomSlot.WALL, "Bare wall", 0),
-        RoomItem("wall.paw", RoomSlot.WALL, "Paw print", 70),
-        RoomItem("wall.sun", RoomSlot.WALL, "Sun clock", 100, level = 3),
-        RoomItem("window.classic", RoomSlot.WINDOW, "Classic window", 0),
-        RoomItem("window.arch", RoomSlot.WINDOW, "Arched window", 120, level = 5),
-        RoomItem("window.garden", RoomSlot.WINDOW, "Garden view", 150, level = 6),
-        RoomItem("rug.orange", RoomSlot.RUG, "Orange rug", 0),
-        RoomItem("rug.sky", RoomSlot.RUG, "Sky rug", 80),
-        RoomItem("rug.stripe", RoomSlot.RUG, "Striped rug", 110, level = 4),
-        RoomItem("lamp.dome", RoomSlot.LAMP, "Dome lamp", 0),
-        RoomItem("lamp.mushroom", RoomSlot.LAMP, "Mushroom lamp", 90, level = 4),
-        RoomItem("plant.leafy", RoomSlot.PLANT, "Leafy plant", 0),
-        RoomItem("plant.cactus", RoomSlot.PLANT, "Cactus", 70, level = 2),
-        RoomItem("toy.none", RoomSlot.TOY, "No toy", 0),
-        RoomItem("toy.ball", RoomSlot.TOY, "Ball", 40),
-        RoomItem("toy.rope", RoomSlot.TOY, "Rope toy", 60, level = 2),
-        RoomItem("toy.star", RoomSlot.TOY, "Star squeaker", 0, premium = true),
+        RoomItem("bed-donut", RoomSlot.BED, "Orange donut", 0),
+        RoomItem("bed-cloud", RoomSlot.BED, "Cloud bed", 120),
+        RoomItem("bed-teepee", RoomSlot.BED, "Teepee", 200, level = 6),
+        RoomItem("bed-royal", RoomSlot.BED, "Royal bed", 0, premium = true),
+        RoomItem("bowl-food", RoomSlot.BOWL, "Orange bowl", 0),
+        RoomItem("bowl-bone", RoomSlot.BOWL, "Bone bowls", 90, level = 3),
+        RoomItem("wall-none", RoomSlot.WALL, "Bare wall", 0),
+        RoomItem("art-portrait", RoomSlot.WALL, "Paw portrait", 70),
+        RoomItem("art-sunset", RoomSlot.WALL, "Sunset", 100, level = 3),
+        RoomItem("rug-round", RoomSlot.RUG, "Round rug", 0),
+        RoomItem("rug-paw", RoomSlot.RUG, "Paw rug", 80, level = 2),
+        RoomItem("plant-pot", RoomSlot.PLANT, "Potted plant", 0),
+        RoomItem("plant-cactus", RoomSlot.PLANT, "Cactus", 70, level = 2),
+        RoomItem("toy-none", RoomSlot.TOY, "No toy", 0),
+        RoomItem("toy-ball", RoomSlot.TOY, "Ball", 40),
+        RoomItem("toy-rope", RoomSlot.TOY, "Rope toy", 60, level = 4),
     )
 
     fun item(id: String): RoomItem? = items.firstOrNull { it.id == id }
@@ -79,7 +72,7 @@ data class PetRoomState(
 ) {
     val level: Int get() = RoomCatalog.level(points)
 
-    fun piece(slot: RoomSlot): String = placed[slot.name] ?: RoomCatalog.starter(slot).id
+    fun piece(slot: RoomSlot): String = placed[slot.name]?.takeIf { RoomCatalog.item(it) != null } ?: RoomCatalog.starter(slot).id
     fun owns(item: RoomItem): Boolean = item.price == 0 && !item.premium || item.id in owned
 }
 

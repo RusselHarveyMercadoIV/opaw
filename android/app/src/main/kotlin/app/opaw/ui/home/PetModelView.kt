@@ -234,8 +234,8 @@ private class PetModelLayout(context: Context) : FrameLayout(context), Choreogra
             aspect = viewport.width.toFloat() / viewport.height
             val tan = SENSOR_HEIGHT / (2f * focal)
             if (stage == null) stage = temperament?.let { PetStage(it) }
-            val walls = RoomCamera.halfWidth(aspect) - RoomCamera.WALL_GAP
-            stage?.halfWidth = if (room) ({ z -> min((1f - z) * tan * aspect, walls) }) else ({ z -> (1f - z) * tan * aspect })
+            val walls = RoomCamera.HALF - RoomCamera.WALL_GAP
+            stage?.halfWidth = if (room) ({ z -> min((1f - RoomCamera.worldZ(z)) * tan * aspect, walls) }) else ({ z -> (1f - z) * tan * aspect })
             return
         }
         // Turn the pet so its head points a little to one side of the camera: a three-quarter
@@ -313,6 +313,9 @@ private class PetModelLayout(context: Context) : FrameLayout(context), Choreogra
         val (wide, tall, deep) = measured.size
         val k = (if (room) RoomCamera.PET_LENGTH else 1f) / max(max(wide, deep), 1e-6f)
         val floor = if (room) RoomCamera.FLOOR else PetStage.FLOOR
+        // In the room the stage is placed deeper, and kept between the walls even when it peeks.
+        val wx = if (room) stage.x.coerceIn(-(RoomCamera.HALF - 0.3f), RoomCamera.HALF - 0.3f) else stage.x
+        val wz = if (room) RoomCamera.worldZ(stage.z) else stage.z
 
         // Legs: ease between standing, walking and trotting, and step in time with the ground
         // covered so the paws don't slide. Turning on the spot steps too.
@@ -353,14 +356,14 @@ private class PetModelLayout(context: Context) : FrameLayout(context), Choreogra
                 across * c, 0f, -across * s, 0f,
                 0f, up, 0f, 0f,
                 across * s, 0f, across * c, 0f,
-                stage.x - across * (c * cx + s * cz), floor + stage.hop + bounce - up * bottom, stage.z - across * (-s * cx + c * cz), 1f,
+                wx - across * (c * cx + s * cz), floor + stage.hop + bounce - up * bottom, wz - across * (-s * cx + c * cz), 1f,
             ),
         )
 
         // Its shadow on the floor, smaller and lighter while it's in the air.
         val tan = SENSOR_HEIGHT / (2f * (if (room) RoomCamera.FOCAL else FOCAL_LENGTH))
-        val depth = (1f - stage.z).coerceAtLeast(0.1f)
-        val px = (stage.x / (depth * tan * aspect) + 1f) / 2f * width
+        val depth = (1f - wz).coerceAtLeast(0.1f)
+        val px = (wx / (depth * tan * aspect) + 1f) / 2f * width
         val py = (1f - floor / (depth * tan)) / 2f * height
         val reach = (0.22f + 0.24f * abs(sin(stage.heading))) * (if (room) RoomCamera.PET_LENGTH else 1f) / (depth * tan * aspect) * width / 2f
         val lift = (1f - 2.5f * stage.hop).coerceIn(0.4f, 1f)

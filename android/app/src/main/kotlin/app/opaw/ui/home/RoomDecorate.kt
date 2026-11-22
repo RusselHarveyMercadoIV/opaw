@@ -34,7 +34,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -69,20 +72,27 @@ import app.opaw.ui.theme.opaw
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlin.math.roundToInt
 
-/** The pet standing in its room: the roaming 3D pet in the room's view, or the flat pet on the rug. */
+/**
+ * The pet standing in its room: the roaming 3D pet in the room's view, or the flat pet in its
+ * place, which walks the design's path ([PetRoom] moves it).
+ */
 @Composable
-internal fun RoomPet(data: DogData, view: Modifier, standing: Modifier, onTap: (() -> Unit)? = null) {
+internal fun RoomPet(data: DogData, view: Modifier, standing: Modifier) {
     val app = rememberApp()
     val now = rememberNow()
     val dog = data.dog
-    val report = data.careReport(now)
     val mood = MoodEngine.mood(data.careSnapshot(now), now)
     val image = rememberPetImage(dog)
     val roams = app.petModels.file(dog.id, mood) != null && app.petModels.motion(dog.id, "rest") != null
     if (roams) {
         PetAvatar(dog, image, mood, view, room = true)
     } else {
-        PetAvatar(dog, image, mood, standing.loopMotion(report.tier.motion), sticker = 6.dp, faded = report.tier == CareTier.NEEDS_YOU, onTap = onTap)
+        // Its soft shadow on the floor, then the pet, as in the design.
+        Box(standing.drawBehind {
+            drawOval(Color.Black.copy(alpha = 0.14f), topLeft = Offset(size.width * 0.17f, size.height * 0.94f), size = Size(size.width * 0.66f, size.height * 0.095f))
+        }) {
+            PetAvatar(dog, image, mood, Modifier.fillMaxSize(), sticker = 4.dp)
+        }
     }
 }
 
@@ -247,38 +257,13 @@ private fun PieceCard(item: RoomItem, state: PetRoomState, onPick: (RoomItem) ->
     }
 }
 
-/** A simple picture of a piece for its card: its colour and kind. */
+/** The piece's own art from the design, small, for its card. */
 @Composable
 private fun Swatch(item: RoomItem) {
-    val (fill, icon) = when (item.id) {
-        "bed.donut" -> Color(0xFFF26A1B) to DesignIcon.MOON
-        "bed.cloud" -> Color(0xFFE9E9EE) to DesignIcon.CLOUD
-        "bed.teepee" -> Color(0xFFF26A1B) to DesignIcon.HOME
-        "bed.royal" -> Color(0xFF7B4FD1) to DesignIcon.STAR
-        "bowl.steel" -> Color(0xFFBFC4CC) to DesignIcon.MEAL
-        "bowl.blue" -> Color(0xFF4A90D9) to DesignIcon.MEAL
-        "wall.paw" -> Color(0xFFFFE3CF) to DesignIcon.PAW
-        "wall.sun" -> Color(0xFFFFC94A) to DesignIcon.CLOCK
-        "window.arch", "window.classic" -> Color(0xFFE4F1FF) to DesignIcon.SUN
-        "window.garden" -> Color(0xFF9ED39A) to DesignIcon.SUN
-        "rug.sky" -> Color(0xFF9ED0F5) to DesignIcon.GRID
-        "rug.stripe" -> Color(0xFFFFC48F) to DesignIcon.GRID
-        "lamp.mushroom" -> Color(0xFFE5483B) to DesignIcon.SUN
-        "plant.cactus" -> Color(0xFF7DBB86) to DesignIcon.HEART
-        "toy.ball" -> Color(0xFFF26A1B) to DesignIcon.BALL
-        "toy.rope" -> Color(0xFFFFB27A) to DesignIcon.BONE
-        "toy.star" -> Color(0xFFFFC94A) to DesignIcon.STAR
-        "wall.none", "toy.none" -> Color(0xFFEDEDF0) to DesignIcon.CLOSE
-        else -> Color(0xFFFFB27A) to when (item.slot) {
-            RoomSlot.BOWL -> DesignIcon.MEAL
-            RoomSlot.LAMP -> DesignIcon.SUN
-            RoomSlot.PLANT -> DesignIcon.HEART
-            RoomSlot.RUG -> DesignIcon.GRID
-            else -> DesignIcon.HOME
-        }
-    }
-    Box(Modifier.size(52.dp).background(fill, CircleShape), contentAlignment = Alignment.Center) {
-        Icon(icon, size = 24.dp, tint = if (fill.red + fill.green + fill.blue > 2.4f) Color(0xFF888888) else Color.White)
+    if (item.id.endsWith("-none")) {
+        Icon(DesignIcon.CLOSE, size = 24.dp, tint = Color(0xFFBBBBBB))
+    } else {
+        PieceArt(item.id, Modifier.size(72.dp))
     }
 }
 
