@@ -1,6 +1,10 @@
 package app.opaw.ui.home
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -30,12 +34,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -70,6 +77,7 @@ import app.opaw.ui.rememberApp
 import app.opaw.ui.theme.Opaw
 import app.opaw.ui.theme.opaw
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 /**
@@ -192,38 +200,71 @@ fun RoomDecorateScreen(dogId: String) {
     }
 }
 
-/** The shop sheet (16b): tabs, then the pieces for them. */
+/**
+ * The shop sheet (16b): tabs, then the pieces for them. Drag it down (or tap the handle) and it
+ * tucks away to a slim bar so the whole room and its + spots are in view; drag it up to open it.
+ */
 @Composable
 private fun ShopSheet(tab: ShopTab, state: PetRoomState, onTab: (ShopTab) -> Unit, onDone: () -> Unit, onPick: (RoomItem) -> Unit) {
+    var open by remember { mutableStateOf(true) }
+    val pull = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    val haptics = rememberHaptics()
+    val shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
     Column(
-        Modifier.fillMaxWidth().shadow(20.dp, RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp))
-            .background(Color.White, RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)).navigationBarsPadding().padding(top = 10.dp, bottom = 12.dp),
+        Modifier.fillMaxWidth()
+            .graphicsLayer { translationY = if (open) pull.value.coerceAtLeast(0f) else pull.value.coerceAtMost(0f) * 0.4f }
+            .shadow(20.dp, shape).background(Color.White, shape)
+            .pointerInput(Unit) {
+                detectVerticalDragGestures(
+                    onDragEnd = {
+                        val y = pull.value
+                        if (open && y > 60.dp.toPx()) { open = false; haptics.select() }
+                        else if (!open && y < -30.dp.toPx()) { open = true; haptics.select() }
+                        scope.launch { pull.animateTo(0f) }
+                    },
+                    onDragCancel = { scope.launch { pull.animateTo(0f) } },
+                ) { change, dy -> change.consume(); scope.launch { pull.snapTo(pull.value + dy) } }
+            }
+            .navigationBarsPadding().padding(top = 10.dp, bottom = 12.dp),
     ) {
-        Box(Modifier.align(Alignment.CenterHorizontally).size(40.dp, 5.dp).background(Color(0xFFDDDDDD), CircleShape))
-        Row(Modifier.padding(horizontal = 20.dp).padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            Modifier.align(Alignment.CenterHorizontally).pressable { open = !open; haptics.select() }.padding(horizontal = 30.dp, vertical = 4.dp),
+        ) { Box(Modifier.size(40.dp, 5.dp).background(Color(0xFFDDDDDD), CircleShape)) }
+        Row(Modifier.padding(horizontal = 20.dp).padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("Decorate", style = opaw(22.sp, FontWeight.Black), color = Ink, modifier = Modifier.weight(1f))
             PawCoin(20.dp)
             Text(" ${state.paws}", style = opaw(16.sp, FontWeight.Black), color = Ink)
-        }
-        Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            for (t in ShopTab.entries) {
-                val on = t == tab
+            if (!open) {
                 Text(
-                    t.title, style = opaw(14.sp, FontWeight.ExtraBold), color = if (on) Color.White else Ink,
-                    modifier = Modifier.pressable { onTab(t) }.background(if (on) Ink else Color(0xFFF2F2F4), CircleShape).padding(horizontal = 16.dp, vertical = 9.dp),
+                    "Done", style = opaw(15.sp, FontWeight.ExtraBold), color = Color.White,
+                    modifier = Modifier.padding(start = 12.dp).pressable(onClick = onDone).background(Ink, CircleShape).padding(horizontal = 18.dp, vertical = 9.dp),
                 )
             }
         }
-        Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            for (item in RoomCatalog.items.filter { it.slot in tab.slots }) {
-                PieceCard(item, state, onPick)
+        AnimatedVisibility(open, enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(), exit = shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut()) {
+            Column {
+                Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    for (t in ShopTab.entries) {
+                        val on = t == tab
+                        Text(
+                            t.title, style = opaw(14.sp, FontWeight.ExtraBold), color = if (on) Color.White else Ink,
+                            modifier = Modifier.pressable { onTab(t) }.background(if (on) Ink else Color(0xFFF2F2F4), CircleShape).padding(horizontal = 16.dp, vertical = 9.dp),
+                        )
+                    }
+                }
+                Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    for (item in RoomCatalog.items.filter { it.slot in tab.slots }) {
+                        PieceCard(item, state, onPick)
+                    }
+                }
+                Box(Modifier.padding(horizontal = 20.dp).padding(top = 14.dp)) {
+                    Box(
+                        Modifier.fillMaxWidth().height(54.dp).pressable(onClick = onDone).background(Ink, CircleShape),
+                        contentAlignment = Alignment.Center,
+                    ) { Text("Done", style = opaw(17.sp, FontWeight.ExtraBold), color = Color.White) }
+                }
             }
-        }
-        Box(Modifier.padding(horizontal = 20.dp).padding(top = 14.dp)) {
-            Box(
-                Modifier.fillMaxWidth().height(54.dp).pressable(onClick = onDone).background(Ink, CircleShape),
-                contentAlignment = Alignment.Center,
-            ) { Text("Done", style = opaw(17.sp, FontWeight.ExtraBold), color = Color.White) }
         }
     }
 }
