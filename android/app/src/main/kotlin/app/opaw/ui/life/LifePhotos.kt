@@ -466,6 +466,7 @@ fun LifeCamera(photos: LifePhotos, start: LifeAngle, onClose: () -> Unit) {
                 )
             }
             BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+                val travel = maxHeight - 100.dp
                 val frame = Modifier.padding(horizontal = 36.dp).padding(top = 30.dp, bottom = 70.dp).fillMaxSize()
                 if (guide != null) {
                     Image(
@@ -481,7 +482,7 @@ fun LifeCamera(photos: LifePhotos, start: LifeAngle, onClose: () -> Unit) {
                     Box(
                         Modifier
                             .fillMaxWidth()
-                            .offset(y = (maxHeight - 100.dp) * sweep)
+                            .offset(y = travel * sweep)
                             .height(3.dp)
                             .shadow(10.dp, CircleShape, ambientColor = Action, spotColor = Action)
                             .background(Brush.horizontalGradient(listOf(Color.Transparent, Action, Color.Transparent)), CircleShape),
