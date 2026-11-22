@@ -159,6 +159,8 @@ fun PetRoom(
     modifier: Modifier = Modifier,
     mealDue: String? = null,
     pose: RoomPose = RoomPose.WALK,
+    /** The water bowl; the empty room of 14k has only the food bowl. */
+    water: Boolean = true,
     /** What's in each spot (16b); the starters when not given. */
     pieces: (RoomSlot) -> String = { RoomCatalog.starter(it).id },
     actions: RoomActions,
@@ -197,7 +199,7 @@ fun PetRoom(
         Canvas(Modifier.fillMaxSize()) {
             art(RoomSlot.TOY)?.let { drawArt(it, box(spots.getValue(RoomSlot.TOY)), night) }
             art(RoomSlot.BOWL)?.let { drawArt(it, box(spots.getValue(RoomSlot.BOWL)), night) }
-            if (pieces(RoomSlot.BOWL) != "bowl-bone") RoomArt.pieces["bowl-water"]?.let { drawArt(it, box(waterSpot), night) }
+            if (water && pieces(RoomSlot.BOWL) != "bowl-bone") RoomArt.pieces["bowl-water"]?.let { drawArt(it, box(waterSpot), night) }
         }
         if (pose == RoomPose.SLEEP) {
             Text(

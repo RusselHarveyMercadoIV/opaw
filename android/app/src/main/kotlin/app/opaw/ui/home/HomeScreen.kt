@@ -1,6 +1,11 @@
 package app.opaw.ui.home
 
 import android.content.Intent
+import app.opaw.ui.onboarding.OrangeButton
+import app.opaw.services.RoomSlot
+import app.opaw.services.RoomCatalog
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.ui.geometry.Offset
@@ -293,8 +298,10 @@ private fun TodayRing(done: Int, total: Int, night: Boolean, onClick: () -> Unit
 // MARK: - Room for a pet (14k)
 
 /**
- * The room before there's a pet in it (14k), or room for one more at the end of the pages: a
- * dashed spot waits on the rug. [locked] when the free plan already has its one pet.
+ * The room before there's a pet in it (14k), as in the design: the starter cloud bed, a dashed
+ * spot on the rug with an orange +, "Your pet's room is ready" with 50 Paws, the welcome offer
+ * counting down, then Add your first pet. At the end of the pages it's room for one more;
+ * [locked] when the free plan already has its one pet.
  */
 @Composable
 private fun EmptyRoom(first: Boolean, locked: Boolean, onAdd: () -> Unit, onJoin: (() -> Unit)?, onPremium: () -> Unit) {
@@ -302,61 +309,74 @@ private fun EmptyRoom(first: Boolean, locked: Boolean, onAdd: () -> Unit, onJoin
     val night = Opaw.colors.surface != Color.White
     val ink = if (night) Color.White else colors.ink
     val add = if (locked) onPremium else onAdd
-    Box(Modifier.fillMaxSize()) {
-        PetRoom(night, pose = RoomPose.STILL, actions = RoomActions({}, {}, {}, {})) { _, standing ->
-            Box(standing, contentAlignment = Alignment.BottomCenter) {
-                Box(
-                    Modifier.fillMaxWidth(0.9f).fillMaxHeight(0.28f).drawBehind {
-                        drawOval(
-                            Color.White, style = Stroke(3.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(14f, 10f)), cap = StrokeCap.Round),
-                        )
-                    },
-                )
-                Box(
-                    Modifier.align(Alignment.Center).size(64.dp).pressable(onClick = add)
-                        .shadow(14.dp, CircleShape, ambientColor = Action.copy(alpha = 0.35f), spotColor = Action.copy(alpha = 0.35f))
-                        .background(Action, CircleShape),
-                    contentAlignment = Alignment.Center,
-                ) { Icon(if (locked) DesignIcon.LOCK else DesignIcon.PLUS, size = 28.dp, weight = 3f, tint = Color.White) }
-            }
-        }
-        Column(
-            Modifier.fillMaxWidth().statusBarsPadding().padding(top = if (first) 24.dp else 80.dp).padding(horizontal = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val s = maxWidth.value / 390f
+        PetRoom(
+            night, pose = RoomPose.STILL, water = false,
+            pieces = { if (it == RoomSlot.BED) "bed-cloud" else RoomCatalog.starter(it).id },
+            actions = RoomActions({}, {}, {}, {}),
+        ) { _, _ -> }
+        // The dashed spot waiting on the rug.
+        Box(
+            Modifier.offset((109 * s).dp, (410 * s).dp).size((160 * s).dp, (190 * s).dp).drawBehind {
+                val r = 80.dp.toPx() * s
+                val b = 36.dp.toPx() * s
+                val outline = androidx.compose.ui.graphics.Path().apply {
+                    addRoundRect(
+                        androidx.compose.ui.geometry.RoundRect(
+                            androidx.compose.ui.geometry.Rect(0f, 0f, size.width, size.height),
+                            topLeft = androidx.compose.ui.geometry.CornerRadius(r), topRight = androidx.compose.ui.geometry.CornerRadius(r),
+                            bottomRight = androidx.compose.ui.geometry.CornerRadius(b), bottomLeft = androidx.compose.ui.geometry.CornerRadius(b),
+                        ),
+                    )
+                }
+                drawPath(outline, Color(0xFFCFCFD3), style = Stroke(3.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(9.dp.toPx(), 6.dp.toPx()))))
+            },
+            contentAlignment = Alignment.Center,
         ) {
-            Row(verticalAlignment = Alignment.Top) {
-                Text(
-                    if (first) "Your pet\u2019s room\nis ready" else if (locked) "Room for one more" else "Add a pet",
-                    style = opaw(30.sp, FontWeight.Black).copy(lineHeight = 33.sp), color = ink, modifier = Modifier.weight(1f),
-                )
-                // A new home starts with 50 Paws for its first pet (14k).
-                if (first) PawsChip(50, night)
-            }
-            WelcomeOfferBar(Modifier.padding(top = 8.dp))
-            if (!first) {
-                Text(
-                    if (locked) "Free covers one pet. Premium adds as many as you like, each with their own room." else "One photo and they move into a room of their own.",
-                    style = opaw(15.sp, FontWeight.SemiBold).copy(lineHeight = 21.sp), color = ink.copy(alpha = 0.7f),
-                )
-            }
+            Box(
+                Modifier.size(64.dp).pressable(onClick = add)
+                    .shadow(12.dp, CircleShape, ambientColor = Action.copy(alpha = 0.3f), spotColor = Action.copy(alpha = 0.3f))
+                    .background(Action, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) { Icon(if (locked) DesignIcon.LOCK else DesignIcon.PLUS, size = 28.dp, weight = 3f, tint = Color.White) }
+        }
+        Row(
+            Modifier.fillMaxWidth().statusBarsPadding().padding(top = if (first) 24.dp else 80.dp).padding(start = 24.dp, end = 20.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                if (first) "Your pet\u2019s room\nis ready" else if (locked) "Room for one more" else "Add a pet",
+                style = opaw(30.sp, FontWeight.Black).copy(lineHeight = 32.sp), color = ink, modifier = Modifier.weight(1f),
+            )
+            // A new home starts with 50 Paws for its first pet.
+            if (first) PawsChip(50, night)
         }
         Column(
-            Modifier.align(Alignment.BottomCenter).padding(horizontal = 24.dp).padding(bottom = 120.dp),
+            Modifier.align(Alignment.BottomCenter).padding(horizontal = 24.dp).padding(bottom = 112.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            BlackPillButton(
+            WelcomeOfferBar(Modifier.padding(bottom = 12.dp))
+            if (!first) {
+                Text(
+                    if (locked) "Free covers one pet. Premium adds as many as you like, each with their own room." else "One photo and they move into a room of their own.",
+                    style = opaw(14.sp, FontWeight.SemiBold).copy(lineHeight = 20.sp), color = ink.copy(alpha = 0.7f), textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(bottom = 10.dp),
+                )
+            }
+            OrangeButton(
                 when {
                     locked -> "Try Premium free for 7 days"
                     first -> "Add your first pet"
                     else -> "Add a pet"
                 },
-                height = 58.dp, onClick = add,
+                onClick = add,
             )
             if (onJoin != null) {
                 Text(
                     "Have an invite code?", style = opaw(15.sp, FontWeight.ExtraBold), color = ink, textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth().pressable(onClick = onJoin).padding(vertical = 10.dp),
+                    modifier = Modifier.fillMaxWidth().pressable(onClick = onJoin).padding(8.dp),
                 )
             }
         }

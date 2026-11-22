@@ -4,7 +4,11 @@ import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.CircleShape
@@ -76,19 +80,27 @@ fun WelcomeOfferBar(modifier: Modifier = Modifier) {
     if (ends <= now || app.premium.isPremium) return
     val left = (ends - now) / 1000
     val text = String.format(java.util.Locale.ROOT, "%02d:%02d:%02d", left / 3600, left / 60 % 60, left % 60)
+    // The design's bar (14k): black, "50% off" in orange, and an orange Claim.
     Row(
-        modifier.fillMaxWidth().background(Brush.horizontalGradient(listOf(Color(0xFFFF8F2E), Color(0xFFFF6A0F))), CircleShape)
-            .padding(start = 16.dp, end = 5.dp, top = 5.dp, bottom = 5.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier.fillMaxWidth().height(48.dp)
+            .shadow(12.dp, CircleShape, ambientColor = Color(0x2E000000), spotColor = Color(0x2E000000))
+            .background(Color(0xFF111111), CircleShape)
+            .padding(start = 16.dp, end = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("Premium 50% off", style = opaw(14.sp, FontWeight.Black), color = Color.White)
-        Text("· $text left", style = opaw(13.sp, FontWeight.Bold), color = Color(0xFFFFE3D1))
-        Spacer(Modifier.weight(1f))
         Text(
-            "Claim", style = opaw(14.sp, FontWeight.ExtraBold), color = Action,
+            buildAnnotatedString {
+                append("Premium ")
+                withStyle(SpanStyle(color = Color(0xFFFF9A4D), fontWeight = FontWeight.Black)) { append("50% off") }
+                append(" \u00b7 $text left")
+            },
+            style = opaw(14.sp, FontWeight.ExtraBold), color = Color.White, maxLines = 1, modifier = Modifier.weight(1f),
+        )
+        Text(
+            "Claim", style = opaw(13.sp, FontWeight.Black), color = Color.White,
             modifier = Modifier.pressable { haptics.tap(); scope.launch { claimWelcomeOffer(app, context) } }
-                .background(Color.White, CircleShape).padding(horizontal = 16.dp, vertical = 8.dp),
+                .background(Action, CircleShape).padding(horizontal = 14.dp, vertical = 8.dp),
         )
     }
 }

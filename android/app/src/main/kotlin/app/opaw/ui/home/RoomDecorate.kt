@@ -99,21 +99,21 @@ internal fun RoomPet(data: DogData, view: Modifier, standing: Modifier) {
 /** The Paws coin: orange, with the O paw on it. */
 @Composable
 internal fun PawCoin(size: Dp = 22.dp) {
-    Box(Modifier.size(size).background(Action, CircleShape).border(size * 0.12f, Color(0xFFFFC08A), CircleShape), contentAlignment = Alignment.Center) {
-        Icon(DesignIcon.PAW, size = size * 0.55f, tint = Color.White)
-    }
+    app.opaw.ui.components.SvgArt(app.opaw.ui.components.DesignArt.PAW_COIN, Modifier.size(size))
 }
 
 /** "245" with the coin, as on Home and in the shop. */
 @Composable
 internal fun PawsChip(paws: Int, night: Boolean = false, modifier: Modifier = Modifier) {
     Row(
-        modifier.background(if (night) Color.White.copy(alpha = 0.12f) else Color.White, CircleShape).padding(start = 6.dp, end = 14.dp, top = 6.dp, bottom = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(7.dp),
+        modifier.height(40.dp)
+            .then(if (night) Modifier else Modifier.shadow(10.dp, CircleShape, ambientColor = Color(0x14000000), spotColor = Color(0x14000000)))
+            .background(if (night) Color.White.copy(alpha = 0.12f) else Color.White, CircleShape).padding(start = 8.dp, end = 14.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        PawCoin()
-        Text("$paws", style = opaw(16.sp, FontWeight.Black), color = if (night) Color.White else Ink)
+        PawCoin(26.dp)
+        Text("$paws", style = opaw(15.sp, FontWeight.ExtraBold), color = if (night) Color.White else Ink)
     }
 }
 
