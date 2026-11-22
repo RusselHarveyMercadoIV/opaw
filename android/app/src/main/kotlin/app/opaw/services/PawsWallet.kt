@@ -139,6 +139,13 @@ class PawsWallet(context: Context) {
     /** Puts a piece the pet owns (or a Premium one, with Premium) in its spot. */
     fun place(dogId: String, item: RoomItem) = update(dogId) { it.copy(placed = it.placed + (item.slot.name to item.id)) }
 
+    /** Forgets every pet's room and Paws, when all data is erased. */
+    fun clear() {
+        cache.clear()
+        states.clear()
+        prefs.edit().clear().apply()
+    }
+
     /** Marks the current level as celebrated. */
     fun celebrated(dogId: String) = update(dogId) { it.copy(seenLevel = it.level) }
 }

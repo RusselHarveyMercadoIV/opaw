@@ -220,7 +220,7 @@ fun ProfileScreen(dogId: String) {
             containerColor = colors.surface,
             title = { Text("Reset all data?", style = opaw(19.sp, FontWeight.Black)) },
             text = {
-                Text("This deletes your pets, logs, walks, memories and reminders on this phone, then starts setup again. It can't be undone. Your subscription isn't affected.",
+                Text("This deletes your pets, logs, walks, memories and reminders on this phone, signs you out and starts again from the welcome. It can't be undone. Your subscription isn't affected.",
                     style = opaw(15.sp, FontWeight.Medium))
             },
             confirmButton = {
@@ -252,6 +252,11 @@ private suspend fun eraseAll(app: OpawApplication) {
     app.settings.clear()
     if (offerShown) app.settings.setPremiumOfferShown(true)
     app.settings.syncFormat()
+    app.paws.clear()
+    // Sign out too, so the app starts again from the very first onboarding screen (14a)
+    // instead of bringing the account's pets straight back.
+    runCatching { app.pack.signOut() }
+    app.household.reset()
     NotificationService.reschedule(app)
     WidgetRefresher.refresh(app)
 }
