@@ -1,6 +1,22 @@
 package app.opaw.ui.home
 
 import android.content.Intent
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.style.TextOverflow
+import app.opaw.core.CareNeed
+import app.opaw.core.CareReport
+import app.opaw.data.CareEvent
+import app.opaw.services.CareRecorder
+import app.opaw.ui.AppTab
+import app.opaw.ui.LocalSelectTab
+import java.time.Instant
+import java.time.ZoneId
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -84,12 +100,17 @@ val CareTier.motion: LoopMotion
         CareTier.NEEDS_YOU -> LoopMotion.DROOP
     }
 
-/** Home (2a): the pet as a big living sticker. Swipe between pets; the last page adds a new one (2h). */
+/**
+ * Home is the pet's room (13a to 13c): the whole screen is its room, and the 3D pet explores it.
+ * The top bar and tabs float over the room; under the bar sits one row with the pet's name, its
+ * mood and the Today ring. Swipe for the next pet's room; the last page has room for one more.
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun HomeScreen() {
     val app = rememberApp()
     val navigator = LocalNavigator.current
+    val selectTab = LocalSelectTab.current
     val haptics = rememberHaptics()
     val scope = rememberCoroutineScope()
     val all by app.repository.allDogData.collectAsStateWithLifecycle(emptyList())
@@ -97,11 +118,12 @@ fun HomeScreen() {
     var addSource by remember { mutableStateOf<PhotoSource?>(null) }
     var showJoin by remember { mutableStateOf(false) }
     if (all.isEmpty()) {
-        // Setup was skipped: Home is just "Add a pet" until there is one.
-        Box(Modifier.fillMaxSize().background(Opaw.colors.cream)) {
-            AddPetPage({}, locked = false, onAdd = { addSource = it }, onJoin = { showJoin = true }) { navigator.push(Route.Paywall) }
-        }
-        addSource?.let { source -> AddDogSheet(source, onDismiss = { addSource = null }) }
+        // A new account lands here (14k): the room is ready, and adding the first pet opens the photos.
+        EmptyRoom(
+            first = true, locked = false,
+            onAdd = { scope.launch { app.settings.setOnboardingSkipped(false) } },
+            onJoin = { showJoin = true },
+        ) { navigator.push(Route.Paywall) }
         if (showJoin) JoinCodeDialog(app) { showJoin = false }
         return
     }
@@ -119,27 +141,18 @@ fun HomeScreen() {
     }
     val current = all.getOrNull(pager.currentPage) ?: all.firstOrNull { it.dog.id == activeId } ?: all.first()
 
-    val dots: @Composable () -> Unit = {
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-            all.forEachIndexed { index, _ ->
-                val selected = index == pager.currentPage
-                Box(Modifier.size(if (selected) 22.dp else 8.dp, 8.dp).background(if (selected) Opaw.colors.action else Color(0xFFCCCCCC), CircleShape))
-            }
-            if (pager.currentPage == addPage) {
-                Box(Modifier.size(22.dp, 8.dp).background(Opaw.colors.action, CircleShape))
-            } else {
-                Box(Modifier.padding(start = 2.dp).size(16.dp).pressable { scope.launch { pager.animateScrollToPage(addPage) } }.dashedCapsule(Opaw.colors.ghost, dash = 3f, gap = 2.5f))
-            }
-        }
-    }
-
-    Box(Modifier.fillMaxSize().background(Opaw.colors.cream)) {
+    Box(Modifier.fillMaxSize()) {
         HorizontalPager(pager, Modifier.fillMaxSize()) { page ->
             val data = all.getOrNull(page)
             if (data != null) {
-                PetPage(data, dots, openStudio = { navigator.push(Route.Studio(data.dog.id)) }, openProfile = { navigator.push(Route.PetProfile(data.dog.id)) }) { navigator.push(Route.Today(data.dog.id)) }
+                PetRoomPage(
+                    data,
+                    openToday = { navigator.push(Route.Today(data.dog.id)) },
+                    openWalk = { selectTab(AppTab.ACTIVITY) },
+                    openStudio = { navigator.push(Route.Studio(data.dog.id)) },
+                )
             } else {
-                AddPetPage(dots, locked = !Premium.isPremium && all.isNotEmpty(), onAdd = { addSource = it }) { navigator.push(Route.Paywall) }
+                EmptyRoom(first = false, locked = !Premium.isPremium, onAdd = { addSource = PhotoSource.CAMERA }, onJoin = null) { navigator.push(Route.Paywall) }
             }
         }
         // Top bar.
@@ -154,6 +167,184 @@ fun HomeScreen() {
     }
 
     addSource?.let { source -> AddDogSheet(source, onDismiss = { addSource = null }) }
+}
+
+/** Night is from nine in the evening until six, and always in dark mode. */
+@Composable
+private fun isNight(now: Instant): Boolean {
+    val hour = now.atZone(ZoneId.systemDefault()).hour
+    return hour >= 21 || hour < 6 || Opaw.colors.surface != Color.White
+}
+
+/** "breakfast", "lunch" or "dinner", by the time of day. */
+private fun mealName(hour: Int) = when {
+    hour < 11 -> "breakfast"
+    hour < 16 -> "lunch"
+    else -> "dinner"
+}
+
+/** How the pet is, in a few words, and the colour of its dot: "Happy · fed and walked". */
+private fun moodLine(report: CareReport, night: Boolean, meal: String): Pair<String, Color> = when (report.needs.firstOrNull()) {
+    null -> if (night) "Asleep · all done today" to Color(0xFF34C759) else "Happy · fed and walked" to Action
+    CareNeed.MEAL -> "Hungry · $meal is due" to Color(0xFFEC3013)
+    CareNeed.MEDS -> "Waiting · meds are late" to Color(0xFFEC3013)
+    CareNeed.WATER -> "Thirsty · the water bowl is low" to Color(0xFFEC3013)
+    CareNeed.POTTY -> "Restless · needs to go out" to Color(0xFFEC3013)
+    CareNeed.WALK -> "Bored · no walk yet today" to Color(0xFFF5B300)
+}
+
+// MARK: - The pet's room
+
+@Composable
+private fun PetRoomPage(data: DogData, openToday: () -> Unit, openWalk: () -> Unit, openStudio: () -> Unit) {
+    val app = rememberApp()
+    val colors = Opaw.colors
+    val haptics = rememberHaptics()
+    val scope = rememberCoroutineScope()
+    val now = rememberNow()
+    val dog = data.dog
+    val report = data.careReport(now)
+    val mood = MoodEngine.mood(data.careSnapshot(now), now)
+    val image = rememberPetImage(dog)
+    // A rigged 3D pet roams the room; a flat one stands on the rug.
+    val roams = app.petModels.file(dog.id, mood) != null && app.petModels.motion(dog.id, "rest") != null
+    val night = isNight(now)
+    val hour = now.atZone(ZoneId.systemDefault()).hour
+    val meal = mealName(hour)
+
+    fun log(kind: CareKind) {
+        haptics.tap()
+        scope.launch { app.toasts.show(CareRecorder.log(app, CareEvent(dogId = dog.id, kindRaw = kind.raw))) }
+    }
+
+    Box(Modifier.fillMaxSize()) {
+        PetRoom(
+            night,
+            mealDue = if (CareNeed.MEAL in report.needs) meal else null,
+            actions = RoomActions(onBowl = { log(CareKind.MEAL) }, onWater = { log(CareKind.WATER) }, onDoor = openWalk, onBed = openToday),
+        ) { view, standing ->
+            if (roams) {
+                PetAvatar(dog, image, mood, view, room = true)
+            } else {
+                PetAvatar(dog, image, mood, standing.loopMotion(report.tier.motion), sticker = 6.dp, faded = report.tier == CareTier.NEEDS_YOU, onTap = openStudio)
+            }
+        }
+        // The name, mood and Today ring, under the top bar and above anywhere the pet can reach.
+        val (line, dot) = moodLine(report, night, meal)
+        val ink = if (night) Color.White else colors.ink
+        Row(
+            Modifier.fillMaxWidth().statusBarsPadding().padding(top = 80.dp).padding(horizontal = 24.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(dog.name, style = opaw(34.sp, FontWeight.Black).copy(letterSpacing = (-0.3).sp), color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(8.dp).background(dot, CircleShape))
+                    Text(line, style = opaw(13.sp, FontWeight.ExtraBold), color = ink.copy(alpha = 0.75f), maxLines = 1)
+                }
+            }
+            val reminders = data.reminders(now)
+            val total = if (reminders.isEmpty()) maxOf(1, data.scheduledMealHours.size) else reminders.size
+            val done = (if (reminders.isEmpty()) data.count(CareKind.MEAL, now) else data.doneReminderIds(now).size).coerceAtMost(total)
+            TodayRing(done, total, night, openToday)
+        }
+    }
+}
+
+/** "3/5 Today" with a ring that fills as the day's care gets done. Opens the day's list. */
+@Composable
+private fun TodayRing(done: Int, total: Int, night: Boolean, onClick: () -> Unit) {
+    val colors = Opaw.colors
+    val track = if (night) Color.White.copy(alpha = 0.2f) else colors.track
+    Row(
+        Modifier
+            .pressable(onClick = onClick)
+            .then(if (night) Modifier else Modifier.floatingShadow())
+            .background(if (night) Color.White.copy(alpha = 0.12f) else colors.surface, CircleShape)
+            .padding(start = 6.dp, end = 14.dp, top = 6.dp, bottom = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Canvas(Modifier.size(30.dp)) {
+            val stroke = 4.5.dp.toPx()
+            val inset = Offset(stroke / 2, stroke / 2)
+            val box = Size(size.width - stroke, size.height - stroke)
+            drawArc(track, 0f, 360f, false, inset, box, style = Stroke(stroke))
+            drawArc(Action, -90f, 360f * done / total, false, inset, box, style = Stroke(stroke, cap = StrokeCap.Round))
+        }
+        Column {
+            Text("$done/$total", style = opaw(14.sp, FontWeight.Black), color = if (night) Color.White else colors.ink)
+            Text("Today", style = opaw(11.sp, FontWeight.Bold), color = if (night) Color.White.copy(alpha = 0.7f) else colors.muted)
+        }
+    }
+}
+
+// MARK: - Room for a pet (14k)
+
+/**
+ * The room before there's a pet in it (14k), or room for one more at the end of the pages: a
+ * dashed spot waits on the rug. [locked] when the free plan already has its one pet.
+ */
+@Composable
+private fun EmptyRoom(first: Boolean, locked: Boolean, onAdd: () -> Unit, onJoin: (() -> Unit)?, onPremium: () -> Unit) {
+    val colors = Opaw.colors
+    val night = Opaw.colors.surface != Color.White
+    val ink = if (night) Color.White else colors.ink
+    val add = if (locked) onPremium else onAdd
+    Box(Modifier.fillMaxSize()) {
+        PetRoom(night, actions = RoomActions({}, {}, {}, {})) { _, standing ->
+            Box(standing, contentAlignment = Alignment.BottomCenter) {
+                Box(
+                    Modifier.fillMaxWidth(0.9f).fillMaxHeight(0.28f).drawBehind {
+                        drawOval(
+                            Color.White, style = Stroke(3.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(14f, 10f)), cap = StrokeCap.Round),
+                        )
+                    },
+                )
+                Box(
+                    Modifier.align(Alignment.Center).size(64.dp).pressable(onClick = add)
+                        .shadow(14.dp, CircleShape, ambientColor = Action.copy(alpha = 0.35f), spotColor = Action.copy(alpha = 0.35f))
+                        .background(Action, CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) { Icon(if (locked) DesignIcon.LOCK else DesignIcon.PLUS, size = 28.dp, weight = 3f, tint = Color.White) }
+            }
+        }
+        Column(
+            Modifier.fillMaxWidth().statusBarsPadding().padding(top = if (first) 24.dp else 80.dp).padding(horizontal = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(
+                if (first) "Your pet\u2019s room\nis ready" else if (locked) "Room for one more" else "Add a pet",
+                style = opaw(30.sp, FontWeight.Black).copy(lineHeight = 33.sp), color = ink,
+            )
+            if (!first) {
+                Text(
+                    if (locked) "Free covers one pet. Premium adds as many as you like, each with their own room." else "One photo and they move into a room of their own.",
+                    style = opaw(15.sp, FontWeight.SemiBold).copy(lineHeight = 21.sp), color = ink.copy(alpha = 0.7f),
+                )
+            }
+        }
+        Column(
+            Modifier.align(Alignment.BottomCenter).padding(horizontal = 24.dp).padding(bottom = 120.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            BlackPillButton(
+                when {
+                    locked -> "Try Premium free for 7 days"
+                    first -> "Add your first pet"
+                    else -> "Add a pet"
+                },
+                height = 58.dp, onClick = add,
+            )
+            if (onJoin != null) {
+                Text(
+                    "Have an invite code?", style = opaw(15.sp, FontWeight.ExtraBold), color = ink, textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().pressable(onClick = onJoin).padding(vertical = 10.dp),
+                )
+            }
+        }
+    }
 }
 
 enum class PhotoSource { CAMERA, LIBRARY }
@@ -201,68 +392,6 @@ private fun FamilyChip(dogs: List<Dog>, current: DogData, onClick: () -> Unit) {
     }
 }
 
-// MARK: - Pet page
-
-@Composable
-private fun PetPage(data: DogData, dots: @Composable () -> Unit, openStudio: () -> Unit, openProfile: () -> Unit, openToday: () -> Unit) {
-    val colors = Opaw.colors
-    val now = rememberNow()
-    val dog = data.dog
-    val report = data.careReport(now)
-    val mood = MoodEngine.mood(data.careSnapshot(now), now)
-    val image = rememberPetImage(dog)
-    val app = rememberApp()
-    // A rigged 3D pet roams the whole width, so it gets no side margins or bobbing of its own.
-    val roams = app.petModels.file(dog.id, mood) != null && app.petModels.motion(dog.id, "rest") != null
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = 92.dp, bottom = 120.dp).statusBarsPadding(), horizontalAlignment = Alignment.CenterHorizontally) {
-        // The stage: the avatar.
-        Box(Modifier.fillMaxWidth().height(if (roams) 320.dp else 290.dp)) {
-            PetAvatar(
-                dog, image, mood,
-                if (roams) Modifier.fillMaxSize() else Modifier.fillMaxSize().padding(horizontal = 78.dp).loopMotion(report.tier.motion),
-                sticker = 7.dp,
-                faded = report.tier == CareTier.NEEDS_YOU,
-                onTap = openStudio,
-            )
-        }
-        Column(Modifier.padding(horizontal = 36.dp).padding(top = 14.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(dog.name, style = opaw(50.sp, FontWeight.Black).copy(letterSpacing = (-0.5).sp), color = colors.ink, maxLines = 1)
-            dots()
-            ChipRow(data, onClick = openProfile)
-            Text("“${report.line}”", style = opaw(17.sp, FontWeight.Bold).copy(lineHeight = 23.sp), color = colors.ink, textAlign = TextAlign.Center)
-        }
-        val meals = data.count(CareKind.MEAL, now)
-        val mealGoal = maxOf(1, data.scheduledMealHours.size)
-        val meds = data.medsStatus(now).second
-        Row(Modifier.padding(horizontal = 20.dp).padding(top = 18.dp).fillMaxWidth().pressable(onClick = openToday).whiteCard().padding(vertical = 18.dp, horizontal = 12.dp)) {
-            StatColumn("$meals/$mealGoal", "Meals", Modifier.weight(1f))
-            StatColumn(OpawFormat.distance(data.walkedKm(now) * 1000), "Walked", Modifier.weight(1f))
-            StatColumn(meds?.let { clock(it) } ?: "None", "Meds due", Modifier.weight(1f), valueColor = if (meds == null) colors.ink else colors.alert)
-        }
-    }
-}
-
-/** Breed, age and weight. Tapping them opens the pet's profile (2j). */
-@Composable
-private fun ChipRow(data: DogData, onClick: () -> Unit) {
-    val dog = data.dog
-    val chips = buildList {
-        if (dog.breed.isNotEmpty()) add(dog.breed)
-        data.ageDescription?.let { add(it) }
-        dog.weightKg?.let { add(OpawFormat.weight(it)) }
-        if (isEmpty()) add(dog.size.title)
-    }
-    Row(Modifier.pressable(onClick = onClick), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        chips.forEach { chip ->
-            Text(
-                chip, style = opaw(14.sp, FontWeight.ExtraBold), color = Opaw.colors.ink, maxLines = 1,
-                modifier = Modifier.shadow(6.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.06f), spotColor = Color.Black.copy(alpha = 0.06f))
-                    .background(Opaw.colors.surface, CircleShape).padding(horizontal = 14.dp, vertical = 7.dp),
-            )
-        }
-    }
-}
-
 /** Text with a thick white outline, like a sticker label. */
 @Composable
 fun OutlinedText(text: String, modifier: Modifier = Modifier, size: Int = 28) {
@@ -276,54 +405,3 @@ fun OutlinedText(text: String, modifier: Modifier = Modifier, size: Int = 28) {
     }
 }
 
-// MARK: - Add a pet (2h)
-
-@Composable
-private fun AddPetPage(dots: @Composable () -> Unit, locked: Boolean, onAdd: (PhotoSource) -> Unit, onJoin: (() -> Unit)? = null, onPremium: () -> Unit) {
-    val colors = Opaw.colors
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).statusBarsPadding().padding(top = 92.dp, bottom = 120.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(Modifier.fillMaxWidth().height(290.dp)) {
-            Box(Modifier.fillMaxSize().padding(horizontal = 78.dp).dashedRounded(Color(0xFFCFCFD3)))
-            GhostCycle(Modifier.align(Alignment.TopCenter).padding(top = 40.dp).size(190.dp, 210.dp))
-            Box(
-                Modifier.align(Alignment.BottomEnd).padding(end = 66.dp).size(56.dp)
-                    .shadow(12.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.22f), spotColor = Color.Black.copy(alpha = 0.22f)).background(Action, CircleShape),
-                contentAlignment = Alignment.Center,
-            ) { Icon(if (locked) DesignIcon.LOCK else DesignIcon.CAMERA, size = 24.dp, weight = if (locked) 2.6f else 2.4f, tint = Color.White) }
-        }
-        Column(Modifier.padding(horizontal = 36.dp).padding(top = 14.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("Add a pet", style = opaw(40.sp, FontWeight.Black), color = colors.ink)
-            dots()
-            Text(
-                if (locked) "Free covers one pet. Premium adds as many as you like, each with their own avatar."
-                else "Take one photo of a dog, cat or bunny and they come to life next to your pet.",
-                style = opaw(16.sp, FontWeight.Medium).copy(lineHeight = 22.sp), color = colors.muted, textAlign = TextAlign.Center,
-            )
-        }
-        Column(Modifier.padding(horizontal = 20.dp).padding(top = 18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            if (locked) {
-                BlackPillButton("Try Premium free for 7 days", height = 60.dp, onClick = onPremium)
-                BlackPillButton("See what Premium adds", height = 60.dp, inverted = true, onClick = onPremium)
-            } else {
-                BlackPillButton("Take a photo", height = 60.dp) { onAdd(PhotoSource.CAMERA) }
-                BlackPillButton("Choose from library", height = 60.dp, inverted = true) { onAdd(PhotoSource.LIBRARY) }
-            }
-            // Helping with someone else's pet instead.
-            if (onJoin != null) {
-                Text("Have an invite code?", style = opaw(15.sp, FontWeight.ExtraBold), color = colors.ink, textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth().pressable(onClick = onJoin).padding(vertical = 12.dp))
-            }
-        }
-    }
-}
-
-private fun Modifier.dashedRounded(color: Color): Modifier = drawBehind {
-    val stroke = 2.5f * density
-    drawRoundRect(
-        color,
-        topLeft = androidx.compose.ui.geometry.Offset(stroke / 2, stroke / 2),
-        size = androidx.compose.ui.geometry.Size(size.width - stroke, size.height - stroke),
-        cornerRadius = androidx.compose.ui.geometry.CornerRadius(48 * density),
-        style = androidx.compose.ui.graphics.drawscope.Stroke(stroke, pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(8 * density, 6 * density))),
-    )
-}
