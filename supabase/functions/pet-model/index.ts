@@ -47,19 +47,20 @@ const TRIPO_RIG_CREATURE = "v2.5-20260210";
 const TRIPO_SHEET_MODEL = "seedream_v5";
 const TRIPO_SHEET_SIZE = "3072x1536";
 
-// The pet as one picture in the app's game-art style (cute, cel-shaded, but unmistakably this pet),
-// which the owner approves and which then becomes the 3D model. A clean, evenly lit, standing,
-// three-quarter view in simple shapes models far better than photos, and keeps the face's
-// markings. Drawn by Tripo's GPT-image model (10 credits).
+// The pet as one picture in the app's flat cartoon style (simple colour blocks, one shadow tone,
+// a clean outline, but unmistakably this pet), which the owner approves and which then becomes the
+// 3D model. A clean, evenly lit, standing, three-quarter view in simple shapes models far better
+// than photos, and keeps the face's markings. The onboarding sample pet (Android welcome_pet) is
+// drawn with this same prompt, so keep the two in step. Drawn by Tripo's GPT-image model (10 credits).
 const TRIPO_PICTURE_MODEL = "chat_image_2";
 const PICTURE_PROMPT =
-  "Redraw this exact pet (the same individual animal shown in all reference photos) as a character in a cute anime " +
-  "action-RPG game art style: clean cel shading, soft two-tone shadows, painterly fur shapes, thin clean outline, " +
-  "polished 3D-game character look, slightly cute proportions with large expressive eyes. Keep its real identity exact: " +
-  "the same coat colours and markings, the same face pattern, eye colour, nose colour, ear shape and tail shape, and its " +
-  "real body proportions. Full body, standing calmly on all four legs, three-quarter front view, all four legs clearly " +
-  "visible and separated, mouth gently open in a happy smile, plain pure white background, no shadow, no ground, no " +
-  "collar, no text.";
+  "Redraw this exact pet (the same individual animal shown in all reference photos) as a cute, simple game character. " +
+  "Style: smooth simplified shapes, flat colour blocks, one soft shadow tone, no fur texture or individual hair strands, " +
+  "a clean even dark-brown outline, small simple dot eyes with one highlight, gently rounded cute proportions with a " +
+  "slightly bigger head. Keep its identity: the same coat colours and where the markings sit, the same face pattern, " +
+  "eye colour, nose colour, ear shape and tail shape. Full body, standing on all four legs, three-quarter front view, " +
+  "all four legs clearly visible and separated, happy open-mouth smile, plain pure white background, no shadow, " +
+  "no ground, no collar, no text.";
 const MAX_DRAWS = 3;
 const SHEET_PROMPT =
   "Character reference sheet of the exact pet in the reference images (the same animal photographed from different sides). " +

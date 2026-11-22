@@ -273,7 +273,7 @@ private fun key(p: Float, vararg keys: Pair<Float, Float>): Float {
     return keys.last().second
 }
 
-/** The sample pet, drawn by the same prompt the avatar maker uses (supabase/functions/pet-model PICTURE_PROMPT). */
+/** The sample pet, drawn by the same flat cartoon prompt the avatar maker uses (supabase/functions/pet-model PICTURE_PROMPT). */
 @Composable
 private fun DesignPet(modifier: Modifier) {
     Image(painterResource(R.drawable.welcome_pet), null, modifier, contentScale = ContentScale.Fit)
