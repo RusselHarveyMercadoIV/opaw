@@ -382,29 +382,17 @@ private fun BoxScope.Shadow(st: Stage, x: Int, y: Int, w: Int, h: Int, alpha: Fl
 
 // MARK: - 14a Welcome
 
-/** The welcome (14a): brand orange, the pet hopping on its stage, one white button. */
+/** The welcome (14a): brand orange, the pet lounging on its couch like royalty, one white button. */
 @Composable
 private fun WelcomeScreen(busy: Boolean, failed: Boolean, error: String?, onStart: () -> Unit, onSignIn: () -> Unit) {
     val t = rememberSeconds()
     DesignScreen(Color(0xFFFF6A0F)) { st ->
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFFFF8F2E), Color(0xFFFF6A0F)))))
         Box(Modifier.at(st, 55, 150, 300, 300).background(Color.White.copy(alpha = 0.95f), CircleShape))
-        Box(Modifier.at(st, 85, 370, 240, 48).background(Color(0xFFFFE3CF), CircleShape))
-        SvgArt(
-            RoomArt.pieces.getValue("plant-pot"),
-            Modifier.at(st, 45, 304, 96, 96).graphicsLayer { transformOrigin = TransformOrigin(0.5f, 1f); rotationZ = key(t % 3f / 3f, 0f to -3f, 0.5f to 3f, 1f to -3f) },
-        )
-        if (busy) {
-            // 11b: while the pets come back, the pet lounges on its couch like royalty.
-            Shadow(st, 95, 404, 220, 20)
-            Image(painterResource(R.drawable.royal_pet), null, Modifier.at(st, 75, 158, 260, 260).obLounge(t), contentScale = ContentScale.Fit)
-            for (i in 0..2) Note(st, t, 296, 196, i * 1f)
-        } else {
-            SvgArt(RoomArt.pieces.getValue("bed-donut"), Modifier.at(st, 249, 294, 120, 120))
-            Shadow(st, 142, 400, 126, 18)
-            DesignPet(Modifier.at(st, 100, 180, 210, 230).obHop(t, st))
-            SvgArt(RoomArt.pieces.getValue("toy-ball"), Modifier.at(st, 229, 380, 56, 56).obFloat(t, st))
-        }
+        // The pet lounges on its couch like royalty: on the welcome, while signing in (11b) and on try again (11d).
+        Shadow(st, 95, 404, 220, 20)
+        for (i in 0..2) Note(st, t, 296, 196, i * 1f)
+        Image(painterResource(R.drawable.royal_pet), null, Modifier.at(st, 75, 158, 260, 260).obLounge(t), contentScale = ContentScale.Fit)
         Sparkle(st, t, 66, 168, 22, "#fff", 0f)
         Sparkle(st, t, 330, 150, 16, "#FFE3D1", 0.7f)
         Sparkle(st, t, 344, 380, 22, "#fff", 1.3f)
