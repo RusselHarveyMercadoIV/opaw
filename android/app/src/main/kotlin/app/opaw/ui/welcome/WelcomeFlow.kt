@@ -288,6 +288,29 @@ private fun Modifier.obHop(t: Float, st: Stage) = graphicsLayer {
     scaleY = key(p, 0f to 1f, 0.58f to 1f, 0.66f to 0.92f, 0.77f to 1.05f, 0.88f to 0.95f, 0.94f to 1f, 1f to 1f)
 }
 
+/** ob-lounge: a slow breath, then a long sip leaning into the coconut (3 s). */
+private fun Modifier.obLounge(t: Float) = graphicsLayer {
+    transformOrigin = TransformOrigin(0.5f, 1f)
+    val p = t % 3f / 3f
+    rotationZ = key(p, 0f to 0f, 0.5f to 0f, 0.62f to -2f, 0.72f to -2f, 0.82f to 0.6f, 1f to 0f)
+    scaleX = key(p, 0f to 1f, 0.25f to 1.015f, 0.5f to 1f, 0.62f to 1.03f, 0.72f to 1.03f, 0.82f to 0.99f, 1f to 1f)
+    scaleY = key(p, 0f to 1f, 0.25f to 1.025f, 0.5f to 1f, 0.62f to 0.96f, 0.72f to 0.96f, 0.82f to 1.02f, 1f to 1f)
+}
+
+private val NOTE = svgDoc("0 0 20 24", """<ellipse cx="7" cy="19" rx="5.5" ry="4" fill="#FF7A1A"/><rect x="10.6" y="3" width="2.6" height="16.5" rx="1.3" fill="#FF7A1A"/><path d="M12 3c4 .8 6.5 3.6 6.5 8-1.4-2-3.4-3-6.5-3.2z" fill="#FF7A1A"/>""")
+
+/** ob-note: a little music note drifting up and away from the lounging pet (3 s, [delay] in). */
+@Composable
+private fun BoxScope.Note(st: Stage, t: Float, x: Int, y: Int, delay: Float) {
+    val p = phase(t, 3f, delay) ?: return
+    SvgArt(NOTE, Modifier.at(st, x, y, 22, 26).graphicsLayer {
+        translationX = 26f * p * st.s * density
+        translationY = -70f * p * st.s * density
+        rotationZ = -10f + 24f * p
+        alpha = if (p < 0.15f) p / 0.15f else 1f - (p - 0.15f) / 0.85f
+    })
+}
+
 /** ob-twinkle: sparkles breathing in and out (2.2 s). */
 private fun Modifier.obTwinkle(t: Float, delay: Float) = graphicsLayer {
     val p = phase(t, 2.2f, delay) ?: 0f
@@ -374,14 +397,8 @@ private fun WelcomeScreen(busy: Boolean, failed: Boolean, error: String?, onStar
         if (busy) {
             // 11b: while the pets come back, the pet lounges on its couch like royalty.
             Shadow(st, 95, 404, 220, 20)
-            Image(
-                painterResource(R.drawable.royal_pet), null,
-                Modifier.at(st, 75, 158, 260, 260).graphicsLayer {
-                    transformOrigin = TransformOrigin(0.5f, 1f)
-                    rotationZ = key(t % 3.2f / 3.2f, 0f to -1.5f, 0.5f to 1.5f, 1f to -1.5f)
-                },
-                contentScale = ContentScale.Fit,
-            )
+            Image(painterResource(R.drawable.royal_pet), null, Modifier.at(st, 75, 158, 260, 260).obLounge(t), contentScale = ContentScale.Fit)
+            for (i in 0..2) Note(st, t, 296, 196, i * 1f)
         } else {
             SvgArt(RoomArt.pieces.getValue("bed-donut"), Modifier.at(st, 249, 294, 120, 120))
             Shadow(st, 142, 400, 126, 18)
