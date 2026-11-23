@@ -19,6 +19,7 @@ import app.opaw.ui.components.Feedback
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 
@@ -36,6 +37,15 @@ class OpawApplication : Application() {
 
     /** Work that should outlive a screen, such as saving after a toast's Undo. */
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+    /**
+     * Every pet with its data, kept for the app's whole life so a screen opened again
+     * starts from the last list instead of empty. Null until the database first answers,
+     * which keeps Home from flashing "add a pet" while it loads.
+     */
+    val pets: kotlinx.coroutines.flow.StateFlow<List<app.opaw.data.DogData>?> by lazy {
+        repository.allDogData.stateIn(scope, kotlinx.coroutines.flow.SharingStarted.Eagerly, null)
+    }
 
     override fun onCreate() {
         super.onCreate()

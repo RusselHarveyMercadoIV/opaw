@@ -187,7 +187,8 @@ private fun RouteScreen(route: Route) {
 private fun ToastWatcher() {
     val app = rememberApp()
     val now = rememberNow()
-    val all by app.repository.allDogData.collectAsStateWithLifecycle(emptyList())
+    val loaded by app.pets.collectAsStateWithLifecycle()
+    val all = loaded ?: emptyList()
     LaunchedEffect(now, all) {
         for (data in all) {
             val done = data.doneReminderIds(now)

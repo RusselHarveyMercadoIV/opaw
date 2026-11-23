@@ -120,10 +120,12 @@ fun HomeScreen() {
     val selectTab = LocalSelectTab.current
     val haptics = rememberHaptics()
     val scope = rememberCoroutineScope()
-    val all by app.repository.allDogData.collectAsStateWithLifecycle(emptyList())
+    val loaded by app.pets.collectAsStateWithLifecycle()
     val activeId by app.settings.activeDogId.collectAsStateWithLifecycle(null)
     var addSource by remember { mutableStateOf<PhotoSource?>(null) }
     var showJoin by remember { mutableStateOf(false) }
+    // Still loading: draw nothing rather than the empty room.
+    val all = loaded ?: return
     if (all.isEmpty()) {
         // A new account lands here (14k): the room is ready, and adding the first pet opens the photos.
         EmptyRoom(

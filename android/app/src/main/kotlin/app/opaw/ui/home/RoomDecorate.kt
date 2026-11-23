@@ -135,7 +135,8 @@ fun RoomDecorateScreen(dogId: String) {
     val app = rememberApp()
     val navigator = LocalNavigator.current
     val haptics = rememberHaptics()
-    val all by app.repository.allDogData.collectAsStateWithLifecycle(emptyList())
+    val loaded by app.pets.collectAsStateWithLifecycle()
+    val all = loaded ?: emptyList()
     val data = all.firstOrNull { it.dog.id == dogId } ?: return
     val state = app.paws.state(dogId)
     var tab by remember { mutableStateOf(ShopTab.BEDS) }
