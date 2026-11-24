@@ -1,6 +1,5 @@
 package app.opaw.data
 
-import app.opaw.core.Badge
 import app.opaw.core.CareKind
 import app.opaw.core.OpawFormat
 import app.opaw.core.PoopColor
@@ -92,37 +91,3 @@ fun walkTitle(date: java.time.Instant, activity: WalkActivity = WalkActivity.WAL
         }
     }
 }
-
-/** The big text on the medal. */
-val Badge.medal: String
-    get() = when (this) {
-        Badge.FIRST_LOG, Badge.FIRST_WALK -> "1st"
-        Badge.CARE_STREAK_7, Badge.WALK_STREAK_7 -> "7"
-        Badge.CARE_STREAK_30 -> "30"
-        Badge.WALKS_10, Badge.MEMORY_KEEPER -> "10"
-        Badge.WALKS_100, Badge.KM100_TOTAL -> "100"
-        Badge.KM5_WALK -> "5K"
-        Badge.KM10_WALK -> "10K"
-        Badge.KM50_MONTH -> "50"
-        Badge.EARLY_BIRD -> "7am"
-        Badge.SQUEAKY_CLEAN, Badge.PACK_LEADER -> "5"
-        Badge.HEALTH_CHECK -> "Vet"
-    }
-
-/** The caption under the medal. */
-val Badge.medalLabel: String
-    get() = when (this) {
-        Badge.FIRST_LOG -> "First log"
-        Badge.FIRST_WALK -> "First walk"
-        Badge.CARE_STREAK_7, Badge.CARE_STREAK_30 -> "day streak"
-        Badge.WALK_STREAK_7 -> "walk streak"
-        Badge.WALKS_10, Badge.WALKS_100 -> "walks"
-        Badge.KM5_WALK, Badge.KM10_WALK -> "in one walk"
-        Badge.KM50_MONTH -> "km in a month"
-        Badge.KM100_TOTAL -> "km walked"
-        Badge.EARLY_BIRD -> "Early bird"
-        Badge.SQUEAKY_CLEAN -> "baths"
-        Badge.MEMORY_KEEPER -> "memories"
-        Badge.HEALTH_CHECK -> "Health check"
-        Badge.PACK_LEADER -> "pack friends"
-    }

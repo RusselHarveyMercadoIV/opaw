@@ -159,21 +159,38 @@ class MoodTest {
 }
 
 class BadgeTest {
-    @Test fun firstLogAndWalk() {
-        val earned = BadgeEngine.earned(BadgeStats(totalCareEvents = 1, walkCount = 1, totalWalkKm = 1.2, longestWalkKm = 1.2))
-        assertTrue(Badge.FIRST_LOG in earned)
-        assertTrue(Badge.FIRST_WALK in earned)
-        assertFalse(Badge.KM5_WALK in earned)
+    @Test fun tiersFollowTargets() {
+        val stats = BadgeStats(totalCareEvents = 120, walkCount = 9, longestWalkKm = 5.2)
+        val earned = BadgeEngine.earned(stats)
+        assertTrue(Badge.PAW_PRINTS.level(Tier.BRONZE) in earned)
+        assertTrue(Badge.PAW_PRINTS.level(Tier.SILVER) in earned)
+        assertFalse(Badge.PAW_PRINTS.level(Tier.GOLD) in earned)
+        assertFalse(Badge.RAMBLER.level(Tier.BRONZE) in earned)
+        assertEquals(Tier.SILVER, Badge.TRAIL_LEGEND.tier(stats))
+        assertEquals(null, Badge.RAMBLER.tier(stats))
     }
 
     @Test fun newlyEarnedExcludesExisting() {
-        val new = BadgeEngine.newlyEarned(BadgeStats(totalCareEvents = 3, careStreakDays = 7), alreadyEarned = setOf(Badge.FIRST_LOG))
-        assertEquals(listOf(Badge.CARE_STREAK_7), new)
+        val stats = BadgeStats(careStreakDays = 30)
+        val new = BadgeEngine.newlyEarned(stats, alreadyEarned = setOf(Badge.DEVOTED.level(Tier.BRONZE)))
+        assertEquals(listOf(Badge.DEVOTED.level(Tier.SILVER)), new)
+        assertEquals(Badge.DEVOTED.level(Tier.SILVER), BadgeEngine.headline(new))
     }
 
-    @Test fun progressIsClamped() {
-        assertEquals(0.5, Badge.WALKS_10.progress(BadgeStats(walkCount = 5)), 0.0001)
-        assertEquals(1.0, Badge.WALKS_10.progress(BadgeStats(walkCount = 50)))
+    @Test fun progressTowardNextTier() {
+        assertEquals(0.5, Badge.RAMBLER.progress(BadgeStats(walkCount = 5)), 0.0001)
+        assertEquals(0.4, Badge.RAMBLER.progress(BadgeStats(walkCount = 20)), 0.0001)
+        assertEquals(1.0, Badge.RAMBLER.progress(BadgeStats(walkCount = 500)))
+        assertEquals(Tier.GOLD, Badge.RAMBLER.nextTier(BadgeStats(walkCount = 60)))
+    }
+
+    @Test fun levelsRoundTrip() {
+        val level = Badge.SQUEAKY_CLEAN.level(Tier.GOLD)
+        assertEquals("squeakyClean.gold", level.raw)
+        assertEquals(level, BadgeLevel.fromRaw(level.raw))
+        assertEquals("badge_squeaky_clean_gold", level.art)
+        assertEquals("Log 30 baths", level.detail)
+        assertEquals(null, BadgeLevel.fromRaw("firstLog"))
     }
 }
 

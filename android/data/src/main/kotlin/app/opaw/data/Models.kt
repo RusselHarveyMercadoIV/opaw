@@ -4,7 +4,7 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
-import app.opaw.core.Badge
+import app.opaw.core.BadgeLevel
 import app.opaw.core.CareKind
 import app.opaw.core.DogSize
 import app.opaw.core.DogTraits
@@ -105,7 +105,10 @@ data class Dog(
     /** The owner's pick, else a guess from energy. */
     val temperament: Temperament get() = Temperament.fromRaw(temperamentRaw) ?: Temperament.guess(energy)
     val avatarStatus: AvatarStatus get() = AvatarStatus.fromRaw(avatarStatusRaw)
-    val earnedBadges: Set<Badge> get() = earnedBadgesRaw.mapNotNull(Badge::fromRaw).toSet()
+    /** Badge levels held (design 2f): `rambler.silver` and so on. */
+    val earnedBadges: Set<BadgeLevel> get() = earnedBadgesRaw.mapNotNull(BadgeLevel::fromRaw).toSet()
+    /** Holds only badges from before bronze, silver and gold, so the first refresh awards levels quietly. */
+    val hasLegacyBadges: Boolean get() = earnedBadgesRaw.isNotEmpty() && earnedBadgesRaw.none { '.' in it }
     val ageYears: Double get() = age(birthDate)
     val traits: DogTraits get() = DogTraits(size, energy, ageYears)
 

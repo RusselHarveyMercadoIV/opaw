@@ -52,6 +52,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.opaw.OpawApplication
@@ -250,7 +251,11 @@ fun NoticeView(notice: Notice, onAction: () -> Unit) {
                 Notice.Kind.DUE -> Icon(DesignIcon.MEDS, size = 24.dp, weight = 2.4f, tint = tint)
                 Notice.Kind.OFFLINE -> Icon(DesignIcon.CLOUD_OFF, size = 24.dp, tint = tint)
                 Notice.Kind.FAILED -> Icon(DesignIcon.ALERT, size = 24.dp, tint = tint)
-                Notice.Kind.MILESTONE -> Text(notice.medal ?: "★", style = opaw(22.sp, FontWeight.Black), color = Ink, maxLines = 1, modifier = Modifier.padding(6.dp))
+                Notice.Kind.MILESTONE -> if (notice.medalRes != null) {
+                    Image(painterResource(notice.medalRes), null, Modifier.fillMaxSize().padding(3.dp))
+                } else {
+                    Text(notice.medal ?: "★", style = opaw(22.sp, FontWeight.Black), color = Ink, maxLines = 1, modifier = Modifier.padding(6.dp))
+                }
             }
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {

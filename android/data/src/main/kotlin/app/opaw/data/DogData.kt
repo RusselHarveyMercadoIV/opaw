@@ -4,7 +4,7 @@ import app.opaw.core.CareKind
 import app.opaw.core.CareReport
 import app.opaw.core.CareScore
 import app.opaw.core.CareSnapshot
-import app.opaw.core.Badge
+import app.opaw.core.BadgeLevel
 import app.opaw.core.BadgeEngine
 import app.opaw.core.BadgeStats
 import app.opaw.core.StreakCalculator
@@ -199,8 +199,8 @@ data class DogData(
         )
     }
 
-    /** Badges earned by these stats that the dog doesn't have yet. */
-    fun newBadges(friendsCount: Int = 0): List<Badge> = BadgeEngine.newlyEarned(badgeStats(friendsCount), dog.earnedBadges)
+    /** Badge levels earned by these stats that the pet doesn't have yet. */
+    fun newBadges(friendsCount: Int = 0): List<BadgeLevel> = BadgeEngine.newlyEarned(badgeStats(friendsCount), dog.earnedBadges)
 }
 
 fun Reminder.dueDate(on: Instant, zone: ZoneId = ZoneId.systemDefault()): Instant =

@@ -59,7 +59,6 @@ import app.opaw.data.Dog
 import app.opaw.data.DogData
 import app.opaw.data.Memory
 import app.opaw.data.Walk
-import app.opaw.data.medal
 import app.opaw.data.title
 import app.opaw.services.CareRecorder
 import app.opaw.services.CutoutService
@@ -415,7 +414,7 @@ private fun AddMemorySheet(dog: Dog, onDismiss: () -> Unit) {
             haptics.success()
             onDismiss()
             CareRecorder.refreshBadges(app, dog.id).firstOrNull()?.let { badge ->
-                app.toasts.show(Notice(Notice.Kind.MILESTONE, badge.title, "${dog.name} · ${badge.detail}", medal = badge.medal, actionTitle = "View") { app.toasts.showChallenges = true })
+                app.toasts.show(CareRecorder.badgeNotice(badge, dog.name) { app.toasts.showChallenges = true })
             }
         }
     }

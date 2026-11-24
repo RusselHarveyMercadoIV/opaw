@@ -10,6 +10,11 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.graphics.ColorMatrix
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.res.painterResource
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -48,14 +53,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.opaw.core.Badge
+import app.opaw.core.BadgeLevel
+import app.opaw.core.BadgeStats
+import app.opaw.core.Tier
+import app.opaw.core.topTiers
 import app.opaw.core.DogSize
 import app.opaw.core.EnergyLevel
 import app.opaw.core.Temperament
 import app.opaw.core.OpawFormat
 import app.opaw.core.StreakCalculator
 import app.opaw.data.DogData
-import app.opaw.data.medal
-import app.opaw.data.medalLabel
 import app.opaw.services.NotificationService
 import app.opaw.services.PhotoStore
 import app.opaw.services.Premium
@@ -465,22 +472,24 @@ fun ChallengesScreen() {
         ScreenHeader("Challenges", leading = { RoundIcon(DesignIcon.BACK, onClick = navigator::pop) })
         val d = data ?: return@Column
         val newestRaw by app.settings.newestBadge(d.dog.id).collectAsStateWithLifecycle(null)
-        // The newest badge counts as new for three days.
-        val newest = newestRaw?.let { Badge.fromRaw(it) }?.takeIf { d.dog.lastBadgeEarnedAt?.let { at -> ChronoUnit.HOURS.between(at, java.time.Instant.now()) < 72 } == true }
+        // The newest level counts as new for three days.
+        val newest = newestRaw?.let { BadgeLevel.fromRaw(it) }?.takeIf { d.dog.lastBadgeEarnedAt?.let { at -> ChronoUnit.HOURS.between(at, java.time.Instant.now()) < 72 } == true }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).navigationBarsPadding().padding(bottom = 40.dp)) {
             MonthCard(d, Modifier.padding(horizontal = 20.dp).padding(top = 16.dp))
             StreakCard(d, Modifier.padding(horizontal = 20.dp).padding(top = 12.dp))
             val earned = d.dog.earnedBadges
+            val tiers = earned.topTiers()
+            val stats = d.badgeStats()
             Row(Modifier.padding(horizontal = 24.dp).padding(top = 22.dp), verticalAlignment = Alignment.Bottom) {
                 Text("Badges", style = opaw(21.sp, FontWeight.Black), color = colors.ink, modifier = Modifier.weight(1f))
-                Text("${earned.size} of ${Badge.entries.size}", style = opaw(14.sp, FontWeight.Bold), color = colors.muted)
+                Text("${earned.size} of ${Badge.entries.size * Tier.entries.size}", style = opaw(14.sp, FontWeight.Bold), color = colors.muted)
             }
-            // Earned first (newest at the front), then the rest.
-            val ordered = Badge.entries.sortedBy { if (it == newest) 0 else if (it in earned) 1 else 2 }
-            Column(Modifier.padding(horizontal = 20.dp).padding(top = 14.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            // The newest first, then the rest by metal (gold first), then those still to earn.
+            val ordered = Badge.entries.sortedBy { if (it == newest?.badge) -1 else tiers[it]?.let { tier -> 2 - tier.ordinal } ?: 3 }
+            Column(Modifier.padding(horizontal = 20.dp).padding(top = 14.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
                 ordered.chunked(3).forEach { row ->
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        row.forEach { BadgeMedal(it, it in earned, it == newest, Modifier.weight(1f)) }
+                        row.forEach { BadgeMedal(it, tiers[it], stats, isNew = it == newest?.badge, Modifier.weight(1f)) }
                         repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
                     }
                 }
@@ -523,22 +532,67 @@ private fun StreakCard(data: DogData, modifier: Modifier) {
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             repeat(7) { index -> Box(Modifier.weight(1f).height(10.dp).background(if (index < streak) colors.action else colors.hairline, CircleShape)) }
         }
-        Text("Reward: ${data.dog.name} earns the ${Badge.CARE_STREAK_7.title} badge", style = opaw(14.sp, FontWeight.Medium), color = colors.muted)
+        Text("Reward: ${data.dog.name} earns ${Badge.DEVOTED.title} in bronze", style = opaw(14.sp, FontWeight.Medium), color = colors.muted)
     }
 }
 
-/** A 94pt round badge: black when earned, red "NEW" when just earned, white while still to earn. */
+/** The words under a medal: the metal's own colour, dark enough to read on the cream ground. */
+private val Tier.ink: Color
+    get() = when (this) {
+        Tier.BRONZE -> Color(0xFF87461C)
+        Tier.SILVER -> Color(0xFF5B636D)
+        Tier.GOLD -> Color(0xFF8A5F00)
+    }
+
+/** What a badge counts, for "Gold · 500 logs". */
+private val Badge.unit: String
+    get() = when (this) {
+        Badge.PAW_PRINTS -> "logs"
+        Badge.DEVOTED, Badge.NEVER_SKIP -> "days"
+        Badge.RAMBLER, Badge.EARLY_BIRD -> "walks"
+        Badge.TRAIL_LEGEND, Badge.CENTURY_PAWS, Badge.BUSY_MONTH -> "km"
+        Badge.SQUEAKY_CLEAN -> "baths"
+        Badge.MEMORY_KEEPER -> "memories"
+        Badge.HEALTH_CHECK -> "vet visits"
+        Badge.PACK_LEADER -> "friends"
+    }
+
+private fun count(value: Double): String = if (value % 1.0 == 0.0) value.toLong().toString() else oneDecimal.format(value)
+
+private val greyscale = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) })
+
+/**
+ * A badge medal (2f): the art in its highest metal, with progress to the next one. A NEW tag for three
+ * days after it levels up. Still to earn: the bronze medal in grey with a lock, and what bronze needs.
+ */
 @Composable
-private fun BadgeMedal(badge: Badge, earned: Boolean, isNew: Boolean, modifier: Modifier) {
+private fun BadgeMedal(badge: Badge, tier: Tier?, stats: BadgeStats, isNew: Boolean, modifier: Modifier) {
     val colors = Opaw.colors
-    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        val fill = if (isNew) colors.alert else if (earned) Action else colors.surface
-        val shadow = if (isNew) colors.alert.copy(alpha = 0.35f) else Color.Black.copy(alpha = if (earned) 0.2f else 0.08f)
-        Box(Modifier.size(94.dp).shadow(12.dp, CircleShape, ambientColor = shadow, spotColor = shadow).background(fill, CircleShape), contentAlignment = Alignment.Center) {
-            Text(if (isNew) "NEW" else badge.medal, style = opaw(26.sp, FontWeight.Black), color = if (earned || isNew) Color.White else colors.ink.copy(alpha = 0.35f), maxLines = 1)
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Box(Modifier.padding(bottom = 6.dp).size(92.dp)) {
+            Image(
+                painterResource(badge.medalRes(tier ?: Tier.BRONZE)),
+                contentDescription = "${badge.title}, ${tier?.title ?: "not earned yet"}",
+                modifier = Modifier.fillMaxSize().shadow(if (tier != null) 10.dp else 4.dp, CircleShape, clip = false,
+                    ambientColor = Color.Black.copy(alpha = 0.14f), spotColor = Color.Black.copy(alpha = 0.14f)),
+                alpha = if (tier != null) 1f else 0.32f,
+                colorFilter = if (tier != null) null else greyscale,
+            )
+            if (tier == null) Icon(DesignIcon.LOCK, size = 26.dp, weight = 2.4f, tint = colors.muted, modifier = Modifier.align(Alignment.Center))
+            if (isNew) {
+                Text("NEW", style = opaw(11.sp, FontWeight.Black), color = Color.White,
+                    modifier = Modifier.align(Alignment.TopEnd).offset(x = 8.dp, y = (-2).dp).background(Action, CircleShape).padding(horizontal = 9.dp, vertical = 3.dp))
+            }
         }
-        Text(if (isNew) badge.title else badge.medalLabel, style = opaw(14.sp, FontWeight.Bold), color = if (earned || isNew) colors.ink else colors.muted,
-            textAlign = TextAlign.Center, maxLines = 2)
+        Text(badge.title, style = opaw(14.sp, FontWeight.ExtraBold), color = colors.ink, textAlign = TextAlign.Center, maxLines = 1)
+        val next = badge.nextTier(stats)
+        val caption = when {
+            tier == null -> "${count(badge.value(stats))}/${count(badge.target(Tier.BRONZE))} for Bronze"
+            isNew -> "${tier.title} · just now"
+            next == null -> "${tier.title} · ${count(badge.target(Tier.GOLD))} ${badge.unit}"
+            else -> "${tier.title} · ${count(badge.value(stats))}/${count(badge.target(next))}"
+        }
+        Text(caption, style = opaw(12.sp, FontWeight.Bold), color = tier?.ink ?: colors.muted, textAlign = TextAlign.Center, maxLines = 1)
     }
 }
 

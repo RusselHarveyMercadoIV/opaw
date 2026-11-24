@@ -63,8 +63,10 @@ data class Notice(
     val detail: String,
     /** A photo for family toasts. */
     val imagePath: String? = null,
-    /** The big number or medal on a milestone toast. */
+    /** The big number on a milestone toast, when there is no medal art. */
     val medal: String? = null,
+    /** The badge medal on a milestone toast (design 2f). */
+    val medalRes: Int? = null,
     val actionTitle: String? = null,
     override val id: String = UUID.randomUUID().toString(),
     val action: (() -> Unit)? = null,

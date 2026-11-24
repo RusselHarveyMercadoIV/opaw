@@ -91,7 +91,6 @@ import app.opaw.data.DogData
 import app.opaw.data.Walk
 import app.opaw.data.WalkActivity
 import app.opaw.data.WalkPin
-import app.opaw.data.medal
 import app.opaw.data.title
 import app.opaw.data.walkTitle
 import app.opaw.services.CareRecorder
@@ -615,7 +614,7 @@ private fun WalkSummary(result: WalkRecorder.FinishedWalk, data: DogData, activi
         haptics.success()
         WidgetRefresher.refresh(app)
         CareRecorder.refreshBadges(app, data.dog.id).firstOrNull()?.let { badge ->
-            app.toasts.show(Notice(Notice.Kind.MILESTONE, badge.title, "${data.dog.name} · ${badge.detail}", medal = badge.medal, actionTitle = "View") {
+            app.toasts.show(CareRecorder.badgeNotice(badge, data.dog.name) {
                 onClose()
                 navigator.push(Route.Challenges)
             })

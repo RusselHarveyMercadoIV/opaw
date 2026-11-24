@@ -8,7 +8,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import app.opaw.BuildConfig
-import app.opaw.core.Badge
+import app.opaw.core.BadgeLevel
 import app.opaw.core.LocationPrivacy
 import app.opaw.data.Dog
 import app.opaw.data.Memory
@@ -374,7 +374,7 @@ class PackService(private val context: Context) {
         post(memory.dogId, "memory", memory.caption, imagePath = imagePath)
     }
 
-    suspend fun shareBadge(badge: Badge, dog: Dog) = post(dog.id, "badge", "${dog.name} earned ${badge.title}!", badge = badge.raw)
+    suspend fun shareBadge(badge: BadgeLevel, dog: Dog) = post(dog.id, "badge", "${dog.name} earned ${badge.title}!", badge = badge.raw)
 
     suspend fun setLiked(liked: Boolean, post: PackPost) {
         val user = requireUser()

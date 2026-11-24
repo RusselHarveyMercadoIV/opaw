@@ -1,13 +1,14 @@
 package app.opaw.services
 
-import app.opaw.core.Badge
+import app.opaw.core.BadgeEngine
+import app.opaw.core.BadgeLevel
 import android.content.Context
 import app.opaw.OpawApplication
 import app.opaw.core.CareKind
 import app.opaw.data.CareEvent
 import app.opaw.data.DogData
 import app.opaw.data.displayTitle
-import app.opaw.data.medal
+import app.opaw.ui.profile.medalRes
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -52,11 +53,7 @@ object CareRecorder {
             // The reaction first, then the milestone replaces it.
             app.scope.launch {
                 delay(1600)
-                toasts.show(
-                    Notice(Notice.Kind.MILESTONE, badge.title, "${after.dog.name} · ${badge.detail}", medal = badge.medal, actionTitle = "View") {
-                        toasts.showChallenges = true
-                    },
-                )
+                toasts.show(badgeNotice(badge, after.dog.name) { toasts.showChallenges = true })
             }
         }
         return CareToast(
@@ -70,21 +67,32 @@ object CareRecorder {
         )
     }
 
-    /** Awards any newly earned badges and returns them, so the UI can celebrate. */
-    suspend fun refreshBadges(context: Context, dogId: String, friendsCount: Int = 0): List<Badge> {
+    /**
+     * Awards any newly earned badge levels and returns them, the one to celebrate first. A pet that only
+     * holds badges from before bronze, silver and gold gets its levels quietly, so updating doesn't
+     * fire a stack of toasts.
+     */
+    suspend fun refreshBadges(context: Context, dogId: String, friendsCount: Int = 0): List<BadgeLevel> {
         val app = context.applicationContext as OpawApplication
         val data = app.repository.loadDogData(dogId) ?: return emptyList()
         val new = data.newBadges(friendsCount)
-        if (new.isEmpty()) return emptyList()
+        if (new.isEmpty() && !data.dog.hasLegacyBadges) return emptyList()
+        val quiet = data.dog.hasLegacyBadges
         app.repository.saveDog(
             data.dog.copy(
                 earnedBadgesRaw = (data.dog.earnedBadges + new).map { it.raw }.sorted(),
-                lastBadgeEarnedAt = Instant.now(),
+                lastBadgeEarnedAt = if (quiet || new.isEmpty()) data.dog.lastBadgeEarnedAt else Instant.now(),
             ),
         )
-        app.settings.setNewestBadge(dogId, new.first().raw)
-        return new
+        if (quiet) return emptyList()
+        val headline = BadgeEngine.headline(new) ?: return emptyList()
+        app.settings.setNewestBadge(dogId, headline.raw)
+        return listOf(headline) + (new - headline)
     }
+
+    /** The milestone toast for a new badge level: its medal, "Rambler · Silver", and what earned it. */
+    fun badgeNotice(level: BadgeLevel, petName: String, action: () -> Unit) =
+        Notice(Notice.Kind.MILESTONE, level.title, "$petName · ${level.detail}", medalRes = level.medalRes, actionTitle = "View", action = action)
 
     /**
      * Removes a log and returns the white toast that says so: UNDONE after Undo on a logged toast,
