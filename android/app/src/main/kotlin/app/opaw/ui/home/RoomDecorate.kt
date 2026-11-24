@@ -78,14 +78,29 @@ import app.opaw.ui.theme.Opaw
 import app.opaw.ui.theme.opaw
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import app.opaw.services.TreatItem
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.foundation.layout.BoxWithConstraints
 import kotlin.math.roundToInt
+import kotlin.math.abs
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 
 /**
  * The pet standing in its room: the roaming 3D pet in the room's view, or the flat pet in its
  * place, which walks the design's path ([PetRoom] moves it).
  */
 @Composable
-internal fun RoomPet(data: DogData, view: Modifier, standing: Modifier) {
+internal fun RoomPet(data: DogData, view: Modifier, standing: Modifier, cue: RoomCue? = null) {
     val app = rememberApp()
     val now = rememberNow()
     val dog = data.dog
@@ -93,7 +108,7 @@ internal fun RoomPet(data: DogData, view: Modifier, standing: Modifier) {
     val image = rememberPetImage(dog)
     val roams = app.petModels.file(dog.id, mood) != null && app.petModels.motion(dog.id, "rest") != null
     if (roams) {
-        PetAvatar(dog, image, mood, view, room = true)
+        PetAvatar(dog, image, mood, view, room = true, cue = cue)
     } else {
         // Its soft shadow on the floor, then the pet, as in the design.
         Box(standing.drawBehind {
@@ -106,13 +121,13 @@ internal fun RoomPet(data: DogData, view: Modifier, standing: Modifier) {
 
 /** The Paws coin: orange, with the O paw on it. */
 @Composable
-internal fun PawCoin(size: Dp = 22.dp) {
-    app.opaw.ui.components.SvgArt(app.opaw.ui.components.DesignArt.PAW_COIN, Modifier.size(size))
+internal fun PawCoin(size: Dp = 22.dp, modifier: Modifier = Modifier) {
+    app.opaw.ui.components.SvgArt(app.opaw.ui.components.DesignArt.PAW_COIN, modifier.size(size))
 }
 
 /** "245" with the coin, as on Home and in the shop. */
 @Composable
-internal fun PawsChip(paws: Int, night: Boolean = false, modifier: Modifier = Modifier) {
+internal fun PawsChip(paws: Int, night: Boolean = false, modifier: Modifier = Modifier, coin: Modifier = Modifier) {
     Row(
         modifier.height(40.dp)
             .then(if (night) Modifier else Modifier.shadow(10.dp, CircleShape, ambientColor = Color(0x14000000), spotColor = Color(0x14000000)))
@@ -120,15 +135,16 @@ internal fun PawsChip(paws: Int, night: Boolean = false, modifier: Modifier = Mo
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        PawCoin(26.dp)
+        PawCoin(26.dp, coin)
         Text("$paws", style = opaw(15.sp, FontWeight.ExtraBold), color = if (night) Color.White else Ink)
     }
 }
 
 /**
- * Decorate (16b, 16c): the room turns into a shop. Every spot that can change gets an orange +;
- * tap one and the sheet shows what fits there. Tapping a piece puts it straight into the room so
- * it's seen in place before spending; Buy for 120 keeps it, Keep looking puts the old one back.
+ * The Shop (16b, 16c, 16e, 16f): the room turns into a store. Every spot that can change gets an
+ * orange +; tap one and the sheet shows what fits there. Tapping a piece puts it straight into the
+ * room so it's seen in place before spending; Buy for 120 keeps it, Keep looking puts the old one
+ * back. Food is a can that fills the bowl; treats come in packs and Give tosses one to the pet.
  */
 @Composable
 fun RoomDecorateScreen(dogId: String) {
@@ -143,20 +159,30 @@ fun RoomDecorateScreen(dogId: String) {
     // A piece being tried, before it's bought.
     var trying by remember { mutableStateOf<RoomItem?>(null) }
     val night = Opaw.colors.surface != Color.White
+    // A treat just given (16f): it's tossed in, and the pet hops up to catch it.
+    var tossed by remember { mutableStateOf<RoomCue?>(null) }
+    LaunchedEffect(tossed?.id) {
+        val cue = tossed ?: return@LaunchedEffect
+        delay((cue.kind.seconds * 1000).toLong())
+        if (tossed?.id == cue.id) tossed = null
+    }
 
     Box(Modifier.fillMaxSize()) {
         PetRoom(
             night,
+            pose = if (tossed != null) RoomPose.HOP else RoomPose.WALK,
             pieces = { slot -> trying?.takeIf { it.slot == slot }?.id ?: state.piece(slot) },
             actions = RoomActions({}, {}, {}, {}),
             markers = { spots ->
                 if (trying == null) {
                     for ((slot, at) in spots) {
-                        val inTab = slot in tab.slots
+                        // The bowl's + is the food's too, while the Food tab is open (16e).
+                        val food = slot == RoomSlot.BOWL && tab == ShopTab.FOOD
+                        val inTab = slot in tab.slots || food
                         Box(
                             Modifier.offset { IntOffset((at.x - 18.dp.toPx()).roundToInt(), (at.y - 18.dp.toPx()).roundToInt()) }
                                 .size(36.dp)
-                                .pressable { haptics.select(); tab = ShopTab.entries.first { slot in it.slots } }
+                                .pressable { haptics.select(); if (!food) tab = ShopTab.entries.first { slot in it.slots } }
                                 .shadow(8.dp, CircleShape)
                                 .background(if (inTab) Action else Color.White, CircleShape)
                                 .border(3.dp, if (inTab) Color(0xFFFFC08A) else Action, CircleShape),
@@ -165,7 +191,8 @@ fun RoomDecorateScreen(dogId: String) {
                     }
                 }
             },
-        ) { view, standing -> RoomPet(data, view, standing) }
+        ) { view, standing -> RoomPet(data, view, standing, tossed) }
+        tossed?.treatId?.let { TreatToss(it, tossed!!.id) }
 
         Box(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 20.dp).padding(top = 10.dp)) {
             Text(
@@ -187,7 +214,24 @@ fun RoomDecorateScreen(dogId: String) {
                     }
                 }
             } else {
-                ShopSheet(tab, state, onTab = { tab = it }, onDone = { navigator.pop() }) { item ->
+                ShopSheet(
+                    tab, state, onTab = { tab = it }, onDone = { navigator.pop() },
+                    onTreat = { treat ->
+                        val have = state.treats[treat.id] ?: 0
+                        when {
+                            state.level < treat.level -> haptics.warning()
+                            have > 0 -> if (app.paws.giveTreat(dogId, treat)) {
+                                haptics.success()
+                                val cue = RoomCue(RoomCue.Kind.TREAT, treat.id)
+                                RoomCues.send(dogId, cue)
+                                tossed = cue
+                            } else haptics.warning()
+                            treat.premium && !Premium.isPremium -> navigator.push(Route.Paywall)
+                            app.paws.buyTreat(dogId, treat, Premium.isPremium) -> haptics.milestone()
+                            else -> haptics.warning()
+                        }
+                    },
+                ) { item ->
                     haptics.select()
                     when {
                         state.level < item.level -> haptics.warning()
@@ -206,65 +250,97 @@ fun RoomDecorateScreen(dogId: String) {
  * tucks away to a slim bar so the whole room and its + spots are in view; drag it up to open it.
  */
 @Composable
-private fun ShopSheet(tab: ShopTab, state: PetRoomState, onTab: (ShopTab) -> Unit, onDone: () -> Unit, onPick: (RoomItem) -> Unit) {
-    var open by remember { mutableStateOf(true) }
-    val pull = remember { Animatable(0f) }
+private fun ShopSheet(tab: ShopTab, state: PetRoomState, onTab: (ShopTab) -> Unit, onDone: () -> Unit, onTreat: (TreatItem) -> Unit, onPick: (RoomItem) -> Unit) {
     val scope = rememberCoroutineScope()
     val haptics = rememberHaptics()
     val shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
+    // One offset moves the whole sheet: 0 is open, [travel] (the height of everything under the
+    // header) is tucked away. The content never changes size, so the sheet follows the finger
+    // exactly and settles without a jump.
+    var travel by remember { mutableFloatStateOf(0f) }
+    var offset by remember { mutableFloatStateOf(0f) }
+    var closed by remember { mutableStateOf(false) }
+    val drag = rememberDraggableState { d -> offset = (offset + d).coerceIn(0f, travel) }
+    fun settle(close: Boolean, velocity: Float = 0f) {
+        if (close != closed) haptics.select()
+        closed = close
+        scope.launch {
+            drag.drag {
+                var last = offset
+                animate(offset, if (close) travel else 0f, velocity, spring(dampingRatio = 0.9f, stiffness = 450f)) { value, _ ->
+                    dragBy(value - last)
+                    last = value
+                }
+            }
+        }
+    }
+    // Read only inside graphicsLayer, so dragging redraws the sheet without recomposing it.
+    fun progress() = if (travel > 0f) offset / travel else 0f
+    val fling = with(LocalDensity.current) { 900.dp.toPx() }
     Column(
         Modifier.fillMaxWidth()
-            .graphicsLayer { translationY = if (open) pull.value.coerceAtLeast(0f) else pull.value.coerceAtMost(0f) * 0.4f }
+            .graphicsLayer { translationY = offset }
             .shadow(20.dp, shape).background(Color.White, shape)
-            .pointerInput(Unit) {
-                detectVerticalDragGestures(
-                    onDragEnd = {
-                        val y = pull.value
-                        if (open && y > 60.dp.toPx()) { open = false; haptics.select() }
-                        else if (!open && y < -30.dp.toPx()) { open = true; haptics.select() }
-                        scope.launch { pull.animateTo(0f) }
-                    },
-                    onDragCancel = { scope.launch { pull.animateTo(0f) } },
-                ) { change, dy -> change.consume(); scope.launch { pull.snapTo(pull.value + dy) } }
-            }
+            .draggable(
+                drag, Orientation.Vertical,
+                onDragStopped = { velocity ->
+                    settle(if (abs(velocity) > fling) velocity > 0 else offset > travel / 2, velocity)
+                },
+            )
             .navigationBarsPadding().padding(top = 10.dp, bottom = 12.dp),
     ) {
         Box(
-            Modifier.align(Alignment.CenterHorizontally).pressable { open = !open; haptics.select() }.padding(horizontal = 30.dp, vertical = 4.dp),
+            Modifier.align(Alignment.CenterHorizontally).pressable { settle(!closed) }.padding(horizontal = 30.dp, vertical = 4.dp),
         ) { Box(Modifier.size(40.dp, 5.dp).background(Color(0xFFDDDDDD), CircleShape)) }
         Row(Modifier.padding(horizontal = 20.dp).padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Decorate", style = opaw(22.sp, FontWeight.Black), color = Ink, modifier = Modifier.weight(1f))
+            Text("Shop", style = opaw(22.sp, FontWeight.Black), color = Ink, modifier = Modifier.weight(1f))
             PawCoin(20.dp)
             Text(" ${state.paws}", style = opaw(16.sp, FontWeight.Black), color = Ink)
-            if (!open) {
+            // A small Done fades in as the sheet tucks away, where the big one can't be seen.
+            Text(
+                "Done", style = opaw(15.sp, FontWeight.ExtraBold), color = Color.White,
+                modifier = Modifier.padding(start = 12.dp).graphicsLayer { alpha = ((progress() - 0.5f) * 2f).coerceIn(0f, 1f) }
+                    .then(if (closed) Modifier.pressable(onClick = onDone) else Modifier)
+                    .background(Ink, CircleShape).padding(horizontal = 18.dp, vertical = 9.dp),
+            )
+        }
+        Column(
+            Modifier
+                .onSizeChanged {
+                    travel = it.height.toFloat()
+                    offset = if (closed) travel else offset.coerceAtMost(travel)
+                }
+                .graphicsLayer { alpha = 1f - progress() },
+        ) {
+            Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                for (t in ShopTab.entries) {
+                    val on = t == tab
+                    Text(
+                        t.title, style = opaw(14.sp, FontWeight.ExtraBold), color = if (on) Color.White else Ink,
+                        modifier = Modifier.pressable { onTab(t) }.background(if (on) Ink else Color(0xFFF2F2F4), CircleShape).padding(horizontal = 16.dp, vertical = 9.dp),
+                    )
+                }
+            }
+            Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (tab == ShopTab.TREATS) {
+                    for (treat in RoomCatalog.treats) TreatCard(treat, state, onTreat)
+                } else {
+                    for (item in RoomCatalog.items.filter { it.slot in tab.slots }) PieceCard(item, state, onPick)
+                }
+            }
+            if (tab == ShopTab.TREATS) {
+                // Three a day at most: treats are for fun, not meals.
                 Text(
-                    "Done", style = opaw(15.sp, FontWeight.ExtraBold), color = Color.White,
-                    modifier = Modifier.padding(start = 12.dp).pressable(onClick = onDone).background(Ink, CircleShape).padding(horizontal = 18.dp, vertical = 9.dp),
+                    "${state.treatsLeft().coerceAtLeast(0)} of ${RoomCatalog.TREATS_A_DAY} treats left today",
+                    style = opaw(12.sp, FontWeight.Bold), color = Color(0xFF666666),
+                    modifier = Modifier.padding(horizontal = 20.dp).padding(top = 12.dp),
                 )
             }
-        }
-        AnimatedVisibility(open, enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(), exit = shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut()) {
-            Column {
-                Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    for (t in ShopTab.entries) {
-                        val on = t == tab
-                        Text(
-                            t.title, style = opaw(14.sp, FontWeight.ExtraBold), color = if (on) Color.White else Ink,
-                            modifier = Modifier.pressable { onTab(t) }.background(if (on) Ink else Color(0xFFF2F2F4), CircleShape).padding(horizontal = 16.dp, vertical = 9.dp),
-                        )
-                    }
-                }
-                Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    for (item in RoomCatalog.items.filter { it.slot in tab.slots }) {
-                        PieceCard(item, state, onPick)
-                    }
-                }
-                Box(Modifier.padding(horizontal = 20.dp).padding(top = 14.dp)) {
-                    Box(
-                        Modifier.fillMaxWidth().height(54.dp).pressable(onClick = onDone).background(Ink, CircleShape),
-                        contentAlignment = Alignment.Center,
-                    ) { Text("Done", style = opaw(17.sp, FontWeight.ExtraBold), color = Color.White) }
-                }
+            Box(Modifier.padding(horizontal = 20.dp).padding(top = 14.dp)) {
+                Box(
+                    Modifier.fillMaxWidth().height(54.dp).pressable(onClick = onDone).background(Ink, CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) { Text("Done", style = opaw(17.sp, FontWeight.ExtraBold), color = Color.White) }
             }
         }
     }
@@ -283,14 +359,15 @@ private fun PieceCard(item: RoomItem, state: PetRoomState, onPick: (RoomItem) ->
             contentAlignment = Alignment.Center,
         ) { Swatch(item) }
         Text(item.title, style = opaw(13.sp, FontWeight.ExtraBold), color = Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        val food = item.slot == RoomSlot.FOOD
         when {
-            placed -> Text("In the room", style = opaw(12.sp, FontWeight.ExtraBold), color = Action)
+            placed -> Text(if (food) "In the bowl" else "In the room", style = opaw(12.sp, FontWeight.ExtraBold), color = Action)
             locked -> Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(DesignIcon.LOCK, size = 12.dp, tint = Color(0xFF888888))
                 Text("Level ${item.level}", style = opaw(12.sp, FontWeight.Bold), color = Color(0xFF888888))
             }
             item.premium -> Text("Premium", style = opaw(12.sp, FontWeight.ExtraBold), color = Color(0xFF7B4FD1))
-            state.owns(item) -> Text("Yours", style = opaw(12.sp, FontWeight.Bold), color = Color(0xFF888888))
+            state.owns(item) -> Text(if (food) "Owned" else "Yours", style = opaw(12.sp, FontWeight.Bold), color = Color(0xFF888888))
             else -> Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                 PawCoin(14.dp)
                 Text("${item.price}", style = opaw(13.sp, FontWeight.Black), color = Ink)
@@ -302,10 +379,96 @@ private fun PieceCard(item: RoomItem, state: PetRoomState, onPick: (RoomItem) ->
 /** The piece's own art from the design, small, for its card. */
 @Composable
 private fun Swatch(item: RoomItem) {
-    if (item.id.endsWith("-none")) {
+    if (item.slot == RoomSlot.FOOD) {
+        // Food is sold as a can (16e).
+        ShopPicture(ShopArt.can(item.id), Modifier.size(76.dp))
+    } else if (item.id.endsWith("-none")) {
         Icon(DesignIcon.CLOSE, size = 24.dp, tint = Color(0xFFBBBBBB))
     } else {
         PieceArt(item.id, Modifier.size(72.dp))
+    }
+}
+
+/**
+ * One treat (16f): its bag (or the treat itself), its name, and how many are on hand with Give,
+ * or the pack and its price, or what unlocks it.
+ */
+@Composable
+private fun TreatCard(treat: TreatItem, state: PetRoomState, onTap: (TreatItem) -> Unit) {
+    val have = state.treats[treat.id] ?: 0
+    val locked = state.level < treat.level
+    val shape = RoundedCornerShape(20.dp)
+    Column(Modifier.width(104.dp).alpha(if (locked) 0.55f else 1f).pressable { onTap(treat) }, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Box(
+            Modifier.fillMaxWidth().height(84.dp).background(if (have > 0) Color(0xFFFFF1E6) else Color(0xFFF6F6F7), shape)
+                .then(if (have > 0) Modifier.border(3.dp, Action, shape) else Modifier),
+            contentAlignment = Alignment.Center,
+        ) { ShopPicture(treat.card, Modifier.size(76.dp)) }
+        Text(treat.title, style = opaw(13.sp, FontWeight.ExtraBold), color = Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        when {
+            have > 0 -> Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("×$have", style = opaw(12.sp, FontWeight.ExtraBold), color = Ink)
+                Text(
+                    "Give", style = opaw(12.sp, FontWeight.Black), color = Color.White,
+                    modifier = Modifier.background(Action, CircleShape).padding(horizontal = 10.dp, vertical = 3.dp),
+                )
+            }
+            locked -> Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(DesignIcon.LOCK, size = 12.dp, tint = Color(0xFF888888))
+                Text("Level ${treat.level}", style = opaw(12.sp, FontWeight.Bold), color = Color(0xFF888888))
+            }
+            treat.premium -> Text("Premium", style = opaw(12.sp, FontWeight.ExtraBold), color = Color(0xFF7B4FD1))
+            else -> Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("×${treat.pack} ·", style = opaw(13.sp, FontWeight.Black), color = Ink)
+                PawCoin(14.dp)
+                Text("${treat.price}", style = opaw(13.sp, FontWeight.Black), color = Ink)
+            }
+        }
+    }
+}
+
+/**
+ * A treat tossed into the room (16f): it arcs in from the right, spinning, to where the pet hops
+ * up for it, and "Crunch!" pops up as it's caught.
+ */
+@Composable
+private fun TreatToss(treatId: String, key: Long) {
+    val flight = remember(key) { Animatable(0f) }
+    LaunchedEffect(key) { flight.animateTo(1f, tween(2200, easing = LinearEasing)) }
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val s = constraints.maxWidth / 390f
+        val density = LocalDensity.current.density
+        // From the right of the room to the pet's mouth, as on the design's phone.
+        val from = Offset(300f, 340f)
+        val to = Offset(150f, 470f)
+        val size = 40f
+        Box(
+            Modifier.size((size * s / density).dp).graphicsLayer {
+                val t = (flight.value / 0.55f).coerceIn(0f, 1f)
+                val x = from.x + (to.x - from.x) * t
+                val y = from.y + (to.y - from.y) * t - 120f * t * (1f - t)
+                translationX = (x - size / 2f) * s
+                translationY = (y - size / 2f) * s
+                rotationZ = -340f * t
+                alpha = if (flight.value < 0.6f) 1f else 0f
+            },
+        ) { ShopPicture(treatId, Modifier.fillMaxSize()) }
+        Text(
+            "Crunch!", style = opaw(14.sp, FontWeight.ExtraBold), color = Ink,
+            modifier = Modifier
+                .graphicsLayer {
+                    translationX = 166f * s
+                    translationY = 400f * s
+                    val shown = flight.value in 0.55f..0.95f
+                    alpha = if (shown) 1f else 0f
+                    val pop = ((flight.value - 0.55f) / 0.08f).coerceIn(0f, 1f)
+                    scaleX = 0.6f + 0.4f * pop
+                    scaleY = 0.6f + 0.4f * pop
+                }
+                .shadow(10.dp, RoundedCornerShape(20.dp, 20.dp, 20.dp, 6.dp))
+                .background(Color.White, RoundedCornerShape(20.dp, 20.dp, 20.dp, 6.dp))
+                .padding(horizontal = 13.dp, vertical = 8.dp),
+        )
     }
 }
 

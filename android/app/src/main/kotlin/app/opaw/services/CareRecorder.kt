@@ -8,6 +8,7 @@ import app.opaw.core.CareKind
 import app.opaw.data.CareEvent
 import app.opaw.data.DogData
 import app.opaw.data.displayTitle
+import app.opaw.data.matches
 import app.opaw.ui.profile.medalRes
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -42,12 +43,17 @@ object CareRecorder {
         WidgetRefresher.refresh(context)
         val badges = refreshBadges(context, event.dogId)
         val after = repo.loadDogData(event.dogId) ?: before
-        // Care earns Paws (16a): +5 a log, and +20 once the day's reminders are all done.
-        var paws = app.paws.pawsFor(stamped.kind)
-        app.paws.earn(event.dogId, paws, stamped.id)
+        // Care earns Paws (16a): +5 a log, up to the day's allowance, and +20 once the day's reminders are all done.
         val now = Instant.now()
         val due = after.reminders(now)
+        var paws = app.paws.earnForLog(event.dogId, stamped.id, stamped.kind, stamped.trackId, stamped.date, due.count { it.matches(stamped) }, now)
         if (due.isNotEmpty() && after.doneReminderIds(now).size >= due.size) paws += app.paws.dayDone(event.dogId)
+        // In the room, the pet goes to its bowl: it eats after a meal (16g), drinks after water.
+        when (stamped.kind) {
+            CareKind.MEAL -> app.opaw.ui.home.RoomCues.send(event.dogId, app.opaw.ui.home.RoomCue(app.opaw.ui.home.RoomCue.Kind.EAT))
+            CareKind.WATER -> app.opaw.ui.home.RoomCues.send(event.dogId, app.opaw.ui.home.RoomCue(app.opaw.ui.home.RoomCue.Kind.DRINK))
+            else -> Unit
+        }
         if (badges.isNotEmpty()) {
             val badge = badges.first()
             // The reaction first, then the milestone replaces it.

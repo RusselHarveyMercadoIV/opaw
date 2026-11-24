@@ -1,0 +1,22 @@
+<svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <g id="can" stroke="#E2E2E6" stroke-width="18" stroke-linejoin="round" stroke-linecap="round">
+    <path id="tin-body" d="M151 306H873V746C873 819 711 874 512 874S151 819 151 746Z" fill="#D9B65E" />
+    <path id="purple-label" d="M151 319C151 397 313 452 512 452S873 397 873 319V700C873 774 711 824 512 824S151 774 151 700Z" fill="#6B4FD6" />
+    <ellipse id="lid" cx="512" cy="304" rx="370" ry="150" fill="#D9B65E" />
+    <ellipse id="lid-inset" cx="512" cy="309" rx="322" ry="104" fill="#D9B65E" />
+    <path id="pull-ring" d="M413 302L457 200C465 179 485 171 512 171S560 179 568 200L610 302C626 340 589 369 512 369S397 340 413 302Z" fill="#D9B65E" />
+    <ellipse id="ring-opening" cx="512" cy="319" rx="89" ry="44" fill="#D9B65E" />
+    <ellipse id="ring-rivet" cx="512" cy="209" rx="17" ry="12" fill="#E2E2E6" stroke="none" />
+  </g>
+  <g id="label-emblem">
+    <path id="crown" d="M430 527C456 550 477 555 511 508C545 555 565 550 593 527L575 583C535 572 488 572 448 583Z" fill="#F4D16B" stroke="#F4D16B" stroke-width="10" stroke-linejoin="round" />
+    <circle cx="429" cy="524" r="19" fill="#F4D16B" />
+    <circle cx="511" cy="504" r="20" fill="#F4D16B" />
+    <circle cx="594" cy="524" r="19" fill="#F4D16B" />
+    <g id="steak" fill="none" stroke="#FFFFFF" stroke-width="23" stroke-linejoin="round" stroke-linecap="round">
+      <path d="M341 673C369 628 422 609 469 616C515 620 539 638 592 637C635 636 666 649 674 677C683 706 674 751 655 767C635 785 605 778 570 784C526 791 496 817 452 823C397 832 352 814 336 778C323 750 319 705 341 673Z" />
+      <path d="M331 707C334 738 368 756 402 756C448 757 481 735 524 716C567 697 588 704 623 703C650 703 671 696 674 679" />
+    </g>
+    <ellipse id="steak-highlight" cx="440" cy="672" rx="42" ry="24" transform="rotate(-16 440 672)" fill="#FFFFFF" />
+  </g>
+</svg>

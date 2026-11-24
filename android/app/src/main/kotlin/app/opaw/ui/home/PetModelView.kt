@@ -26,6 +26,7 @@ import com.google.android.filament.utils.Utils
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.exp
@@ -50,12 +51,14 @@ fun PetModel3D(
     temperament: app.opaw.core.Temperament? = null,
     /** On Home: the stage is the pet's room, seen through [RoomCamera], and walled in. */
     room: Boolean = false,
+    /** Something to do now in the room: eat, drink or hop for a treat. */
+    cue: RoomCue? = null,
 ) {
     val transition = rememberInfiniteTransition(label = "breathe")
     val breath by transition.animateFloat(0f, 1f, infiniteRepeatable(tween(1800, easing = LinearEasing), RepeatMode.Reverse), label = "breath")
     AndroidView(
         factory = { PetModelLayout(it) },
-        update = { it.show(file, interactive, motion, temperament, room) },
+        update = { it.show(file, interactive, motion, temperament, room, cue) },
         modifier = modifier.graphicsLayer {
             if (breathe) {
                 transformOrigin = TransformOrigin(0.5f, 1f)
@@ -91,9 +94,12 @@ private class PetModelLayout(context: Context) : FrameLayout(context), Choreogra
     private var lastNanos = 0L
     private val motion = PetMotion.State()
     private val shadow = StageShadow(context)
+    private var cue: RoomCue? = null
+    private var playedCue = 0L
 
-    fun show(file: File, interactive: Boolean, motion: String? = null, temperament: app.opaw.core.Temperament? = null, room: Boolean = false) {
+    fun show(file: File, interactive: Boolean, motion: String? = null, temperament: app.opaw.core.Temperament? = null, room: Boolean = false, cue: RoomCue? = null) {
         this.file = file
+        if (cue != null) this.cue = cue
         if (this.room != room) {
             this.room = room
             framed = false
@@ -309,6 +315,18 @@ private class PetModelLayout(context: Context) : FrameLayout(context), Choreogra
         val measured = fit ?: return
         val asset = modelViewer.asset ?: return
         val skeleton = player ?: return
+        // A new cue: off to the bowl, or a hop for a treat.
+        cue?.takeIf { it.id != playedCue && room && it.active() }?.let { next ->
+            playedCue = next.id
+            when (next.kind) {
+                RoomCue.Kind.EAT, RoomCue.Kind.DRINK -> {
+                    val (ax, ay) = if (next.kind == RoomCue.Kind.EAT) RoomCamera.EAT_AT else RoomCamera.DRINK_AT
+                    val (sx, sz) = RoomCamera.stageSpot(ax, ay)
+                    stage.eat(sx, sz, face = (PI / 2).toFloat(), seconds = next.kind.seconds)
+                }
+                RoomCue.Kind.TREAT -> stage.treat()
+            }
+        }
         stage.step(dt)
         val (wide, tall, deep) = measured.size
         val k = (if (room) RoomCamera.PET_LENGTH else 1f) / max(max(wide, deep), 1e-6f)

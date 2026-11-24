@@ -142,6 +142,8 @@ fun MainTabs() {
             ToastWatcher()
             LifeToastHost()
             ClaimAfterSignIn()
+            // Earned Paws flying to the count, above the toasts and the tab bar.
+            app.opaw.ui.components.PawsBurstLayer()
         }
     }
     LaunchedEffect(app.toasts.showChallenges) {

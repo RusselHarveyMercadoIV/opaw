@@ -48,6 +48,8 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -170,8 +172,12 @@ fun CareToastView(toast: CareToast, onUndo: (() -> Unit)?) {
         }
         if (dark && toast.paws > 0) {
             // The Paws it earned, on an orange coin pill.
+            // Earned coins pop out of this pill on their way to the count (PawsBurst).
+            androidx.compose.runtime.DisposableEffect(toast.id) { onDispose { PawsFx.source = null } }
             Row(
-                Modifier.background(Action, CircleShape).padding(start = 6.dp, end = 12.dp, top = 5.dp, bottom = 5.dp),
+                Modifier
+                    .onGloballyPositioned { PawsFx.source = it.boundsInRoot().center }
+                    .background(Action, CircleShape).padding(start = 6.dp, end = 12.dp, top = 5.dp, bottom = 5.dp),
                 horizontalArrangement = Arrangement.spacedBy(5.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {

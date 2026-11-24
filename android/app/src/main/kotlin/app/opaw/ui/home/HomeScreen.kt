@@ -1,6 +1,17 @@
 package app.opaw.ui.home
 
 import android.content.Intent
+import app.opaw.data.dueDate
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
+import app.opaw.ui.components.PawsFx
+import kotlinx.coroutines.delay
 import app.opaw.ui.onboarding.OrangeButton
 import app.opaw.services.RoomSlot
 import app.opaw.services.RoomCatalog
@@ -207,6 +218,39 @@ private fun moodLine(report: CareReport, night: Boolean, meal: String): Pair<Str
 
 // MARK: - The pet's room
 
+/** Which thing in the room a need or a reminder belongs to (13b). */
+private fun thingFor(need: CareNeed): RoomThing = when (need) {
+    CareNeed.MEAL -> RoomThing.BOWL
+    CareNeed.WATER -> RoomThing.WATER
+    CareNeed.MEDS -> RoomThing.HOOK
+    CareNeed.POTTY, CareNeed.WALK -> RoomThing.DOOR
+}
+
+private fun thingFor(kind: CareKind): RoomThing? = when (kind) {
+    CareKind.MEAL -> RoomThing.BOWL
+    CareKind.WATER -> RoomThing.WATER
+    CareKind.MEDS -> RoomThing.HOOK
+    CareKind.PEE, CareKind.POOP -> RoomThing.DOOR
+    else -> null
+}
+
+/**
+ * The (!)s in the room (13b): one on each thing that's due or late, and a white one on each thing
+ * whose reminder comes up in the next half hour.
+ */
+private fun roomAlerts(data: DogData, report: CareReport, now: Instant): List<RoomAlert> {
+    val alerts = LinkedHashMap<RoomThing, RoomAlert>()
+    for (need in report.needs) thingFor(need).let { alerts.getOrPut(it) { RoomAlert(it) } }
+    val done = data.doneReminderIds(now)
+    for (reminder in data.reminders(now)) {
+        if (reminder.id in done) continue
+        val due = reminder.dueDate(now)
+        if (!due.isAfter(now) || due.isAfter(now.plusSeconds(30 * 60))) continue
+        thingFor(reminder.kind)?.let { alerts.getOrPut(it) { RoomAlert(it, soon = true) } }
+    }
+    return alerts.values.toList()
+}
+
 @Composable
 private fun PetRoomPage(data: DogData, openToday: () -> Unit, openDecorate: () -> Unit, openWalk: () -> Unit, openStudio: () -> Unit) {
     val app = rememberApp()
@@ -231,19 +275,51 @@ private fun PetRoomPage(data: DogData, openToday: () -> Unit, openDecorate: () -
 
     Box(Modifier.fillMaxSize()) {
         val room = app.paws.state(dog.id)
+        // Mealtime (16g): after a meal is logged the pet eats and the food in the bowl goes down;
+        // after water it laps at the water bowl.
+        val cue = RoomCues.latest(dog.id)
+        var playing by remember(dog.id) { mutableStateOf<RoomCue?>(null) }
+        val food = remember(dog.id) { Animatable(1f) }
+        LaunchedEffect(cue?.id) {
+            val c = cue?.takeIf { it.active() } ?: return@LaunchedEffect
+            playing = c
+            try {
+                if (c.kind == RoomCue.Kind.EAT) {
+                    food.snapTo(1f)
+                    // A moment to get to the bowl, then it goes down as the pet eats.
+                    delay(1200)
+                    food.animateTo(0.3f, androidx.compose.animation.core.tween(((c.kind.seconds - 1.2f) * 1000).toInt(), easing = androidx.compose.animation.core.LinearEasing))
+                } else {
+                    delay((c.kind.seconds * 1000).toLong())
+                }
+            } finally {
+                playing = null
+            }
+            // Topped up again for next time.
+            food.animateTo(1f, androidx.compose.animation.core.tween(600))
+        }
+        val hungry = CareNeed.MEAL in report.needs && playing == null
         PetRoom(
             night,
-            mealDue = if (CareNeed.MEAL in report.needs) meal else null,
+            alerts = roomAlerts(data, report, now).filterNot { playing != null && it.thing == RoomThing.BOWL && playing?.kind == RoomCue.Kind.EAT },
+            food = if (hungry) 0f else food.value,
             pose = when {
+                playing?.kind == RoomCue.Kind.EAT -> RoomPose.EAT
+                playing?.kind == RoomCue.Kind.DRINK -> RoomPose.DRINK
                 CareNeed.MEAL in report.needs -> RoomPose.WAIT
                 night && report.needs.isEmpty() -> RoomPose.SLEEP
                 else -> RoomPose.WALK
             },
             pieces = { room.piece(it) },
             actions = RoomActions(onBowl = { log(CareKind.MEAL) }, onWater = { log(CareKind.WATER) }, onDoor = openWalk, onBed = openToday),
-        ) { view, standing -> RoomPet(data, view, standing) }
+        ) { view, standing -> RoomPet(data, view, standing, cue) }
         // The name, mood and Today ring, under the top bar and above anywhere the pet can reach.
-        val (line, dot) = moodLine(report, night, meal)
+        val eatingLine = when (playing?.kind) {
+            RoomCue.Kind.EAT -> "Eating · " + (RoomCatalog.item(room.piece(RoomSlot.FOOD))?.title ?: "dinner").lowercase() to Action
+            RoomCue.Kind.DRINK -> "Drinking · fresh water" to Action
+            else -> null
+        }
+        val (line, dot) = eatingLine ?: moodLine(report, night, meal)
         val ink = if (night) Color.White else colors.ink
         Row(
             Modifier.fillMaxWidth().statusBarsPadding().padding(top = 80.dp).padding(horizontal = 24.dp),
@@ -257,8 +333,36 @@ private fun PetRoomPage(data: DogData, openToday: () -> Unit, openDecorate: () -
                     Text(line, style = opaw(13.sp, FontWeight.ExtraBold), color = ink.copy(alpha = 0.75f), maxLines = 1)
                 }
             }
-            // The Paws count, and the brush that opens Decorate (16a).
-            PawsChip(room.paws, night, Modifier.pressable(onClick = openDecorate))
+            // The Paws count, and the brush that opens Decorate (16a). Earned Paws fly in as coins
+            // and the count ticks up as each one lands.
+            var shownPaws by remember(dog.id) { mutableIntStateOf(PawsFx.shown[dog.id] ?: room.paws) }
+            val bump = remember(dog.id) { Animatable(1f) }
+            val density = LocalDensity.current.density
+            LaunchedEffect(dog.id, room.paws) {
+                try {
+                    if (room.paws > shownPaws) {
+                        // Let the toast slide in first, so the coins leave from its "+5".
+                        delay(380)
+                        val gained = room.paws - shownPaws
+                        var first = true
+                        PawsFx.burst(dog.id, gained, density) { share ->
+                            shownPaws += share
+                            if (first) haptics.select()
+                            first = false
+                            scope.launch { bump.snapTo(1.22f); bump.animateTo(1f, spring(dampingRatio = 0.4f, stiffness = 500f)) }
+                        }
+                    }
+                } finally {
+                    shownPaws = room.paws
+                    PawsFx.shown[dog.id] = room.paws
+                }
+            }
+            DisposableEffect(dog.id) { onDispose { PawsFx.targets.remove(dog.id) } }
+            PawsChip(
+                shownPaws, night,
+                Modifier.pressable(onClick = openDecorate).graphicsLayer { scaleX = bump.value; scaleY = bump.value },
+                coin = Modifier.onGloballyPositioned { PawsFx.targets[dog.id] = it.boundsInRoot().center },
+            )
             Spacer(Modifier.width(8.dp))
             Box(
                 Modifier.size(40.dp).pressable(onClick = openDecorate).background(if (night) Color.White.copy(alpha = 0.12f) else colors.surface, CircleShape),

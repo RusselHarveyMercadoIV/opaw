@@ -127,6 +127,11 @@ internal class PetStage(private val temperament: Temperament, private val random
             Gaze.SNIFF -> { yaw = glanceYaw * 0.3f; pitch = -0.5f }
             Gaze.AHEAD -> Unit
         }
+        // Eating: nose in the bowl, bobbing as it chews.
+        if (current is Step.Eat) {
+            yaw = 0f
+            pitch = -0.62f + 0.14f * sin(clock * 10f)
+        }
         val ease = 1f - kotlin.math.exp(-dt * 5f)
         lookYaw += (yaw - lookYaw) * ease
         lookPitch += (pitch - lookPitch) * ease
@@ -154,6 +159,31 @@ internal class PetStage(private val temperament: Temperament, private val random
         squash = 0f
         if (queue.isEmpty()) plan()
         current = queue.removeFirst()
+    }
+
+    /**
+     * Drops what it's doing and trots to [x], [z] (stage units), turns to face [face] and eats or
+     * laps there for [seconds], head down and bobbing, then looks up at you (16g).
+     */
+    fun eat(x: Float, z: Float, face: Float, seconds: Float) {
+        queue.clear()
+        queue += Step.Eat(seconds, face)
+        queue += Step.Look(2f, toCamera = true)
+        start(Step.Go(Spot(x, z), run = true))
+    }
+
+    /** A treat (16f): it hops up for it, then looks at you for more. */
+    fun treat() {
+        queue.clear()
+        queue += Step.Look(2f, toCamera = true)
+        start(Step.Hop(2))
+    }
+
+    private fun start(step: Step) {
+        clock = 0f
+        hop = 0f
+        squash = 0f
+        current = step
     }
 
     /** Picks the next thing to do, weighted by temperament, and a pause after it. */
@@ -211,6 +241,11 @@ internal class PetStage(private val temperament: Temperament, private val random
         }
         is Step.Wait -> {
             style = PetMotion.Style.IDLE
+            clock >= step.seconds
+        }
+        is Step.Eat -> {
+            style = PetMotion.Style.IDLE
+            turn(step.face, 2.5f * dt)
             clock >= step.seconds
         }
         is Step.Go -> {
@@ -289,6 +324,8 @@ internal class PetStage(private val temperament: Temperament, private val random
     private sealed class Step {
         class Look(val seconds: Float, val toCamera: Boolean = false, val tilt: Boolean = false, val aim: Float? = null) : Step()
         class Wait(val seconds: Float) : Step()
+        /** Head down in the bowl, facing [face]. */
+        class Eat(val seconds: Float, val face: Float) : Step()
         class Go(val to: Spot, val run: Boolean, val offStage: Boolean = false) : Step()
         class Spin(val turns: Int, var from: Float = Float.NaN) : Step()
         class Hop(val count: Int) : Step()

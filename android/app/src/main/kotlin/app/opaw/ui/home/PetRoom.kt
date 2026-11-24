@@ -37,7 +37,11 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
@@ -90,6 +94,19 @@ internal object RoomCamera {
         val d = 1f - stageZ
         return 1f - (4.9f + (d - 3.5f) * 0.855f)
     }
+
+    /** The stage spot (x, z) whose floor is at the design's point ([x], [y]): the inverse of [worldZ] and the camera. */
+    fun stageSpot(x: Float, y: Float): Pair<Float, Float> {
+        val half = VIEW_HEIGHT / 2f
+        val d = -FLOOR / ((y - HORIZON).coerceAtLeast(1f) / half * TAN)
+        val wx = (x - DESIGN_WIDTH / 2f) / half * TAN * d
+        return wx to 1f - (3.5f + (d - 4.9f) / 0.855f)
+    }
+
+    /** Where the pet stands to eat, left of the bowl and facing it, as on the design (13b, 16g). */
+    val EAT_AT = 121f to 660f
+    /** Where it stands to drink, left of the water bowl. */
+    val DRINK_AT = 198f to 680f
 }
 
 /** What tapping the room's things does. */
@@ -98,10 +115,21 @@ class RoomActions(
     val onWater: () -> Unit,
     val onDoor: () -> Unit,
     val onBed: () -> Unit,
+    /** The meds on the door hook. */
+    val onMeds: () -> Unit = onBed,
 )
 
-/** What a flat pet is doing in the room (13a to 13c). */
-enum class RoomPose { WALK, WAIT, SLEEP, STILL }
+/** What a flat pet is doing in the room (13a to 13c, 16f, 16g). */
+enum class RoomPose { WALK, WAIT, SLEEP, STILL, EAT, DRINK, HOP }
+
+/** The things in the room a (!) can sit on (13b). */
+enum class RoomThing { BOWL, WATER, DOOR, HOOK }
+
+/**
+ * A (!) on something in the room that needs you (13b): orange and pulsing quickly when it's due or
+ * late, white and pulsing slowly when it's coming up in the next half hour.
+ */
+data class RoomAlert(val thing: RoomThing, val soon: Boolean = false)
 
 /** Where each spot's piece sits on the design's phone: left, top and size of its 100 by 100 box. */
 private class Spot(val left: Float, val top: Float, val size: Float)
@@ -157,7 +185,10 @@ internal fun PieceArt(id: String, modifier: Modifier) {
 fun PetRoom(
     night: Boolean,
     modifier: Modifier = Modifier,
-    mealDue: String? = null,
+    /** The (!) on whatever needs doing or is coming up (13b). */
+    alerts: List<RoomAlert> = emptyList(),
+    /** How full the food bowl is, 0 (empty: a meal is due) to 1; it goes down as the pet eats (16g). */
+    food: Float = 1f,
     pose: RoomPose = RoomPose.WALK,
     /** The water bowl; the empty room of 14k has only the food bowl. */
     water: Boolean = true,
@@ -187,7 +218,6 @@ fun PetRoom(
             RoomArt.pieces["lamp-floor"]?.let { drawArt(it, box(lampSpot), false) }
             art(RoomSlot.BED)?.let { drawArt(it, box(spots.getValue(RoomSlot.BED)), night) }
         }
-        if (mealDue != null) MealPulse(Modifier.place(208f * s, 636f * s, 80f * s, 30f * s))
 
         // The 3D pet's view, and the flat pet's place on the design (200 by 210, feet at 660).
         val viewTop = (RoomCamera.HORIZON - RoomCamera.VIEW_HEIGHT / 2f) * s
@@ -195,11 +225,22 @@ fun PetRoom(
         val standing = Modifier.place(95f * s, 450f * s, 200f * s, 210f * s).roomPose(pose, s)
         pet(view, standing)
 
-        // In front of the pet: the toy and the bowls.
+        // In front of the pet: the toy and the bowls, with the pet's food in its bowl (16e).
+        val context = androidx.compose.ui.platform.LocalContext.current
+        val bowl = pieces(RoomSlot.BOWL)
+        val foodArt = ShopArt.svg(context, pieces(RoomSlot.FOOD))
         Canvas(Modifier.fillMaxSize()) {
             art(RoomSlot.TOY)?.let { drawArt(it, box(spots.getValue(RoomSlot.TOY)), night) }
-            art(RoomSlot.BOWL)?.let { drawArt(it, box(spots.getValue(RoomSlot.BOWL)), night) }
-            if (water && pieces(RoomSlot.BOWL) != "bowl-bone") RoomArt.pieces["bowl-water"]?.let { drawArt(it, box(waterSpot), night) }
+            val bowlBox = box(spots.getValue(RoomSlot.BOWL))
+            // The orange bowl is drawn empty and filled with the food; the bone bowls hold it on the left.
+            val bowlArt = if (bowl == "bowl-food") RoomArt.pieces["bowl-empty"] else art(RoomSlot.BOWL)
+            bowlArt?.let { drawArt(it, bowlBox, night) }
+            if (foodArt != null && food > 0.01f) {
+                val f = foodSpots[bowl] ?: foodSpots.getValue("bowl-food")
+                val k = bowlBox.width() / 100f
+                drawShop(foodArt, RectF(bowlBox.left + f.left * k, bowlBox.top + f.top * k, bowlBox.left + f.right * k, bowlBox.top + f.bottom * k), food)
+            }
+            if (water && bowl != "bowl-bone") RoomArt.pieces["bowl-water"]?.let { drawArt(it, box(waterSpot), night) }
         }
         if (pose == RoomPose.SLEEP) {
             Text(
@@ -209,34 +250,83 @@ fun PetRoom(
         }
 
         // The things to tap: only these spots take a touch, so swiping between pets still works.
-        TapSpot(Rect(198f, 612f, 298f, 680f), s, actions.onBowl)
-        TapSpot(Rect(276f, 636f, 372f, 698f), s, actions.onWater)
-        TapSpot(Rect(88f, 296f, 162f, 458f), s, actions.onDoor)
-        TapSpot(Rect(150f, 440f, 286f, 524f), s, actions.onBed)
+        // Logging at a bowl sends the Paws coins out of it.
+        TapSpot(Rect(198f, 612f, 298f, 680f), s, coins = true, onTap = actions.onBowl)
+        TapSpot(Rect(276f, 636f, 372f, 698f), s, coins = true, onTap = actions.onWater)
+        TapSpot(Rect(88f, 296f, 162f, 458f), s, onTap = actions.onDoor)
+        TapSpot(Rect(150f, 440f, 286f, 524f), s, onTap = actions.onBed)
+
+        // A (!) on whatever needs you (13b).
+        for (alert in alerts) {
+            val (x, y) = alertSpots.getValue(alert.thing)
+            AlertBadge(alert.soon, s, Modifier.place(x * s, y * s, 34f * s, 34f * s)) {
+                when (alert.thing) {
+                    RoomThing.BOWL -> actions.onBowl()
+                    RoomThing.WATER -> actions.onWater()
+                    RoomThing.DOOR -> actions.onDoor()
+                    RoomThing.HOOK -> actions.onMeds()
+                }
+            }
+        }
 
         if (markers != null) {
             markers(spots.mapValues { (_, spot) -> Offset((spot.left + spot.size / 2f) * s, (spot.top + spot.size * 0.55f) * s) })
         }
-        if (mealDue != null) MealBubble(mealDue, Modifier.place(118f * s, 392f * s, null, null), actions.onBowl)
     }
 }
 
-/** A tappable area of the room, in design units. */
+/** Where the food sits in each bowl, in the bowl's 100 by 100 box: in the orange bowl, and the bone bowls' left one. */
+private val foodSpots = mapOf(
+    "bowl-food" to RectF(21f, 33f, 79f, 66f),
+    "bowl-bone" to RectF(23f, 47f, 49f, 62f),
+)
+
+/** Where each (!) sits, as on the design (13b): its top left on the design's phone. */
+private val alertSpots = mapOf(
+    RoomThing.BOWL to (276f to 592f),
+    RoomThing.WATER to (348f to 614f),
+    RoomThing.DOOR to (138f to 300f),
+    RoomThing.HOOK to (96f to 352f),
+)
+
+/**
+ * The (!) (13b): a small orange badge that bobs while a ring pulses out from it. Coming up soon,
+ * it's white with an orange (!) and pulses slowly.
+ */
 @Composable
-private fun TapSpot(area: Rect, s: Float, onTap: () -> Unit) {
-    Box(Modifier.place(area.left * s, area.top * s, area.width * s, area.height * s).pressable(onClick = onTap))
+private fun AlertBadge(soon: Boolean, s: Float, modifier: Modifier, onTap: () -> Unit) {
+    val period = if (soon) 2600 else 1400
+    val loop = rememberInfiniteTransition(label = "alert")
+    val ring by loop.animateFloat(0f, 1f, infiniteRepeatable(tween(period, easing = LinearEasing), RepeatMode.Restart), label = "ring")
+    val bob by loop.animateFloat(0f, 1f, infiniteRepeatable(tween(period, easing = LinearEasing), RepeatMode.Restart), label = "bob")
+    val size = with(androidx.compose.ui.platform.LocalDensity.current) { (19f * s).toSp() }
+    Box(modifier.graphicsLayer { translationY = -4f * s * (1 - cos(bob * 2 * PI).toFloat()) / 2f }.pressable(onClick = onTap)) {
+        Box(
+            Modifier.fillMaxSize()
+                .graphicsLayer { val k = 1f + 1.2f * ring; scaleX = k; scaleY = k; alpha = 0.6f * (1f - ring) }
+                .background(Action, CircleShape),
+        )
+        Box(
+            Modifier.fillMaxSize()
+                .shadow((6f * s / 2.6f).dp, CircleShape, ambientColor = Action, spotColor = Action)
+                .background(if (soon) Color.White else Action, CircleShape)
+                .border((3f * s / 2.6f).dp, if (soon) Action else Color.White, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) { Text("!", style = opaw(size, FontWeight.Black), color = if (soon) Action else Color.White) }
+    }
 }
 
-/** The orange ring that pulses out round the bowl while a meal is due (13b). */
+/** A tappable area of the room, in design units. With [coins], earned Paws fly out of it (16a). */
 @Composable
-private fun MealPulse(modifier: Modifier) {
-    val t by rememberInfiniteTransition(label = "pulse").animateFloat(
-        0f, 1f, infiniteRepeatable(tween(1600, easing = LinearEasing), RepeatMode.Restart), label = "t",
-    )
+private fun TapSpot(area: Rect, s: Float, coins: Boolean = false, onTap: () -> Unit) {
+    var at by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(Offset.Unspecified) }
     Box(
-        modifier
-            .graphicsLayer { val k = 0.8f + 0.7f * t; scaleX = k; scaleY = k; alpha = 0.9f * (1f - t) }
-            .border(3.dp, Action, CircleShape),
+        Modifier.place(area.left * s, area.top * s, area.width * s, area.height * s)
+            .then(if (coins) Modifier.onGloballyPositioned { at = it.boundsInRoot().center } else Modifier)
+            .pressable {
+                if (coins && at.isSpecified) app.opaw.ui.components.PawsFx.from(at)
+                onTap()
+            },
     )
 }
 
@@ -249,10 +339,14 @@ private fun Modifier.roomPose(pose: RoomPose, s: Float): Modifier = composed {
     val loop = rememberInfiniteTransition(label = "pose")
     val t by loop.animateFloat(0f, 1f, infiniteRepeatable(tween(16000, easing = LinearEasing), RepeatMode.Restart), label = "walk")
     val bob by loop.animateFloat(0f, 1f, infiniteRepeatable(tween(3200, easing = LinearEasing), RepeatMode.Restart), label = "bob")
+    // Eating (16g): head down in the bowl, bobbing as it chews; a treat: a hop to catch it.
+    val chew by loop.animateFloat(0f, 1f, infiniteRepeatable(tween(1800, easing = LinearEasing), RepeatMode.Restart), label = "chew")
     graphicsLayer {
-        transformOrigin = TransformOrigin(0.5f, 1f)
+        val eating = pose == RoomPose.EAT || pose == RoomPose.DRINK
+        transformOrigin = TransformOrigin(if (eating) 0.78f else 0.5f, 1f)
         val at = when (pose) {
-            RoomPose.WAIT -> floatArrayOf(-74f, 0f, 0.94f, 1f)
+            RoomPose.WAIT, RoomPose.EAT, RoomPose.HOP -> floatArrayOf(-74f, 0f, 0.94f, 1f)
+            RoomPose.DRINK -> floatArrayOf(3f, 20f, 1f, 1f)
             RoomPose.SLEEP -> floatArrayOf(12f, -150f, 0.46f, 1f)
             RoomPose.STILL -> floatArrayOf(0f, 0f, 1f, 1f)
             RoomPose.WALK -> walkAt(t)
@@ -261,13 +355,15 @@ private fun Modifier.roomPose(pose: RoomPose, s: Float): Modifier = composed {
         translationX = at[0] * s
         val lift = when (pose) {
             RoomPose.SLEEP -> 0.3f
-            RoomPose.STILL -> 0f
+            RoomPose.STILL, RoomPose.EAT, RoomPose.DRINK -> 0f
             else -> 1f
         }
-        translationY = at[1] * s - 10f * s * wave * lift
+        val dip = if (eating) 0.6f + 0.4f * kotlin.math.sin(chew * 2 * PI * 3).toFloat() else 0f
+        val jump = if (pose == RoomPose.HOP) kotlin.math.abs(kotlin.math.sin(chew * 2 * PI * 1.5)).toFloat() else 0f
+        translationY = at[1] * s - 10f * s * wave * lift + 8f * s * dip - 46f * s * jump
         scaleX = at[2] * at[3]
         scaleY = at[2]
-        rotationZ = (-1.5f + 3f * wave) * lift
+        rotationZ = (-1.5f + 3f * wave) * lift + 7f * dip
     }
 }
 
@@ -302,30 +398,4 @@ private fun Modifier.place(x: Float, y: Float, width: Float?, height: Float?): M
         measurable.measure(constraints.copy(minWidth = 0, minHeight = 0))
     }
     layout(0, 0) { placeable.place(x.roundToInt(), y.roundToInt()) }
-}
-
-/** "Dinner time?" with a button to log it, over the bed (13b). */
-@Composable
-private fun MealBubble(meal: String, modifier: Modifier, onLog: () -> Unit) {
-    val shape = RoundedCornerShape(22.dp, 22.dp, 22.dp, 8.dp)
-    Box(modifier) {
-        Row(
-            Modifier
-                .shadow(14.dp, shape, ambientColor = Color.Black.copy(alpha = 0.12f), spotColor = Color.Black.copy(alpha = 0.12f))
-                .background(Color.White, shape)
-                .padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text("${meal.replaceFirstChar(Char::uppercase)} time?", style = opaw(14.sp, FontWeight.ExtraBold), color = Ink)
-            Row(
-                Modifier.pressable(onClick = onLog).background(Action, CircleShape).padding(horizontal = 14.dp, vertical = 9.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(DesignIcon.MEAL, size = 15.dp, tint = Color.White)
-                Text("Log $meal", style = opaw(14.sp, FontWeight.ExtraBold), color = Color.White)
-            }
-        }
-    }
 }

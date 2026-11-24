@@ -275,6 +275,8 @@ fun PetAvatar(
     interactive: Boolean = false,
     /** On Home: the 3D pet roams its room (see [PetRoom]). */
     room: Boolean = false,
+    /** In the room: eat, drink or hop for a treat now. */
+    cue: RoomCue? = null,
     onTap: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
@@ -295,6 +297,7 @@ fun PetAvatar(
                     // On Home it roams, playing as its temperament; a sleepy pet takes it easy.
                     temperament = if (interactive) null else if (mood == AvatarMood.SLEEPY) Temperament.SLEEPY else dog.temperament,
                     room = room,
+                    cue = cue,
                 )
             file != null -> StackedAlphaVideo(file, Modifier.fillMaxSize().then(fade).then(tap))
             else -> LivingPhoto(image, mood, Modifier.fillMaxSize(), sticker = sticker, faded = faded, onTap = onTap)
