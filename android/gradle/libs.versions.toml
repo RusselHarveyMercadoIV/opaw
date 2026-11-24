@@ -1,0 +1,77 @@
+[versions]
+agp = "8.10.1"
+kotlin = "2.1.21"
+ksp = "2.1.21-2.0.1"
+composeBom = "2025.05.01"
+activityCompose = "1.10.1"
+navigationCompose = "2.9.0"
+lifecycle = "2.9.0"
+room = "2.7.1"
+datastore = "1.1.7"
+coreKtx = "1.16.0"
+coroutines = "1.10.2"
+serialization = "1.8.1"
+camerax = "1.4.2"
+exifinterface = "1.4.1"
+mlkitSubject = "16.0.0-beta1"
+mlkitLabeling = "16.0.8"
+playLocation = "21.3.0"
+maplibre = "11.8.0"
+billing = "7.1.1"
+glance = "1.1.1"
+filament = "1.71.5"
+credentials = "1.5.0"
+googleid = "1.1.1"
+
+[libraries]
+androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
+androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
+androidx-navigation-compose = { module = "androidx.navigation:navigation-compose", version.ref = "navigationCompose" }
+androidx-lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycle" }
+androidx-lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycle" }
+compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
+compose-ui = { module = "androidx.compose.ui:ui" }
+compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }
+compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
+compose-foundation = { module = "androidx.compose.foundation:foundation" }
+compose-material3 = { module = "androidx.compose.material3:material3" }
+compose-material-icons = { module = "androidx.compose.material:material-icons-extended" }
+compose-material3-window-size = { module = "androidx.compose.material3:material3-window-size-class" }
+room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
+room-ktx = { module = "androidx.room:room-ktx", version.ref = "room" }
+room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
+datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
+kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
+androidx-exifinterface = { module = "androidx.exifinterface:exifinterface", version.ref = "exifinterface" }
+camerax-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "camerax" }
+camerax-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "camerax" }
+camerax-view = { module = "androidx.camera:camera-view", version.ref = "camerax" }
+# Play Services versions download their models on demand, which keeps the APK small.
+mlkit-subject-segmentation = { module = "com.google.android.gms:play-services-mlkit-subject-segmentation", version.ref = "mlkitSubject" }
+mlkit-image-labeling = { module = "com.google.android.gms:play-services-mlkit-image-labeling", version.ref = "mlkitLabeling" }
+play-services-location = { module = "com.google.android.gms:play-services-location", version.ref = "playLocation" }
+# Open map tiles from OpenFreeMap need no API key.
+maplibre = { module = "org.maplibre.gl:android-sdk", version.ref = "maplibre" }
+billing-ktx = { module = "com.android.billingclient:billing-ktx", version.ref = "billing" }
+glance-appwidget = { module = "androidx.glance:glance-appwidget", version.ref = "glance" }
+glance-material3 = { module = "androidx.glance:glance-material3", version.ref = "glance" }
+# Filament renders the 3D pet from "Bring to life".
+filament-android = { module = "com.google.android.filament:filament-android", version.ref = "filament" }
+filament-gltfio = { module = "com.google.android.filament:gltfio-android", version.ref = "filament" }
+filament-utils = { module = "com.google.android.filament:filament-utils-android", version.ref = "filament" }
+kotlinx-coroutines-play-services = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-play-services", version.ref = "coroutines" }
+# Sign in with Google: Credential Manager hands back a Google ID token for Supabase.
+androidx-credentials = { module = "androidx.credentials:credentials", version.ref = "credentials" }
+androidx-credentials-play = { module = "androidx.credentials:credentials-play-services-auth", version.ref = "credentials" }
+googleid = { module = "com.google.android.libraries.identity.googleid:googleid", version.ref = "googleid" }
+kotlin-test ={ module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+android-library = { id = "com.android.library", version.ref = "agp" }
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }

@@ -1,0 +1,45 @@
+<svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <clipPath id="pouch-clip">
+      <path d="M176 209H848L766 901Q762 949 714 958Q512 982 302 958Q253 953 244 907Z" />
+    </clipPath>
+    <clipPath id="window-clip">
+      <circle cx="504" cy="718" r="188" />
+    </clipPath>
+  </defs>
+  <g id="pouch" stroke="#E2E2E6" stroke-width="16" stroke-linejoin="round">
+    <path d="M178 174Q161 164 163 127Q164 72 220 70H801Q858 72 861 127Q863 155 849 175L766 901Q762 949 714 958Q512 982 302 958Q253 953 244 907Z" fill="#FFFFFF" />
+  </g>
+  <g id="label" clip-path="url(#pouch-clip)">
+    <path d="M169 288Q260 242 367 265C429 277 465 291 511 291C570 291 648 256 724 263Q799 264 850 289L824 492Q747 534 652 516C589 505 550 489 494 492C425 493 363 518 301 519Q235 521 191 494Z" fill="#A24A2A" />
+    <g id="jerky-icon" fill="none" stroke="#FFFFFF" stroke-width="18" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M267 442C280 413 248 393 275 373C294 359 307 374 337 360C366 346 378 338 407 348C438 360 457 367 487 351C514 334 538 317 562 320C592 322 573 350 579 369C583 388 601 395 594 416C591 428 582 426 571 424C540 417 520 435 494 447C459 463 433 446 406 444C378 440 361 457 332 469C309 480 285 482 271 469C264 462 264 452 267 442Z" />
+      <path d="M270 444C291 425 312 430 338 418C364 405 377 393 404 397C432 400 452 415 480 406C508 398 524 376 555 374C566 373 574 375 582 377" />
+    </g>
+    <g id="paw-print" fill="#FFFFFF">
+      <ellipse cx="655" cy="364" rx="17" ry="23" transform="rotate(-12 655 364)" />
+      <ellipse cx="695" cy="343" rx="17" ry="24" transform="rotate(3 695 343)" />
+      <ellipse cx="736" cy="355" rx="17" ry="23" transform="rotate(25 736 355)" />
+      <ellipse cx="756" cy="393" rx="17" ry="22" transform="rotate(34 756 393)" />
+      <path d="M651 420C657 401 680 380 696 382C716 381 733 405 736 426C741 452 727 458 709 449C698 443 693 441 681 444C657 452 641 443 651 420Z" />
+    </g>
+  </g>
+  <g id="zip-top" stroke="#E2E2E6" stroke-width="15" stroke-linejoin="round">
+    <path d="M177 165H847" fill="none" stroke-linecap="round" />
+    <path d="M183 174H838Q855 174 855 189Q855 207 837 207H183Q163 207 163 190Q163 174 183 174Z" fill="#FFFFFF" />
+  </g>
+  <g id="round-window">
+    <circle cx="504" cy="718" r="198" fill="#FFFFFF" />
+    <g id="jerky-strips" clip-path="url(#window-clip)">
+      <path d="M308 696Q348 652 408 662L618 679Q682 683 710 730L699 924H306Z" fill="#85371F" />
+      <path d="M314 798C324 758 342 733 340 696C337 665 323 625 343 604C359 588 375 604 392 593C413 579 447 593 450 615C456 648 430 680 423 712C413 746 423 764 410 802C398 843 383 861 389 902L332 905Z" fill="#AC492C" />
+      <path d="M399 596C406 633 388 659 376 685C354 732 388 741 370 789C358 821 340 840 351 878" fill="none" stroke="#EB9060" stroke-width="19" stroke-linecap="round" />
+      <path d="M470 906C481 863 493 825 518 791C545 756 566 739 568 700C570 667 551 640 570 618C587 598 607 610 626 599C650 585 675 602 680 623C690 663 665 695 654 724C643 753 649 773 630 803C607 836 598 866 591 909Z" fill="#A74729" />
+      <path d="M667 620C647 640 627 661 621 687C614 715 625 733 594 763C560 794 553 807 554 836C556 868 535 897 518 921" fill="none" stroke="#ED9161" stroke-width="19" stroke-linecap="round" />
+      <path d="M374 895C367 862 395 829 406 795C416 763 401 733 413 699C422 671 447 643 452 613C456 588 448 570 469 549C491 528 511 541 533 552C555 565 577 554 585 578C594 601 568 633 554 660C539 688 531 713 527 741C522 785 514 812 491 848C472 875 464 899 465 931Z" fill="#B34C2E" />
+      <path d="M527 553C506 581 494 602 498 635C505 682 483 700 466 727C447 756 461 782 455 808C449 844 411 870 411 911" fill="none" stroke="#ED9161" stroke-width="19" stroke-linecap="round" />
+      <path d="M610 910C630 870 626 850 646 817C659 795 674 780 699 776L708 925Z" fill="#B34C2E" />
+    </g>
+    <circle cx="504" cy="718" r="198" fill="none" stroke="#E2E2E6" stroke-width="18" />
+  </g>
+</svg>

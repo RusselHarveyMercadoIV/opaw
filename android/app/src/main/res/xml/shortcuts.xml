@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Long-press the app icon to log straight away, like the iOS Shortcuts. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut android:shortcutId="log_poop" android:enabled="true" android:icon="@drawable/ic_poop"
+        android:shortcutShortLabel="@string/log_poop" android:shortcutLongLabel="@string/log_poop">
+        <intent android:action="android.intent.action.VIEW" android:data="opaw://log/poop"
+            android:targetPackage="app.opaw" android:targetClass="app.opaw.widget.LogShortcutActivity" />
+    </shortcut>
+    <shortcut android:shortcutId="log_pee" android:enabled="true" android:icon="@drawable/ic_pee"
+        android:shortcutShortLabel="@string/log_pee" android:shortcutLongLabel="@string/log_pee">
+        <intent android:action="android.intent.action.VIEW" android:data="opaw://log/pee"
+            android:targetPackage="app.opaw" android:targetClass="app.opaw.widget.LogShortcutActivity" />
+    </shortcut>
+    <shortcut android:shortcutId="log_meal" android:enabled="true" android:icon="@drawable/ic_meal"
+        android:shortcutShortLabel="@string/log_meal" android:shortcutLongLabel="@string/log_meal">
+        <intent android:action="android.intent.action.VIEW" android:data="opaw://log/meal"
+            android:targetPackage="app.opaw" android:targetClass="app.opaw.widget.LogShortcutActivity" />
+    </shortcut>
+</shortcuts>

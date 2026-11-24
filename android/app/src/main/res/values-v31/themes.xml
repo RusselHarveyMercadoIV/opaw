@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 12 and later draw their own splash. Keep it plain brand orange with no icon: the
+         animated opening (OpawSplash) starts from the same orange and pulls it into the app icon. -->
+    <style name="Theme.Opaw" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/opaw_orange</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowSplashScreenBackground">@color/opaw_orange</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_blank</item>
+    </style>
+</resources>
