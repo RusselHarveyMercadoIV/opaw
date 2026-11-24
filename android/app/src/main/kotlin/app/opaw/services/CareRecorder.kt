@@ -9,6 +9,8 @@ import app.opaw.data.CareEvent
 import app.opaw.data.DogData
 import app.opaw.data.displayTitle
 import app.opaw.data.matches
+import app.opaw.ui.home.RoomCue
+import app.opaw.ui.home.RoomCues
 import app.opaw.ui.profile.medalRes
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -50,8 +52,8 @@ object CareRecorder {
         if (due.isNotEmpty() && after.doneReminderIds(now).size >= due.size) paws += app.paws.dayDone(event.dogId)
         // In the room, the pet goes to its bowl: it eats after a meal (16g), drinks after water.
         when (stamped.kind) {
-            CareKind.MEAL -> app.opaw.ui.home.RoomCues.send(event.dogId, app.opaw.ui.home.RoomCue(app.opaw.ui.home.RoomCue.Kind.EAT))
-            CareKind.WATER -> app.opaw.ui.home.RoomCues.send(event.dogId, app.opaw.ui.home.RoomCue(app.opaw.ui.home.RoomCue.Kind.DRINK))
+            CareKind.MEAL -> RoomCues.send(event.dogId, RoomCue(RoomCue.Kind.EAT))
+            CareKind.WATER -> RoomCues.send(event.dogId, RoomCue(RoomCue.Kind.DRINK))
             else -> Unit
         }
         if (badges.isNotEmpty()) {

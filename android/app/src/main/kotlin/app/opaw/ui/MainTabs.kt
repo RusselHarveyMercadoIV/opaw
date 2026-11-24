@@ -81,6 +81,7 @@ import app.opaw.ui.care.rememberNow
 import app.opaw.ui.components.DesignIcon
 import app.opaw.ui.components.Icon
 import app.opaw.ui.components.ToastHost
+import app.opaw.ui.components.PawsBurstLayer
 import app.opaw.ui.components.pressable
 import app.opaw.ui.components.rememberHaptics
 import app.opaw.ui.theme.Opaw
@@ -143,7 +144,7 @@ fun MainTabs() {
             LifeToastHost()
             ClaimAfterSignIn()
             // Earned Paws flying to the count, above the toasts and the tab bar.
-            app.opaw.ui.components.PawsBurstLayer()
+            PawsBurstLayer()
         }
     }
     LaunchedEffect(app.toasts.showChallenges) {
